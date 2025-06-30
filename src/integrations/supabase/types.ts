@@ -9,101 +9,68 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      audit_history: {
+      admin_activity_logs: {
         Row: {
-          id: number
-          new_values: Json | null
-          old_values: Json | null
-          operation: string | null
-          performed_at: string | null
-          performed_by: string | null
-          record_id: string
-          table_name: string
-          user_id: string | null
+          action: string
+          admin_id: string
+          created_at: string | null
+          details: Json | null
+          id: string
         }
         Insert: {
-          id?: number
-          new_values?: Json | null
-          old_values?: Json | null
-          operation?: string | null
-          performed_at?: string | null
-          performed_by?: string | null
-          record_id: string
-          table_name: string
-          user_id?: string | null
+          action: string
+          admin_id: string
+          created_at?: string | null
+          details?: Json | null
+          id?: string
         }
         Update: {
-          id?: number
-          new_values?: Json | null
-          old_values?: Json | null
-          operation?: string | null
-          performed_at?: string | null
-          performed_by?: string | null
-          record_id?: string
-          table_name?: string
-          user_id?: string | null
+          action?: string
+          admin_id?: string
+          created_at?: string | null
+          details?: Json | null
+          id?: string
         }
         Relationships: []
       }
-      credit_bureau: {
+      apps: {
         Row: {
-          address: string | null
-          city: string | null
-          created_at: string
           id: number
           name: string | null
-          phone_number: string | null
-          state: string | null
-          zip: string | null
         }
         Insert: {
-          address?: string | null
-          city?: string | null
-          created_at?: string
           id?: number
           name?: string | null
-          phone_number?: string | null
-          state?: string | null
-          zip?: string | null
         }
         Update: {
-          address?: string | null
-          city?: string | null
-          created_at?: string
           id?: number
           name?: string | null
-          phone_number?: string | null
-          state?: string | null
-          zip?: string | null
         }
         Relationships: []
       }
-      credit_reports: {
+      credit_transactions: {
         Row: {
-          encrypted_content: string
-          encryption_key_id: string
-          expires_at: string
-          filename: string | null
+          amount: number
+          created_at: string | null
           id: string
-          report_date: string
+          letter_id: string | null
+          type: string
           user_id: string
         }
         Insert: {
-          encrypted_content: string
-          encryption_key_id: string
-          expires_at: string
-          filename?: string | null
+          amount: number
+          created_at?: string | null
           id?: string
-          report_date?: string
+          letter_id?: string | null
+          type: string
           user_id: string
         }
         Update: {
-          encrypted_content?: string
-          encryption_key_id?: string
-          expires_at?: string
-          filename?: string | null
+          amount?: number
+          created_at?: string | null
           id?: string
-          report_date?: string
+          letter_id?: string | null
+          type?: string
           user_id?: string
         }
         Relationships: []
@@ -236,90 +203,171 @@ export type Database = {
         }
         Relationships: []
       }
-      documents: {
-        Row: {
-          content: string | null
-          embedding: string | null
-          id: number
-          metadata: Json | null
-          user_id: string
-        }
-        Insert: {
-          content?: string | null
-          embedding?: string | null
-          id?: number
-          metadata?: Json | null
-          user_id: string
-        }
-        Update: {
-          content?: string | null
-          embedding?: string | null
-          id?: number
-          metadata?: Json | null
-          user_id?: string
-        }
-        Relationships: []
-      }
       encrypted_report_content: {
         Row: {
           content_id: string | null
           created_at: string
           id: number
+          user_id: string | null
         }
         Insert: {
           content_id?: string | null
           created_at?: string
           id?: number
+          user_id?: string | null
         }
         Update: {
           content_id?: string | null
           created_at?: string
           id?: number
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      letters: {
+        Row: {
+          cost_cents: number
+          created_at: string | null
+          file_path: string
+          id: string
+          lob_id: string | null
+          sent_at: string | null
+          status: string
+          to_address: string
+          to_name: string
+          user_id: string
+        }
+        Insert: {
+          cost_cents?: number
+          created_at?: string | null
+          file_path: string
+          id?: string
+          lob_id?: string | null
+          sent_at?: string | null
+          status?: string
+          to_address: string
+          to_name: string
+          user_id: string
+        }
+        Update: {
+          cost_cents?: number
+          created_at?: string | null
+          file_path?: string
+          id?: string
+          lob_id?: string | null
+          sent_at?: string | null
+          status?: string
+          to_address?: string
+          to_name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      mail_queue: {
+        Row: {
+          id: string
+          last_update: string | null
+          letter_id: string
+          queue_status: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          last_update?: string | null
+          letter_id: string
+          queue_status?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          last_update?: string | null
+          letter_id?: string
+          queue_status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      payments: {
+        Row: {
+          amount_cents: number
+          created_at: string | null
+          id: string
+          status: string
+          stripe_payment_id: string
+          user_id: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string | null
+          id?: string
+          status: string
+          stripe_payment_id: string
+          user_id: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string | null
+          id?: string
+          status?: string
+          stripe_payment_id?: string
+          user_id?: string
         }
         Relationships: []
       }
       profiles: {
         Row: {
-          address1: string | null
-          address2: string | null
-          city: string | null
-          created_at: string | null
-          dob: string | null
-          first_name: string | null
-          id: string | null
-          last_name: string | null
-          phone: string | null
-          state: string | null
+          avatar_url: string | null
+          id: number
+          updated_at: string | null
           user_id: string
-          zip: string | null
+          username: string | null
+          website: string | null
         }
         Insert: {
-          address1?: string | null
-          address2?: string | null
-          city?: string | null
-          created_at?: string | null
-          dob?: string | null
-          first_name?: string | null
-          id?: string | null
-          last_name?: string | null
-          phone?: string | null
-          state?: string | null
-          user_id?: string
-          zip?: string | null
+          avatar_url?: string | null
+          id?: never
+          updated_at?: string | null
+          user_id: string
+          username?: string | null
+          website?: string | null
         }
         Update: {
-          address1?: string | null
-          address2?: string | null
-          city?: string | null
-          created_at?: string | null
-          dob?: string | null
-          first_name?: string | null
-          id?: string | null
-          last_name?: string | null
-          phone?: string | null
-          state?: string | null
+          avatar_url?: string | null
+          id?: never
+          updated_at?: string | null
           user_id?: string
-          zip?: string | null
+          username?: string | null
+          website?: string | null
+        }
+        Relationships: []
+      }
+      subscription_plans: {
+        Row: {
+          credits_per_month: number
+          id: string
+          is_active: boolean | null
+          name: string
+          price_cents: number
+          stripe_price_id: string | null
+          user_id: string
+        }
+        Insert: {
+          credits_per_month: number
+          id?: string
+          is_active?: boolean | null
+          name: string
+          price_cents: number
+          stripe_price_id?: string | null
+          user_id?: string
+        }
+        Update: {
+          credits_per_month?: number
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          price_cents?: number
+          stripe_price_id?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -327,83 +375,57 @@ export type Database = {
         Row: {
           account_balance: string | null
           account_number: string | null
-          account_status: string | null
-          account_type: string | null
+          account_status: Database["public"]["Enums"]["tradeline_status"] | null
+          account_type: Database["public"]["Enums"]["tradeline_type"] | null
           created_at: string | null
-          credit_bureau: string | null
+          credit_bureau: Database["public"]["Enums"]["bureau"] | null
           credit_limit: string | null
           creditor_name: string | null
           date_opened: string | null
           dispute_count: number | null
           id: string
-          is_negative: boolean
+          is_negative: boolean | null
           monthly_payment: string | null
           raw_text: string | null
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           account_balance?: string | null
           account_number?: string | null
-          account_status?: string | null
-          account_type?: string | null
+          account_status?:
+            | Database["public"]["Enums"]["tradeline_status"]
+            | null
+          account_type?: Database["public"]["Enums"]["tradeline_type"] | null
           created_at?: string | null
-          credit_bureau?: string | null
+          credit_bureau?: Database["public"]["Enums"]["bureau"] | null
           credit_limit?: string | null
           creditor_name?: string | null
           date_opened?: string | null
           dispute_count?: number | null
           id?: string
-          isNegative?: boolean
+          is_negative?: boolean | null
           monthly_payment?: string | null
           raw_text?: string | null
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           account_balance?: string | null
           account_number?: string | null
-          account_status?: string | null
-          account_type?: string | null
+          account_status?:
+            | Database["public"]["Enums"]["tradeline_status"]
+            | null
+          account_type?: Database["public"]["Enums"]["tradeline_type"] | null
           created_at?: string | null
-          credit_bureau?: string | null
+          credit_bureau?: Database["public"]["Enums"]["bureau"] | null
           credit_limit?: string | null
           creditor_name?: string | null
           date_opened?: string | null
           dispute_count?: number | null
           id?: string
-          isNegative?: boolean
+          is_negative?: boolean | null
           monthly_payment?: string | null
           raw_text?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
-      transcripts: {
-        Row: {
-          content: string | null
-          created_at: string | null
-          id: string
-          tags: string[] | null
-          title: string | null
-          transcript_file: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          content?: string | null
-          created_at?: string | null
-          id: string
-          tags?: string[] | null
-          title?: string | null
-          transcript_file?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          content?: string | null
-          created_at?: string | null
-          id?: string
-          tags?: string[] | null
-          title?: string | null
-          transcript_file?: string | null
-          updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -473,23 +495,32 @@ export type Database = {
         }
         Relationships: []
       }
-      user_roles: {
+      user_subscriptions: {
         Row: {
-          assigned_at: string | null
-          email: string | null
-          role: string
+          ended_at: string | null
+          id: string
+          plan_id: string
+          started_at: string | null
+          status: string
+          stripe_subscription_id: string | null
           user_id: string
         }
         Insert: {
-          assigned_at?: string | null
-          email?: string | null
-          role?: string
-          user_id?: string
+          ended_at?: string | null
+          id?: string
+          plan_id: string
+          started_at?: string | null
+          status?: string
+          stripe_subscription_id?: string | null
+          user_id: string
         }
         Update: {
-          assigned_at?: string | null
-          email?: string | null
-          role?: string
+          ended_at?: string | null
+          id?: string
+          plan_id?: string
+          started_at?: string | null
+          status?: string
+          stripe_subscription_id?: string | null
           user_id?: string
         }
         Relationships: []
@@ -499,12 +530,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      authorize: {
+        Args: {
+          requested_permission: Database["public"]["Enums"]["app_permission"]
+        }
+        Returns: boolean
+      }
       binary_quantize: {
         Args: { "": string } | { "": unknown }
         Returns: unknown
       }
+      custom_access_token_hook: {
+        Args: { event: Json }
+        Returns: Json
+      }
       fetch_tradelines: {
-        Args: Record<PropertyKey, never> | { user_id: number }
+        Args: Record<PropertyKey, never>
         Returns: undefined
       }
       halfvec_avg: {
@@ -563,12 +604,7 @@ export type Database = {
         Args:
           | Record<PropertyKey, never>
           | { query_embedding: string; match_count?: number; filter?: Json }
-        Returns: {
-          id: number
-          content: string
-          metadata: Json
-          similarity: number
-        }[]
+        Returns: undefined
       }
       sparsevec_out: {
         Args: { "": unknown }
@@ -581,6 +617,10 @@ export type Database = {
       sparsevec_typmod_in: {
         Args: { "": unknown[] }
         Returns: number
+      }
+      update_user_profile_timestamp: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       vector_avg: {
         Args: { "": number[] }
@@ -608,7 +648,28 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      app_permission: "channels.delete" | "messages.delete"
+      bureau: "equifax" | "transunion" | "experian" | "'" | "null"
+      tradeline_status:
+        | "open"
+        | "closed"
+        | "in_collection"
+        | "charged_off"
+        | "disputed"
+        | "late"
+        | "collections"
+        | "paid-closed"
+        | "current-account"
+        | "never-late"
+        | "null"
+      tradeline_type:
+        | "credit_card"
+        | "loan"
+        | "mortgage"
+        | "auto_loan"
+        | "student_loan"
+        | "collection"
+        | "null"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -723,6 +784,31 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_permission: ["channels.delete", "messages.delete"],
+      bureau: ["equifax", "transunion", "experian", "'", "null"],
+      tradeline_status: [
+        "open",
+        "closed",
+        "in_collection",
+        "charged_off",
+        "disputed",
+        "late",
+        "collections",
+        "paid-closed",
+        "current-account",
+        "never-late",
+        "null",
+      ],
+      tradeline_type: [
+        "credit_card",
+        "loan",
+        "mortgage",
+        "auto_loan",
+        "student_loan",
+        "collection",
+        "null",
+      ],
+    },
   },
 } as const
