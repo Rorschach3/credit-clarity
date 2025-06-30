@@ -20,9 +20,11 @@ interface DisputeItem {
 
 interface NegativeItemsDialogProps {
   trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function NegativeItemsDialog({ trigger }: NegativeItemsDialogProps) {
+export function NegativeItemsDialog({ trigger, open, onOpenChange }: NegativeItemsDialogProps) {
   const [disputes, setDisputes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
@@ -70,7 +72,7 @@ export function NegativeItemsDialog({ trigger }: NegativeItemsDialogProps) {
   ).length;
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
         {trigger || (
           <Button variant="outline" className="w-full">

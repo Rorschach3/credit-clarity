@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -67,17 +68,16 @@ export function PersonalInfoForm({ onComplete }: PersonalInfoFormProps) {
       try {
         const { data, error } = await supabase
           .from("profiles")
-          .select("first_name, last_name, address, city, state, zip, phone, email, ssnLastFour")
-          .eq("id", user.id)
+          .select("*")
+          .eq("user_id", user.id)
           .single();
 
-        if (error) {
+        if (error && error.code !== 'PGRST116') {
           console.error("Error fetching personal info:", error);
           return;
         }
 
         if (data) {
-
           setExistingInfo({
             firstName: data.first_name || "",
             lastName: data.last_name || "",
@@ -86,8 +86,8 @@ export function PersonalInfoForm({ onComplete }: PersonalInfoFormProps) {
             state: data.state || "",
             zip: data.zip || "",
             phone: data.phone || "",
-            email: data.email || "",
-            ssnLastFour: data.ssnLastFour || "",
+            email: data.email || user?.email || "",
+            ssnLastFour: data.ssnlastfour || "",
           });
 
           // Populate form with existing data
@@ -99,8 +99,8 @@ export function PersonalInfoForm({ onComplete }: PersonalInfoFormProps) {
             state: data.state || "",
             zip: data.zip || "",
             phone: data.phone || "",
-            email: data.email || "",
-            ssnLastFour: data.ssnLastFour || "",
+            email: data.email || user?.email || "",
+            ssnLastFour: data.ssnlastfour || "",
           });
         }
       } catch (error) {
@@ -127,36 +127,26 @@ export function PersonalInfoForm({ onComplete }: PersonalInfoFormProps) {
 
     try {
       const personalInfo = {
-        firstName: values.firstName,
-        lastName: values.lastName,
+        first_name: values.firstName,
+        last_name: values.lastName,
         address: values.address,
         city: values.city,
         state: values.state,
         zip: values.zip,
         phone: values.phone,
         email: values.email,
-        ssnLastFour: values.ssnLastFour,
-        updated_at: new Date().toISOString() // Convert Date to string
+        ssnlastfour: values.ssnLastFour,
+        user_id: user.id,
+        updated_at: new Date().toISOString()
       };
 
-      let operation;
-      if (existingInfo) {
-        // Update existing record
-        operation = supabase
-          .from("profiles")
-          .update(personalInfo)
-          .eq("id", user.id);
-      } else {
-        // Insert new record
-        // Note: Supabase profiles table typically has a row created on user signup
-        // so update is more common here. If insert is truly needed, ensure it aligns
-        // with Supabase auth triggers.
-        operation = supabase
-          .from("profiles")
-          .insert([personalInfo]); // Pass as array for insert operation
-      }
+      const { error } = await supabase
+        .from("profiles")
+        .upsert(personalInfo, { 
+          onConflict: 'user_id',
+          ignoreDuplicates: false 
+        });
 
-      const { error } = await operation;
       console.log("Supabase operation error:", error);
 
       if (error) {

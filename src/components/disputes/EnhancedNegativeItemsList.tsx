@@ -1,12 +1,12 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import type { NegativeItem } from "@/types/document";
 import { DisputeAnalysis } from "@/utils/ai-service";
 import { NegativeItemCard } from "./negative-items/NegativeItemCard";
 import { AiHeader } from "./negative-items/AiHeader";
 import { AiAlert } from "./negative-items/AiAlert";
 import { ListActions } from "./negative-items/ListActions";
+import { NegativeItem } from "@/types/negative-item";
 
 interface EnhancedNegativeItemsListProps {
   items: NegativeItem[];
@@ -73,7 +73,7 @@ export function EnhancedNegativeItemsList({
         <AiHeader 
           hasAiAnalysis={!!analysis}
           showRecommendationsOnly={showRecommendationsOnly}
-          hasRecommendations={hasRecommendations}
+          hasRecommendations={!!hasRecommendations}
           onToggleRecommendations={() => setShowRecommendationsOnly(!showRecommendationsOnly)}
         />
       </CardHeader>
@@ -84,7 +84,7 @@ export function EnhancedNegativeItemsList({
 
         <div className="space-y-4">
           {displayedItems.map((item) => {
-            const isAiRecommended = analysis?.recommendedDisputes?.some(rec => rec.id === item.id);
+            const isAiRecommended = analysis?.recommendedDisputes?.some(rec => rec.id === item.id) || false;
             const recommendedReason = getRecommendedReason(item.id);
             
             return (
@@ -92,7 +92,7 @@ export function EnhancedNegativeItemsList({
                 key={item.id}
                 item={item}
                 isSelected={!!selectedItems[item.id]}
-                isAiRecommended={!!isAiRecommended}
+                isAiRecommended={isAiRecommended}
                 recommendedReason={recommendedReason}
                 onToggleSelect={toggleItem}
               />

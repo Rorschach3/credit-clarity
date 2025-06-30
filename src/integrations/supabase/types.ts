@@ -48,6 +48,66 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_history: {
+        Row: {
+          created_at: string
+          id: string
+          new_values: Json | null
+          old_values: Json | null
+          operation: string
+          performed_by: string | null
+          record_id: string
+          table_name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          new_values?: Json | null
+          old_values?: Json | null
+          operation: string
+          performed_by?: string | null
+          record_id: string
+          table_name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          new_values?: Json | null
+          old_values?: Json | null
+          operation?: string
+          performed_by?: string | null
+          record_id?: string
+          table_name?: string
+        }
+        Relationships: []
+      }
+      credit_reports: {
+        Row: {
+          created_at: string
+          encrypted_content: string | null
+          encryption_key_id: string | null
+          id: string
+          report_date: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          encrypted_content?: string | null
+          encryption_key_id?: string | null
+          id?: string
+          report_date?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          encrypted_content?: string | null
+          encryption_key_id?: string | null
+          id?: string
+          report_date?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       credit_transactions: {
         Row: {
           amount: number
@@ -316,28 +376,55 @@ export type Database = {
       }
       profiles: {
         Row: {
+          address: string | null
           avatar_url: string | null
+          city: string | null
+          email: string | null
+          first_name: string | null
           id: number
+          last_name: string | null
+          phone: string | null
+          ssnlastfour: string | null
+          state: string | null
           updated_at: string | null
           user_id: string
           username: string | null
           website: string | null
+          zip: string | null
         }
         Insert: {
+          address?: string | null
           avatar_url?: string | null
+          city?: string | null
+          email?: string | null
+          first_name?: string | null
           id?: never
+          last_name?: string | null
+          phone?: string | null
+          ssnlastfour?: string | null
+          state?: string | null
           updated_at?: string | null
           user_id: string
           username?: string | null
           website?: string | null
+          zip?: string | null
         }
         Update: {
+          address?: string | null
           avatar_url?: string | null
+          city?: string | null
+          email?: string | null
+          first_name?: string | null
           id?: never
+          last_name?: string | null
+          phone?: string | null
+          ssnlastfour?: string | null
+          state?: string | null
           updated_at?: string | null
           user_id?: string
           username?: string | null
           website?: string | null
+          zip?: string | null
         }
         Relationships: []
       }
@@ -495,6 +582,30 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          assigned_at: string
+          email: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          email: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          assigned_at?: string
+          email?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_subscriptions: {
         Row: {
           ended_at: string | null
@@ -563,6 +674,13 @@ export type Database = {
       halfvec_typmod_in: {
         Args: { "": unknown[] }
         Returns: number
+      }
+      has_role: {
+        Args: {
+          _user_id: string
+          _role: Database["public"]["Enums"]["app_role"]
+        }
+        Returns: boolean
       }
       hnsw_bit_support: {
         Args: { "": unknown }
@@ -649,6 +767,7 @@ export type Database = {
     }
     Enums: {
       app_permission: "channels.delete" | "messages.delete"
+      app_role: "admin" | "moderator" | "user"
       bureau: "equifax" | "transunion" | "experian" | "'" | "null"
       tradeline_status:
         | "open"
@@ -786,6 +905,7 @@ export const Constants = {
   public: {
     Enums: {
       app_permission: ["channels.delete", "messages.delete"],
+      app_role: ["admin", "moderator", "user"],
       bureau: ["equifax", "transunion", "experian", "'", "null"],
       tradeline_status: [
         "open",
