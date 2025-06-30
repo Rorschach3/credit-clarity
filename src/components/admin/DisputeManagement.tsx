@@ -16,7 +16,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Printer, Loader2, FileText, TruckIcon } from "lucide-react"
+import { Printer, Loader2, TruckIcon } from "lucide-react"
 import RealTimeQueue from "./RealTimeQueue"
 
 interface DisputeManagementProps {
@@ -139,8 +139,6 @@ export function DisputeManagement({ isLoading, disputes, fetchDisputes }: Disput
       setProcessingDisputes(prev => ({ ...prev, [dispute.id]: false }))
     }
   }
-
-  const [escalationThreshold] = useState(35) // Escalate if no response in 35 days
 
   useEffect(() => {
     const checkDeadlines = async () => {
