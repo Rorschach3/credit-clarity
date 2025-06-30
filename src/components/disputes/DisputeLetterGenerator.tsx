@@ -1,10 +1,10 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { type NegativeItem } from "@/types/document";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Tables } from "@/integrations/supabase/schema";
 import { Loader2, Save } from "lucide-react";
 import { type Bureau, bureauAddresses } from "@/utils/bureau-constants";
 import { BureauTabs } from "./BureauTabs";
@@ -93,11 +93,10 @@ Sincerely,
         if (!letter) return null;
         
         const { data, error } = await supabase
-          .from(Tables.disputes)
+          .from('disputes')
           .insert({
-            credit_bureau: bureau,
+            credit_report_id: `dispute-${Date.now()}`,
             mailing_address: bureauAddresses[bureau],
-            letter_content: letter,
             status: 'pending',
             user_id: TEMP_USER_ID
           })

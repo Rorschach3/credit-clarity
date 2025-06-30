@@ -97,7 +97,7 @@ export function DocumentUploader({
       const filePath = `${user.id}/${documentType}/${Date.now()}_${file.name}`;
       
       // Upload to Supabase Storage
-      const { data: storageData, error: storageError } = await supabase.storage
+      const { error: storageError } = await supabase.storage
         .from('dispute_documents')
         .upload(filePath, file, {
           cacheControl: '3600',
@@ -107,11 +107,6 @@ export function DocumentUploader({
       if (storageError) throw storageError;
       
       setUploadProgress(60);
-      
-      // Get public URL for the file
-      const fileUrl = supabase.storage
-        .from('dispute_documents')
-        .getPublicUrl(filePath).data.publicUrl;
       
       // Record in database
       const documentRecord = {

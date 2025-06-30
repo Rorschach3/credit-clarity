@@ -1,73 +1,89 @@
-import React from "react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { ParsedTradeline } from "@/utils/tradelineParser";
 
-interface UserInfo {
-  name: string;
-  address: string;
-  city: string;
-  state: string;
-  zip: string;
-}
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Edit3, Save, RotateCcw } from 'lucide-react';
 
 interface LetterEditorProps {
-  userInfo: UserInfo;
-  selectedTradelines: ParsedTradeline[];
-  letter: string;
-  setLetter: (val: string) => void;
-  setShowDocsSection: (val: boolean) => void;
+  initialContent: string;
+  bureau: string;
+  onSave: (content: string) => void;
 }
 
-export const LetterEditor: React.FC<LetterEditorProps> = ({
-  userInfo,
-  selectedTradelines,
-  letter,
-  setLetter,
-  setShowDocsSection,
-}) => {
-  const handleDownload = () => {
-    const blob = new Blob([letter], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "dispute_letter.txt";
-    a.click();
-    URL.revokeObjectURL(url);
+export function LetterEditor({ initialContent, bureau, onSave }: LetterEditorProps) {
+  const [content, setContent] = useState(initialContent);
+  const [isEditing, setIsEditing] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
+
+  const handleContentChange = (value: string) => {
+    setContent(value);
+    setHasChanges(value !== initialContent);
   };
 
-  const handlePrint = () => {
-    const printWindow = window.open("", "_blank");
-    if (printWindow) {
-      printWindow.document.write(`<pre>${letter}</pre>`);
-      printWindow.document.close();
-      printWindow.print();
-    }
+  const handleSave = () => {
+    onSave(content);
+    setIsEditing(false);
+    setHasChanges(false);
+  };
+
+  const handleReset = () => {
+    setContent(initialContent);
+    setHasChanges(false);
   };
 
   return (
-    <div className="space-y-4">
-      {letter && (
-        <>
-          <Textarea
-            rows={12}
-            value={letter}
-            onChange={(e) => setLetter(e.target.value)}
-            className="font-mono"
-          />
-          <div className="flex gap-2">
-            <Button onClick={handleDownload} variant="outline">
-              Download
-            </Button>
-            <Button onClick={handlePrint} variant="outline">
-              Print
-            </Button>
-            <Button onClick={() => setShowDocsSection(true)}>
-              Add Identity Docs & Prepare Packet
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Edit3 className="h-4 w-4" />
+              Letter Editor - {bureau}
+            </CardTitle>
+            <CardDescription>
+              Customize your dispute letter content
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            {hasChanges && <Badge variant="secondary">Unsaved Changes</Badge>}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditing(!isEditing)}
+            >
+              {isEditing ? 'Preview' : 'Edit'}
             </Button>
           </div>
-        </>
-      )}
-    </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isEditing ? (
+          <div className="space-y-4">
+            <Textarea
+              value={content}
+              onChange={(e) => handleContentChange(e.target.value)}
+              className="min-h-[400px] font-mono text-sm"
+              placeholder="Enter your dispute letter content..."
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={handleReset} disabled={!hasChanges}>
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Reset
+              </Button>
+              <Button onClick={handleSave} disabled={!hasChanges}>
+                <Save className="h-4 w-4 mr-2" />
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="whitespace-pre-wrap font-mono text-sm p-4 bg-gray-50 rounded-md border min-h-[400px]">
+            {content}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
-};
+}

@@ -1,20 +1,13 @@
-import { useState, useEffect, useCallback } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
-import { Loader2 } from "lucide-react";
-import { Database } from "@/integrations/supabase/schema";
 
-
-interface NegativeItemsDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}
+import React, { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { FileText, AlertTriangle } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/use-auth';
+import { useToast } from '@/hooks/use-toast';
 
 interface DisputeItem {
   id: string;
@@ -25,164 +18,123 @@ interface DisputeItem {
   status: string;
 }
 
-interface TradelineRow {
-  id: string;
-  credit_bureau: string;
-  letter_content: string;
-  status: string;
-  created_at: string;
+interface NegativeItemsDialogProps {
+  trigger?: React.ReactNode;
 }
 
-export function NegativeItemsDialog({
-  open,
-  onOpenChange,
-}: NegativeItemsDialogProps) {
-  const [items, setItems] = useState<DisputeItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const fetchDisputeItems = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("disputes")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Error fetching disputes:", error);
-        setItems(getSampleDisputeItems());
-      } else if (data && data.length > 0) {
-        const mappedItems = data.map((dispute: TradelineRow) => ({
-          id: dispute.id,
-          bureau: dispute.credit_bureau,
-          company: extractCompanyName(dispute.letter_content),
-          type: "Collection Account",
-          amount: "$0", // Replace with actual value if available
-          status: dispute.status,
-        }));
-        setItems(mappedItems);
-      } else {
-        setItems(getSampleDisputeItems());
-      }
-    } catch (error) {
-      console.error("Unexpected error:", error);
-      setItems(getSampleDisputeItems());
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+export function NegativeItemsDialog({ trigger }: NegativeItemsDialogProps) {
+  const [disputes, setDisputes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const { toast } = useToast();
 
   useEffect(() => {
-    if (open) {
-      fetchDisputeItems();
+    if (user) {
+      fetchDisputes();
     }
-  }, [open, fetchDisputeItems]);
+  }, [user]);
 
-  function extractCompanyName(content: string): string {
+  const fetchDisputes = async () => {
     try {
-      if (!content) return "Unknown Company";
-      const matches = content.match(/regarding.*?account with\s+(.*?)(?:\.|,|\s+on)/i);
-      return matches && matches[1] ? matches[1] : "Credit Account";
-    } catch {
-      return "Credit Account";
-    }
-  }
+      const { data, error } = await supabase
+        .from('disputes')
+        .select('*')
+        .eq('user_id', user?.id);
 
-  function getSampleDisputeItems(): DisputeItem[] {
-    return [
-      {
-        id: "1",
-        bureau: "Experian",
-        company: "Collection Agency A",
-        type: "Collection Account",
-        amount: "$1,245",
-        status: "Pending",
-      },
-      {
-        id: "2",
-        bureau: "TransUnion",
-        company: "Bank XYZ",
-        type: "Late Payment",
-        amount: "$89",
-        status: "Disputed",
-      },
-      {
-        id: "3",
-        bureau: "Equifax",
-        company: "Credit Card Company",
-        type: "Charge-off",
-        amount: "$3,500",
-        status: "Verified",
-      },
-      {
-        id: "4",
-        bureau: "Experian",
-        company: "Collection Agency B",
-        type: "Collection Account",
-        amount: "$567",
-        status: "Removed",
-      },
-    ];
-  }
+      if (error) throw error;
 
-  function getStatusBadgeVariant(status: string) {
-    switch (status.toLowerCase()) {
-      case "removed":
-        return "bg-green-100 text-green-800 border-green-200";
-      case "disputed":
-      case "pending":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "verified":
-        return "bg-red-100 text-red-800 border-red-200";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
+      setDisputes(data || []);
+    } catch (error) {
+      console.error('Error fetching disputes:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load disputes",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
-  }
+  };
+
+  const disputeItems: DisputeItem[] = disputes.map((dispute) => ({
+    id: dispute.id,
+    bureau: dispute.credit_report_id,
+    company: dispute.mailing_address.split('\n')[0] || 'Unknown',
+    type: 'Credit Report Dispute',
+    amount: 'N/A',
+    status: dispute.status
+  }));
+
+  const negativeCount = disputeItems.filter(item => 
+    item.status === 'pending' || item.status === 'in_progress'
+  ).length;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+    <Dialog>
+      <DialogTrigger asChild>
+        {trigger || (
+          <Button variant="outline" className="w-full">
+            <AlertTriangle className="w-4 h-4 mr-2" />
+            View Negative Items ({negativeCount})
+          </Button>
+        )}
+      </DialogTrigger>
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Negative Items</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <FileText className="w-5 h-5" />
+            Negative Items & Disputes
+          </DialogTitle>
         </DialogHeader>
-
-        <div className="space-y-4 mt-4 max-h-[60vh] overflow-y-auto pr-2">
-          {isLoading ? (
-            <div className="flex justify-center items-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        
+        <div className="space-y-4">
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
-          ) : items.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">
-              No negative items found.
-            </p>
+          ) : disputeItems.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No disputes found.</p>
+            </div>
           ) : (
-            items.map((item) => (
-              <div key={item.id} className="border rounded-lg p-4 space-y-2">
-                <div className="flex justify-between items-start">
-                  <h4 className="font-medium">{item.company}</h4>
-                  <Badge
-                    variant="outline"
-                    className={getStatusBadgeVariant(item.status)}
-                  >
-                    {item.status}
-                  </Badge>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Bureau:</span>{" "}
-                    {item.bureau}
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Type:</span>{" "}
-                    {item.type}
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Amount:</span>{" "}
-                    {item.amount}
-                  </div>
-                </div>
-              </div>
-            ))
+            <div className="grid gap-4">
+              {disputeItems.map((item) => (
+                <Card key={item.id}>
+                  <CardHeader className="pb-2">
+                    <div className="flex justify-between items-start">
+                      <CardTitle className="text-lg">{item.company}</CardTitle>
+                      <Badge variant={
+                        item.status === 'pending' ? 'secondary' :
+                        item.status === 'in_progress' ? 'default' :
+                        item.status === 'resolved' ? 'success' : 'destructive'
+                      }>
+                        {item.status}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <p className="font-medium text-muted-foreground">Bureau</p>
+                        <p>{item.bureau}</p>
+                      </div>
+                      <div>
+                        <p className="font-medium text-muted-foreground">Type</p>
+                        <p>{item.type}</p>
+                      </div>
+                      <div>
+                        <p className="font-medium text-muted-foreground">Amount</p>
+                        <p>{item.amount}</p>
+                      </div>
+                      <div>
+                        <p className="font-medium text-muted-foreground">Status</p>
+                        <p className="capitalize">{item.status}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           )}
         </div>
       </DialogContent>
