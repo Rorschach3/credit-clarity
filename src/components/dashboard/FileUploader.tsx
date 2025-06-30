@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useCallback } from "react";
@@ -14,7 +15,6 @@ import {
 } from "@/components/ui/card";
 
 import { supabase } from "@/integrations/supabase/client";
-import { TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/use-auth";
 
 const TOAST_DURATION = 3000;
@@ -143,7 +143,7 @@ export function FileUploader() {
                             file_path: filePath,
                             upload_date: new Date().toISOString(),
                             user_id: user.id,
-                          } as TablesInsert<"credit_reports">,
+                          },
                         ]);
                       if (insertError) {
                         console.error(`Database insert error for file ${file.name}:`, insertError);

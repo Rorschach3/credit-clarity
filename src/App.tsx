@@ -56,7 +56,7 @@ function AppContent() {
       <Navbar />
       <main>
         <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname || 'default'}>
+          <Routes location={location} key={location.pathname || location.key || 'default'}>
             <Route path="/" element={
               <>
                 <Hero />

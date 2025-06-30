@@ -29,7 +29,7 @@ export function NegativeItemsDialog({ trigger }: NegativeItemsDialogProps) {
   const { toast } = useToast();
 
   useEffect(() => {
-    if (user) {
+    if (user?.id) {
       fetchDisputes();
     }
   }, [user]);
@@ -39,7 +39,7 @@ export function NegativeItemsDialog({ trigger }: NegativeItemsDialogProps) {
       const { data, error } = await supabase
         .from('disputes')
         .select('*')
-        .eq('user_id', user?.id);
+        .eq('user_id', user?.id || '');
 
       if (error) throw error;
 
@@ -106,7 +106,7 @@ export function NegativeItemsDialog({ trigger }: NegativeItemsDialogProps) {
                       <Badge variant={
                         item.status === 'pending' ? 'secondary' :
                         item.status === 'in_progress' ? 'default' :
-                        item.status === 'resolved' ? 'success' : 'destructive'
+                        item.status === 'resolved' ? 'default' : 'destructive'
                       }>
                         {item.status}
                       </Badge>

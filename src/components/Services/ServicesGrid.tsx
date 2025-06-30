@@ -45,7 +45,7 @@ const ServicesGrid = () => {
       y: 0,
       transition: { 
         duration: 0.6,
-        ease: [0.6, -0.05, 0.01, 0.99]
+        ease: "easeOut"
       }
     }
   };
@@ -83,7 +83,11 @@ const ServicesGrid = () => {
         >
           {services.map((service, index) => (
             <motion.div key={index} variants={itemVariants}>
-              <ServiceCard {...service} />
+              <ServiceCard 
+                icon={React.createElement(service.icon, { className: "h-8 w-8" })}
+                title={service.title}
+                description={service.description}
+              />
             </motion.div>
           ))}
         </motion.div>
