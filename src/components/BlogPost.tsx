@@ -1,39 +1,25 @@
-import { useParams } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-const posts = [
-  {
-    id: 1,
-    title: "First Blog Post",
-    content: "This is the first blog post.",
-  },
-  {
-    id: 2,
-    title: "Second Blog Post",
-    content: "This is the second blog post.",
-  },
-];
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export function BlogPost() {
-  const { id } = useParams();
-  const post = posts.find((post) => post.id === Number(id));
-
-  if (!post) {
-    return <div>Post not found</div>;
-  }
-
-  return (
-    <div className="container py-10">
-      <Card>
-        <CardHeader>
-          <CardTitle>{post.title}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p>{post.content}</p>
-        </CardContent>
-      </Card>
-    </div>
-  );
+interface BlogPostProps {
+  title: string;
+  content: string;
+  date: string;
 }
+
+const BlogPost: React.FC<BlogPostProps> = ({ title, content, date }) => {
+  return (
+    <Card className="mb-6">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <p className="text-sm text-muted-foreground">{date}</p>
+      </CardHeader>
+      <CardContent>
+        <p>{content}</p>
+      </CardContent>
+    </Card>
+  );
+};
 
 export default BlogPost;

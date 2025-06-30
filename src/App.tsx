@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
@@ -55,7 +56,7 @@ function AppContent() {
       <Navbar />
       <main>
         <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname}>
+          <Routes location={location} key={location.pathname || '/'}>
             <Route path="/" element={
               <>
                 <Hero />
@@ -79,12 +80,6 @@ function AppContent() {
                 <TradelinesPage />
               </MainLayout>
             } />
-            {/* Commented out routes for future implementation
-            <Route path="/contact" element={<ContactPage />} />
-            <Route path="/faq" element={<FaqPage />} />
-            <Route path="/pricing" element={<PricingPage />} />
-            <Route path="/features" element={<FeaturesPage />} />
-            */}
           </Routes>
         </AnimatePresence>
       </main>

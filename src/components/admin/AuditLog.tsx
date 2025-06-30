@@ -1,13 +1,13 @@
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from "@/integrations/supabase/client";
-import type { Tables as TablesType } from "@/integrations/supabase/schema";
 
 const AuditLog = () => {
   type AuditLogEntry = {
-    id: number;
-    performed_by: string | null;
-    operation: string | null;
-    performed_at: string | null;
+    id: string;
+    admin_id: string | null;
+    action: string | null;
+    created_at: string | null;
   };
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
 
@@ -15,8 +15,8 @@ const AuditLog = () => {
     const fetchLogs = async () => {
       try {
         const { data, error } = await supabase
-          .from('audit_history')
-          .select('id, performed_by, operation, performed_at');
+          .from('admin_activity_logs')
+          .select('id, admin_id, action, created_at');
 
         if (error) {
           console.error('Error fetching audit logs:', error);
@@ -39,7 +39,7 @@ const AuditLog = () => {
         <thead>
           <tr>
             <th>ID</th>
-            <th>User</th>
+            <th>Admin ID</th>
             <th>Action</th>
             <th>Timestamp</th>
           </tr>
@@ -48,9 +48,9 @@ const AuditLog = () => {
           {logs.map((log) => (
             <tr key={log.id}>
               <td>{log.id}</td>
-              <td>{log.performed_by}</td>
-              <td>{log.operation}</td>
-              <td>{log.performed_at}</td>
+              <td>{log.admin_id}</td>
+              <td>{log.action}</td>
+              <td>{log.created_at}</td>
             </tr>
           ))}
         </tbody>

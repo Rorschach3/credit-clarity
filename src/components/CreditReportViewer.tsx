@@ -1,78 +1,59 @@
-import React, { useState, useEffect } from "react";
-import { aiService, Account } from "@/utils/ai-service";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+
+import React, { useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { FileText, Download } from "lucide-react";
 
 interface CreditReportViewerProps {
-  fileUrl: string;
-  bureau: string;
-  onClose: () => void;
-  ocrText: string;
+  reportData: {
+    fileName: string;
+    uploadDate: string;
+  };
 }
 
-const CreditReportViewer: React.FC<CreditReportViewerProps> = ({ fileUrl, bureau, onClose, ocrText }) => {
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [labeledAccounts, setLabeledAccounts] = useState<(Account & { isNegative: boolean; reason: string })[]>([]);
+const CreditReportViewer: React.FC<CreditReportViewerProps> = ({ reportData }) => {
+  const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    const loadAccounts = async () => {
-      try {
-        const accts = await aiService.ExtractedAccounts(ocrText);
-        setAccounts(accts);
-      } catch (err) {
-        console.error("Error loading accounts:", err);
-      }
-    };
-    loadAccounts();
-  }, [ocrText]);
-
-  useEffect(() => {
-    if (accounts.length === 0) return;
-    const labelAccounts = async () => {
-      try {
-        const results = await Promise.all(
-          accounts.map(async account => {
-            const { isNegative, reason } = await aiService.classifyTradeline(
-              account.name + account.status + account.paymentHistory + account.balance
-            );
-            return { ...account, isNegative, reason };
-          })
-        );
-        setLabeledAccounts(results);
-      } catch (err) {
-        console.error("Error labeling accounts:", err);
-      }
-    };
-    labelAccounts();
-  }, [accounts]);
+  const handleDownload = async () => {
+    setIsLoading(true);
+    try {
+      // Download logic would go here
+      console.log('Downloading report:', reportData.fileName);
+    } catch (error) {
+      console.error('Error downloading report:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-lg w-11/12 max-w-5xl h-4/5 flex flex-col">
-        <div className="flex justify-between items-center p-4 border-b">
-          <h2 className="text-lg font-semibold">{`Credit Report - ${bureau}`}</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-600 hover:text-gray-900 focus:outline-none"
-            aria-label="Close"
-          >
-            ×
-          </button>
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FileText className="h-5 w-5" />
+          Credit Report Viewer
+        </CardTitle>
+        <CardDescription>
+          View and manage your uploaded credit report
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div>
+            <p className="font-medium">File Name:</p>
+            <p className="text-muted-foreground">{reportData.fileName}</p>
+          </div>
+          <div>
+            <p className="font-medium">Upload Date:</p>
+            <p className="text-muted-foreground">{reportData.uploadDate}</p>
+          </div>
+          <Button onClick={handleDownload} disabled={isLoading}>
+            <Download className="h-4 w-4 mr-2" />
+            Download Report
+          </Button>
         </div>
-        <Card>
-          {labeledAccounts.map((account, idx) => (
-            <div key={idx} className="border p-4 mb-2 rounded-md shadow">
-              <h3 className="text-lg font-semibold">{account.name}</h3>
-              <p>Status: {account.status}</p>
-              <p>Balance: {account.balance}</p>
-              {account.isNegative && (
-                <Badge variant="destructive">Negative: {account.reason}</Badge>
-              )}
-            </div>
-          ))}
-        </Card>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 };
 

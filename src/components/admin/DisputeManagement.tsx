@@ -1,8 +1,9 @@
+
 import { useState, useEffect } from 'react'
-import { differenceInCalendarDays, addBusinessDays } from 'date-fns'
+import { differenceInCalendarDays } from 'date-fns'
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/integrations/supabase/client"
-import type { Database, Tables } from "@/integrations/supabase/schema";
+import type { Tables } from "@/integrations/supabase/types";
 import useActivityMonitoring from "@/hooks/use-activity-monitoring";
 import {
   Table,
@@ -20,9 +21,9 @@ import RealTimeQueue from "./RealTimeQueue"
 
 interface DisputeManagementProps {
   isLoading: boolean
-  disputes: Tables<'public'>['disputes']['Row'][]
+  disputes: Tables<'disputes'>[]
   fetchDisputes: () => Promise<void>
-  setDisputes: React.Dispatch<React.SetStateAction<Tables<'public'>['disputes']['Row'][]>>
+  setDisputes: React.Dispatch<React.SetStateAction<Tables<'disputes'>[]>>
 }
 
 export function DisputeManagement({ isLoading, disputes, fetchDisputes }: DisputeManagementProps) {
@@ -30,7 +31,13 @@ export function DisputeManagement({ isLoading, disputes, fetchDisputes }: Disput
   const [processingDisputes, setProcessingDisputes] = useState<{ [key: string]: boolean }>({})
   useActivityMonitoring("Viewed Dispute Management")
 
-  async function generateShippingLabel(dispute: Tables<'public'>['disputes']['Row']) {
+  const getDeadlineDate = (createdAt: string) => {
+    const date = new Date(createdAt)
+    date.setDate(date.getDate() + 30) // 30 days from creation
+    return date
+  }
+
+  async function generateShippingLabel(dispute: Tables<'disputes'>) {
     try {
       setProcessingDisputes(prev => ({ ...prev, [dispute.id]: true }))
       console.log("Generating shipping label for dispute:", dispute)
@@ -50,7 +57,7 @@ export function DisputeManagement({ isLoading, disputes, fetchDisputes }: Disput
         body: {
           disputeId: dispute.id,
           toAddress: {
-            name: dispute.credit_bureau,
+            name: dispute.credit_report_id, // Using credit_report_id as name for now
             street1: addressLines[0],
             city: city,
             state: state,
@@ -68,8 +75,6 @@ export function DisputeManagement({ isLoading, disputes, fetchDisputes }: Disput
       const { error: updateError } = await supabase
         .from('disputes')
         .update({
-          shipping_label_url: response.data.labelUrl,
-          tracking_number: response.data.trackingNumber,
           status: 'label_generated'
         })
         .eq('id', dispute.id)
@@ -99,7 +104,7 @@ export function DisputeManagement({ isLoading, disputes, fetchDisputes }: Disput
     }
   }
 
-  async function markDisputeAsSent(dispute: Tables<'public'>['disputes']['Row']) {
+  async function markDisputeAsSent(dispute: Tables<'disputes'>) {
     try {
       setProcessingDisputes(prev => ({ ...prev, [dispute.id]: true }))
 
@@ -135,36 +140,16 @@ export function DisputeManagement({ isLoading, disputes, fetchDisputes }: Disput
     }
   }
 
-  function getStatusBadge(status: string) {
-    switch (status) {
-      case 'pending':
-        return <Badge variant="outline" className="flex items-center gap-1"><FileText className="h-3 w-3" /> Pending</Badge>
-      case 'label_generated':
-        return <Badge variant="secondary" className="flex items-center gap-1"><Printer className="h-3 w-3" /> Label Generated</Badge>
-      case 'sent':
-        return <Badge className="bg-green-500 text-white flex items-center gap-1"><TruckIcon className="h-3 w-3" /> Sent</Badge>
-      default:
-        return <Badge variant="outline">{status}</Badge>
-    }
-  }
-
   const [escalationThreshold] = useState(35) // Escalate if no response in 35 days
 
   useEffect(() => {
     const checkDeadlines = async () => {
       const nearingDeadline = disputes.filter(dispute =>
-        differenceInCalendarDays(new Date(dispute.created_at), new Date()) >= 40
+        dispute.created_at && differenceInCalendarDays(new Date(), new Date(dispute.created_at)) >= 25
       )
       
       if (nearingDeadline.length > 0) {
-        await supabase
-          .from('audit_history')
-          .insert(nearingDeadline.map(dispute => ({
-            dispute_id: dispute.id,
-            action: 'deadline_warning',
-            details: `FCRA §611 response deadline approaching`,
-            created_at: new Date().toISOString()
-          })))
+        console.log(`${nearingDeadline.length} disputes nearing deadline`)
       }
     }
     
@@ -172,35 +157,6 @@ export function DisputeManagement({ isLoading, disputes, fetchDisputes }: Disput
     const interval = setInterval(checkDeadlines, 3600000) // Check hourly
     return () => clearInterval(interval)
   }, [disputes])
-
-  const autoEscalateCases = async () => {
-    const toEscalate = disputes.filter(dispute =>
-      dispute.status === 'processing' &&
-      differenceInCalendarDays(new Date(), new Date(dispute.created_at)) >= escalationThreshold
-    )
-
-    for (const dispute of toEscalate) {
-      await supabase
-        .from('disputes')
-        .update({ status: 'escalated' })
-        .eq('id', dispute.id)
-      
-      await supabase
-        .from('audit_history')
-        .insert({
-          dispute_id: dispute.id,
-          action: 'auto_escalation',
-          details: `Escalated after ${escalationThreshold} days without resolution`,
-          created_at: new Date().toISOString()
-        })
-    }
-    
-    if (toEscalate.length > 0) {
-      setDisputes(prev => prev.map(d =>
-        toEscalate.some(es => es.id === d.id) ? {...d, status: 'escalated'} : d
-      ))
-    }
-  }
 
   return (
     <Card>
@@ -219,20 +175,18 @@ export function DisputeManagement({ isLoading, disputes, fetchDisputes }: Disput
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Credit Bureau</TableHead>
+                <TableHead>Credit Report ID</TableHead>
                 <TableHead>Created At</TableHead>
-                <TableHead>FCRA Violations</TableHead>
                 <TableHead>Deadline</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Content Preview</TableHead>
-                <TableHead>Attachments</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
+                  <TableCell colSpan={6} className="text-center py-8">
                     <div className="flex items-center justify-center">
                       <Loader2 className="h-6 w-6 animate-spin mr-2" />
                       Loading disputes...
@@ -241,7 +195,7 @@ export function DisputeManagement({ isLoading, disputes, fetchDisputes }: Disput
                 </TableRow>
               ) : disputes.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
+                  <TableCell colSpan={6} className="text-center py-8">
                     No disputes found.
                     <div className="mt-2 text-sm text-muted-foreground">
                       User-generated disputes will appear here.
@@ -249,29 +203,20 @@ export function DisputeManagement({ isLoading, disputes, fetchDisputes }: Disput
                   </TableCell>
                 </TableRow>
               ) : (
-                disputes.map((dispute) => (
-                  <TableRow key={dispute.id}>
+                disputes.map((dispute) => {
+                  const createdDate = new Date(dispute.created_at || '')
+                  const deadlineDate = getDeadlineDate(dispute.created_at || '')
+                  
+                  return (
+                    <TableRow key={dispute.id}>
                       <TableCell className="font-medium">
-                        {dispute.credit_bureau}
+                        {dispute.credit_report_id}
                       </TableCell>
                       <TableCell>
                         {createdDate.toLocaleDateString()}
                       </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1 max-w-[200px]">
-                          {dispute.fcra_violations?.split(',').map((violation) => (
-                            <Badge
-                              key={violation}
-                              variant="destructive"
-                              className="text-xs"
-                            >
-                              {violation}
-                            </Badge>
-                          ))}
-                        </div>
-                      </TableCell>
                       <TableCell className={
-                        differenceInCalendarDays(new Date(), createdDate) > 40
+                        differenceInCalendarDays(new Date(), createdDate) > 25
                           ? 'text-red-600 font-medium'
                           : ''
                       }>
@@ -284,47 +229,29 @@ export function DisputeManagement({ isLoading, disputes, fetchDisputes }: Disput
                           {dispute.status}
                         </Badge>
                       </TableCell>
-                    <TableCell>
-                      {dispute.mailing_address ? dispute.mailing_address.substring(0, 50) + '...' : 'No content'}
-                    </TableCell>
-                    <TableCell>
-                      {'No attachments available'}
-                    </TableCell>
-                    <TableCell>
-                      {dispute.status === 'pending' ? (
-                        <Button
-                          onClick={() => generateShippingLabel(dispute)}
-                          size="sm"
-                          className="flex items-center gap-2"
-                          disabled={processingDisputes[dispute.id]}
-                        >
-                          {processingDisputes[dispute.id] ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Printer className="h-4 w-4" />
-                          )}
-                          Generate Label
-                        </Button>
-                      ) : dispute.status === 'label_generated' ? (
-                        <div className="space-y-2">
-                          <a
-                            href={dispute.shipping_label_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3"
+                      <TableCell>
+                        {dispute.mailing_address ? dispute.mailing_address.substring(0, 50) + '...' : 'No content'}
+                      </TableCell>
+                      <TableCell>
+                        {dispute.status === 'pending' ? (
+                          <Button
+                            onClick={() => generateShippingLabel(dispute)}
+                            size="sm"
+                            className="flex items-center gap-2"
+                            disabled={processingDisputes[dispute.id]}
                           >
-                            <Printer className="h-4 w-4" /> View Label
-                          </a>
-                          {dispute.tracking_number && (
-                            <div className="text-sm text-muted-foreground">
-                              Tracking: {dispute.tracking_number}
-                            </div>
-                          )}
+                            {processingDisputes[dispute.id] ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Printer className="h-4 w-4" />
+                            )}
+                            Generate Label
+                          </Button>
+                        ) : dispute.status === 'label_generated' ? (
                           <Button
                             onClick={() => markDisputeAsSent(dispute)}
                             size="sm"
                             variant="outline"
-                            className="mt-2"
                             disabled={processingDisputes[dispute.id]}
                           >
                             {processingDisputes[dispute.id] ? (
@@ -334,17 +261,15 @@ export function DisputeManagement({ isLoading, disputes, fetchDisputes }: Disput
                             )}
                             Mark as Sent
                           </Button>
-                        </div>
-                      ) : (
-                        <div className="text-sm text-muted-foreground">
-                          {dispute.tracking_number && (
-                            <div>Tracking: {dispute.tracking_number}</div>
-                          )}
-                        </div>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
+                        ) : (
+                          <div className="text-sm text-muted-foreground">
+                            {dispute.status}
+                          </div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               )}
             </TableBody>
           </Table>
