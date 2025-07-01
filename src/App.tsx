@@ -50,7 +50,7 @@ function AppContent() {
     );
   }
 
-  const routeKey = location.pathname;
+  const routeKey = location.pathname || 'root';
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
