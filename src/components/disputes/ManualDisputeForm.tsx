@@ -1,289 +1,189 @@
 
 import { useState } from "react";
-import { z } from "zod";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-  FormDescription,
-} from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import type { NegativeItem } from "@/types/document";
-
-// Form schema with validation
-const formSchema = z.object({
-  creditorName: z.string().min(1, "Creditor name is required"),
-  accountNumber: z.string().min(1, "Account number is required"),
-  amount: z.string().min(1, "Amount is required"),
-  dateOpened: z.string().optional(),
-  accountType: z.string().optional(),
-  reason: z.string().optional(),
-  balance: z.string().optional(),
-  monthlyPayment: z.string().optional(),
-  bureaus: z.array(z.string()).min(1, "Select at least one bureau"),
-});
-
-type FormValues = z.infer<typeof formSchema>;
+import { Checkbox } from "@/components/ui/checkbox";
+import { useToast } from "@/hooks/use-toast";
+import { type NegativeItem } from "@/types/negative-item";
 
 interface ManualDisputeFormProps {
   onItemCreated: (item: NegativeItem) => void;
 }
 
 export function ManualDisputeForm({ onItemCreated }: ManualDisputeFormProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
+  const [formData, setFormData] = useState({
+    creditorName: "",
+    accountNumber: "",
+    accountType: "credit_card" as const,
+    amount: "",
+    dateReported: "",
+    reason: "",
+    bureaus: [] as string[]
+  });
+  const { toast } = useToast();
+
+  const handleBureauChange = (bureau: string, checked: boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      bureaus: checked 
+        ? [...prev.bureaus, bureau]
+        : prev.bureaus.filter(b => b !== bureau)
+    }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.creditorName || !formData.accountNumber || formData.bureaus.length === 0) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields and select at least one bureau.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const newItem: NegativeItem = {
+      id: `manual-${Date.now()}`,
+      creditorName: formData.creditorName,
+      accountNumber: formData.accountNumber,
+      accountType: formData.accountType,
+      balance: parseFloat(formData.amount.replace(/[$,]/g, '')) || 0,
+      isNegative: true,
+      amount: formData.amount,
+      dateReported: formData.dateReported,
+      bureaus: formData.bureaus,
+      reason: formData.reason || "Account disputed",
+      status: "disputed"
+    };
+
+    onItemCreated(newItem);
+    
+    // Reset form
+    setFormData({
       creditorName: "",
       accountNumber: "",
+      accountType: "credit_card",
       amount: "",
-      dateOpened: "",
-      accountType: "",
+      dateReported: "",
       reason: "",
-      balance: "",
-      monthlyPayment: "",
-      bureaus: ["Experian"],
-    },
-  });
+      bureaus: []
+    });
 
-  const onSubmit = (values: FormValues) => {
-    setIsSubmitting(true);
-    
-    try {
-      // Create a negative item object from form values
-      const newItem: NegativeItem = {
-        id: crypto.randomUUID(),
-        creditorName: values.creditorName,
-        accountNumber: values.accountNumber,
-        amount: values.amount,
-        dateReported: values.dateOpened || new Date().toISOString().split('T')[0],
-        bureaus: values.bureaus as any,
-        reason: values.reason || "Information is inaccurate",
-        status: "Active",
-        // Remove properties that aren't in the NegativeItem type
-        // score and recommendedReason were removed
-      };
-      
-      onItemCreated(newItem);
-      form.reset();
-    } catch (error) {
-      console.error("Error creating manual dispute item:", error);
-    } finally {
-      setIsSubmitting(false);
-    }
+    toast({
+      title: "Item Added",
+      description: "Manual dispute item has been added successfully.",
+    });
   };
 
   return (
-    <Card>
+    <Card className="w-full">
       <CardHeader>
-        <CardTitle>Manual Dispute Entry</CardTitle>
+        <CardTitle>Add Manual Dispute Item</CardTitle>
         <CardDescription>
-          Enter the details of the account you want to dispute
+          Manually add a negative item to dispute if not found in your credit report scan
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="creditorName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Creditor Name *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., Bank of America" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="accountNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Account Number *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., 123456xxxx or last 4 digits" {...field} />
-                    </FormControl>
-                    <FormDescription>
-                      Partial account numbers are acceptable
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="amount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Amount *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., $1,500" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="dateOpened"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Date Opened/Reported</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="accountType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Account Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select account type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="credit_card">Credit Card</SelectItem>
-                        <SelectItem value="loan">Loan</SelectItem>
-                        <SelectItem value="collection">Collection</SelectItem>
-                        <SelectItem value="medical">Medical</SelectItem>
-                        <SelectItem value="utility">Utility</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="balance"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Current Balance</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., $500" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="monthlyPayment"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Monthly Payment</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., $25" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="creditorName">Creditor Name *</Label>
+              <Input
+                id="creditorName"
+                value={formData.creditorName}
+                onChange={(e) => setFormData(prev => ({ ...prev, creditorName: e.target.value }))}
+                placeholder="e.g., Capital One"
+                required
               />
             </div>
-            
-            <FormField
-              control={form.control}
-              name="reason"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Reason for Dispute</FormLabel>
-                  <FormControl>
-                    <Textarea 
-                      placeholder="Explain why you're disputing this item (optional)" 
-                      className="min-h-24"
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+            <div>
+              <Label htmlFor="accountNumber">Account Number *</Label>
+              <Input
+                id="accountNumber"
+                value={formData.accountNumber}
+                onChange={(e) => setFormData(prev => ({ ...prev, accountNumber: e.target.value }))}
+                placeholder="e.g., ****1234"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="accountType">Account Type</Label>
+              <Select value={formData.accountType} onValueChange={(value: "credit_card" | "loan" | "mortgage" | "auto_loan" | "student_loan" | "collection") => 
+                setFormData(prev => ({ ...prev, accountType: value }))
+              }>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="credit_card">Credit Card</SelectItem>
+                  <SelectItem value="loan">Personal Loan</SelectItem>
+                  <SelectItem value="mortgage">Mortgage</SelectItem>
+                  <SelectItem value="auto_loan">Auto Loan</SelectItem>
+                  <SelectItem value="student_loan">Student Loan</SelectItem>
+                  <SelectItem value="collection">Collection Account</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="amount">Amount</Label>
+              <Input
+                id="amount"
+                value={formData.amount}
+                onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                placeholder="e.g., $1,500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="dateReported">Date Reported</Label>
+            <Input
+              id="dateReported"
+              type="date"
+              value={formData.dateReported}
+              onChange={(e) => setFormData(prev => ({ ...prev, dateReported: e.target.value }))}
             />
-            
-            <FormField
-              control={form.control}
-              name="bureaus"
-              render={() => (
-                <FormItem>
-                  <FormLabel>Credit Bureaus to Dispute With *</FormLabel>
-                  <div className="flex flex-wrap gap-2">
-                    {["Experian", "TransUnion", "Equifax"].map((bureau) => (
-                      <FormField
-                        key={bureau}
-                        control={form.control}
-                        name="bureaus"
-                        render={({ field }) => (
-                          <FormItem className="flex items-center space-x-1 space-y-0">
-                            <input
-                              type="checkbox"
-                              id={bureau}
-                              checked={field.value?.includes(bureau)}
-                              onChange={(e) => {
-                                const checked = e.target.checked;
-                                if (checked) {
-                                  field.onChange([...field.value, bureau]);
-                                } else {
-                                  field.onChange(
-                                    field.value?.filter((value) => value !== bureau)
-                                  );
-                                }
-                              }}
-                              className="h-4 w-4 rounded border-gray-300"
-                            />
-                            <label
-                              htmlFor={bureau}
-                              className="text-sm font-medium mr-4"
-                            >
-                              {bureau}
-                            </label>
-                          </FormItem>
-                        )}
-                      />
-                    ))}
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
+          </div>
+
+          <div>
+            <Label htmlFor="reason">Dispute Reason</Label>
+            <Textarea
+              id="reason"
+              value={formData.reason}
+              onChange={(e) => setFormData(prev => ({ ...prev, reason: e.target.value }))}
+              placeholder="e.g., This account does not belong to me"
+              rows={3}
             />
-            
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Creating..." : "Create Dispute Item"}
-            </Button>
-          </form>
-        </Form>
+          </div>
+
+          <div>
+            <Label>Credit Bureaus Reporting *</Label>
+            <div className="flex flex-wrap gap-4 mt-2">
+              {['Experian', 'Equifax', 'TransUnion'].map((bureau) => (
+                <div key={bureau} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={bureau}
+                    checked={formData.bureaus.includes(bureau)}
+                    onCheckedChange={(checked) => handleBureauChange(bureau, checked as boolean)}
+                  />
+                  <Label htmlFor={bureau}>{bureau}</Label>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <Button type="submit" className="w-full">
+            Add Dispute Item
+          </Button>
+        </form>
       </CardContent>
     </Card>
   );

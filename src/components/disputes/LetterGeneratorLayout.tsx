@@ -21,7 +21,7 @@ export function LetterGeneratorLayout({ selectedItems = [] }: LetterGeneratorLay
         <LetterGeneratorForm selectedItems={selectedItems} onGenerate={handleGenerate} />
       </div>
       <div>
-        <LetterPreview letter={generatedLetter} />
+        <LetterPreview content={generatedLetter} />
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,7 +18,7 @@ import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/integrations/supabase/client"
 import { useAuth } from "@/hooks/use-auth"
 import { FileUploadZone } from "./FileUploadZone"
-import type { NegativeItem } from "@/types/document"
+import type { NegativeItem } from "@/types/negative-item"
 import { aiService, ExtractedText, DisputeAnalysis } from "@/utils/ai-service"
 
 interface EnhancedDocumentScannerProps {
@@ -29,7 +30,6 @@ export function EnhancedDocumentScanner({ onScanComplete }: EnhancedDocumentScan
   const [isScanning, setIsScanning] = useState(false)
   const [scanStatus, setScanStatus] = useState<'idle' | 'uploading' | 'extracting' | 'analyzing' | 'complete' | 'error'>('idle')
   const [activeTab, setActiveTab] = useState<"upload" | "scan" | "analyze">("upload")
-  const [extractedText, setExtractedText] = useState<ExtractedText | null>(null)
   const [disputeAnalysis, setDisputeAnalysis] = useState<DisputeAnalysis | null>(null)
   const [processingProgress, setProcessingProgress] = useState(0)
   const [processingStep, setProcessingStep] = useState('')
@@ -75,7 +75,6 @@ export function EnhancedDocumentScanner({ onScanComplete }: EnhancedDocumentScan
       setScanStatus("extracting")
 
       const extractedData = await aiService.extractTextFromDocument(fileUrl, file.type)
-      setExtractedText(extractedData)
 
       updateProgress("Analyzing credit report", 60)
       setScanStatus("analyzing")
@@ -92,10 +91,13 @@ export function EnhancedDocumentScanner({ onScanComplete }: EnhancedDocumentScan
         id: item.id,
         creditorName: item.creditorName,
         accountNumber: item.accountNumber,
+        accountType: item.accountType as any,
+        balance: item.balance,
+        isNegative: item.isNegative,
         amount: item.amount,
         dateReported: item.dateReported,
         bureaus: item.bureaus,
-        reason: item.reason,
+        reason: item.reason || "Account disputed",
         status: item.status,
       }))
 
@@ -258,10 +260,13 @@ export function EnhancedDocumentScanner({ onScanComplete }: EnhancedDocumentScan
                         id: item.id,
                         creditorName: item.creditorName,
                         accountNumber: item.accountNumber,
+                        accountType: item.accountType as any,
+                        balance: item.balance,
+                        isNegative: item.isNegative,
                         amount: item.amount,
                         dateReported: item.dateReported,
                         bureaus: item.bureaus,
-                        reason: item.reason,
+                        reason: item.reason || "Account disputed",
                         status: item.status,
                       })),
                       disputeAnalysis

@@ -1,5 +1,6 @@
+
 import React from "react";
-import { GroupedTradeline, BureauTradeline, Bureau } from "@/utils/groupTradelinesByAccount";
+import { GroupedTradeline, Bureau } from "@/utils/groupTradelinesByAccount";
 
 const BUREAUS: { key: Bureau; label: string; color: string }[] = [
   { key: "equifax", label: "Equifax", color: "bg-green-200" },
@@ -13,7 +14,6 @@ type FieldKey =
   | "status"
   | "dateOpened"
   | "balance"
-  | "type"
   | "creditLimit"
   | "monthlyPayment"
   | "disputeCount";
@@ -30,7 +30,6 @@ const FIELDS: FieldConfig[] = [
   { key: "status", label: "Status" },
   { key: "dateOpened", label: "Date Opened" },
   { key: "balance", label: "Balance", format: (v) => v != null ? `$${Number(v).toFixed(2)}` : "" },
-  { key: "type", label: "Type" },
   { key: "creditLimit", label: "Credit Limit", format: (v) => v != null ? `$${Number(v).toFixed(2)}` : "" },
   { key: "monthlyPayment", label: "Monthly Payment", format: (v) => v != null ? `$${Number(v).toFixed(2)}` : "" },
   { key: "disputeCount", label: "Dispute Count" },
@@ -45,10 +44,8 @@ import { ParsedTradeline } from "@/utils/tradelineParser";
 
 export const TradelineGrid: React.FC<{
   tradelines: GroupedTradeline[];
-  selected: ParsedTradeline[];
-  setSelected: (selected: ParsedTradeline[]) => void;
   onAddManual: () => void;
-}> = ({ tradelines, selected, setSelected, onAddManual }) => {
+}> = ({ tradelines, onAddManual }) => {
   return (
     <div className="space-y-8">
       {tradelines.map((group) => (
@@ -66,7 +63,7 @@ export const TradelineGrid: React.FC<{
               {FIELDS.map((field) => {
                 const values = BUREAUS.map((b) => {
                   const t = group[b.key];
-                  let v: string | number | undefined = t ? t[field.key] : "";
+                  let v: string | number | undefined = t ? (t as any)[field.key] : "";
                   if (field.format) v = field.format(v);
                   return v;
                 });
@@ -90,7 +87,6 @@ export const TradelineGrid: React.FC<{
         </div>
       ))}
       <button onClick={onAddManual}>Add Manual Tradeline</button>
-      {/* Placeholder for selection handling */}
     </div>
   );
 };

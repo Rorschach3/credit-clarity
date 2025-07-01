@@ -1,9 +1,10 @@
+
 import { useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { type NegativeItem } from "@/types/document";
+import { type NegativeItem } from "@/types/negative-item";
 
 interface NegativeItemsListProps {
   items: NegativeItem[];
@@ -82,7 +83,7 @@ export function NegativeItemsList({ items, onGenerateDisputes }: NegativeItemsLi
                   <div className="col-span-2">
                     <span className="text-muted-foreground">Bureaus:</span>{" "}
                     <div className="inline-flex flex-wrap gap-1 mt-1">
-                      {item.bureaus.map(bureau => (
+                      {item.bureaus.map((bureau: string) => (
                         <Badge key={bureau} variant="secondary" className="text-xs">
                           {bureau}
                         </Badge>

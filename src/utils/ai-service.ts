@@ -17,7 +17,7 @@ export interface Account {
   isNegative: boolean;
   amount: string;
   dateReported: string;
-  reason?: string;
+  reason: string;
   recommendedReason?: string;
 }
 
@@ -26,6 +26,11 @@ export interface DisputeAnalysis {
   recommendedDisputes: Account[];
   confidenceScore: number;
   summary: string;
+}
+
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
 }
 
 class AIService {
@@ -83,11 +88,31 @@ class AIService {
 
         resolve({
           negativeItems: mockNegativeItems,
-          recommendedDisputes: mockNegativeItems.slice(0, 1), // Recommend first item
+          recommendedDisputes: mockNegativeItems.slice(0, 1),
           confidenceScore: 0.92,
           summary: "Found 2 negative items, 1 recommended for dispute"
         });
       }, 3000);
+    });
+  }
+
+  async chatCompletion(messages: ChatMessage[], model: string = 'gpt-4', maxTokens: number = 256): Promise<string> {
+    // Mock implementation for chat completion
+    console.log(`Chat completion with ${messages.length} messages using ${model}`);
+    
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const lastMessage = messages[messages.length - 1];
+        const mockResponses = [
+          "I understand you're asking about credit reports. Let me help you with that.",
+          "Credit disputes are an important part of maintaining good credit health.",
+          "I'd be happy to help you understand your credit report better.",
+          "That's a great question about credit repair processes."
+        ];
+        
+        const randomResponse = mockResponses[Math.floor(Math.random() * mockResponses.length)];
+        resolve(randomResponse);
+      }, 1000);
     });
   }
 }

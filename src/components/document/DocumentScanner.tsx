@@ -1,14 +1,11 @@
 
-import { useState, useCallback, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, FileText, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
-import { FileUploadZone } from "./FileUploadZone";
-import { ScanStatus } from "./ScanStatus";
-import type { NegativeItem } from "@/types/document";
+import { type NegativeItem } from "@/types/negative-item";
 
 interface DocumentScannerProps {
   onScanComplete: (negativeItems: NegativeItem[]) => void;
@@ -17,131 +14,130 @@ interface DocumentScannerProps {
 export function DocumentScanner({ onScanComplete }: DocumentScannerProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isScanning, setIsScanning] = useState(false);
-  const [scanStatus, setScanStatus] = useState<'idle' | 'scanning' | 'complete' | 'error'>('idle');
+  const [scanResult, setScanResult] = useState<string>("");
   const { toast } = useToast();
-  const { user } = useAuth();
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      setScanResult("");
+    }
+  };
 
   const handleScan = async () => {
     if (!file) {
       toast({
-        title: "Error",
-        description: "Please upload a file first",
+        title: "No File Selected",
+        description: "Please select a file to scan first.",
         variant: "destructive"
       });
       return;
     }
 
     setIsScanning(true);
-    setScanStatus('scanning');
-
+    
     try {
-      const userId = user?.id || 'anonymous';
-      const filePath = `${userId}/${Date.now()}_${file.name}`;
+      // Mock scanning process
+      await new Promise(resolve => setTimeout(resolve, 3000));
       
-      console.log('Uploading file to:', filePath);
-      
-      if (user) {
-        const { error: uploadError, data } = await supabase.storage
-          .from('credit_reports')
-          .upload(filePath, file, {
-            cacheControl: '3600',
-            upsert: false
-          });
-
-        if (uploadError) {
-          console.error('Upload error:', uploadError);
-          throw uploadError;
+      // Mock negative items found
+      const mockNegativeItems: NegativeItem[] = [
+        {
+          id: "1",
+          creditorName: "Capital One",
+          accountNumber: "****1234",
+          accountType: "credit_card",
+          balance: 1500,
+          isNegative: true,
+          amount: "$1,500",
+          dateReported: "2023-01-15",
+          bureaus: ["Experian", "Equifax"],
+          reason: "Charged Off",
+          status: "charged_off"
         }
+      ];
 
-        console.log('File uploaded successfully:', data?.path);
-      }
-
-      // Simulate document analysis with mock data
-      setTimeout(() => {
-        const mockNegativeItems: NegativeItem[] = [
-          {
-            id: "1",
-            creditorName: "ABC Collections",
-            accountNumber: "XXXX-1234",
-            amount: "$1,245",
-            dateReported: "2024-03-15",
-            bureaus: ["Experian", "TransUnion"],
-            reason: "Collection Account",
-            status: "Open"
-          },
-          {
-            id: "2",
-            creditorName: "XYZ Financial",
-            accountNumber: "XXXX-5678",
-            amount: "$567",
-            dateReported: "2024-02-20",
-            bureaus: ["Equifax", "Experian"],
-            reason: "Late Payment",
-            status: "Open"
-          },
-          {
-            id: "3",
-            creditorName: "Credit Card Company",
-            accountNumber: "XXXX-9012",
-            amount: "$3,500",
-            dateReported: "2024-01-10",
-            bureaus: ["TransUnion", "Equifax"],
-            reason: "Charge-off",
-            status: "Open"
-          }
-        ];
-
-        setScanStatus('complete');
-        setIsScanning(false);
-        onScanComplete(mockNegativeItems);
-        
-        toast({
-          title: "Analysis Complete",
-          description: `Found ${mockNegativeItems.length} negative items on your credit report.`,
-        });
-      }, 3000);
+      setScanResult(`Found ${mockNegativeItems.length} negative items`);
+      onScanComplete(mockNegativeItems);
+      
+      toast({
+        title: "Scan Complete",
+        description: `Found ${mockNegativeItems.length} negative items on your credit report.`,
+      });
     } catch (error) {
-      console.error("Error scanning document:", error);
-      setScanStatus('error');
-      setIsScanning(false);
+      console.error("Scan failed:", error);
       toast({
         title: "Scan Failed",
-        description: "There was an error analyzing your document. Please try again.",
+        description: "There was an error scanning your document. Please try again.",
         variant: "destructive"
       });
+    } finally {
+      setIsScanning(false);
     }
   };
 
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Upload Credit Report</CardTitle>
+        <CardTitle>Document Scanner</CardTitle>
         <CardDescription>
-          Upload your credit report to scan for negative items that can be disputed
+          Upload your credit report to scan for negative items
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <FileUploadZone file={file} onFileChange={setFile} />
-        
-        <ScanStatus status={scanStatus} />
+      <CardContent className="space-y-4">
+        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+          <input
+            type="file"
+            onChange={handleFileChange}
+            accept=".pdf,.jpg,.jpeg,.png"
+            className="hidden"
+            id="file-upload"
+          />
+          <label htmlFor="file-upload" className="cursor-pointer">
+            <Upload className="mx-auto h-12 w-12 text-gray-400" />
+            <p className="mt-2 text-sm text-gray-600">
+              Click to upload or drag and drop
+            </p>
+            <p className="text-xs text-gray-500">
+              PDF, JPG, PNG up to 10MB
+            </p>
+          </label>
+        </div>
 
-        {file && scanStatus !== 'scanning' && (
-          <div className="mt-4 flex justify-center">
-            <Button 
-              onClick={handleScan}
-              size="sm"
-              disabled={isScanning}
-            >
-              {isScanning ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Scanning
-                </>
-              ) : (
-                "Scan Document"
-              )}
-            </Button>
-          </div>
+        {file && (
+          <Alert>
+            <FileText className="h-4 w-4" />
+            <AlertDescription>
+              Selected file: {file.name}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <Button 
+          onClick={handleScan}
+          disabled={!file || isScanning}
+          className="w-full"
+        >
+          {isScanning ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Scanning...
+            </>
+          ) : (
+            <>
+              <FileText className="mr-2 h-4 w-4" />
+              Scan Document
+            </>
+          )}
+        </Button>
+
+        {scanResult && (
+          <Alert>
+            <AlertDescription>
+              {scanResult}
+            </AlertDescription>
+          </Alert>
         )}
       </CardContent>
     </Card>

@@ -1,6 +1,5 @@
 
 import { ReactNode } from 'react';
-import { UserCircle, FileText, Bot, FileArchive, FileCheck, MailOpen } from "lucide-react";
 
 interface StepIndicatorProps {
   currentStep: string;
