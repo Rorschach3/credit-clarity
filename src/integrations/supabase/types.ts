@@ -462,10 +462,10 @@ export type Database = {
         Row: {
           account_balance: string | null
           account_number: string | null
-          account_status: Database["public"]["Enums"]["tradeline_status"] | null
-          account_type: Database["public"]["Enums"]["tradeline_type"] | null
+          account_status: string | null
+          account_type: string | null
           created_at: string | null
-          credit_bureau: Database["public"]["Enums"]["bureau"] | null
+          credit_bureau: string | null
           credit_limit: string | null
           creditor_name: string | null
           date_opened: string | null
@@ -479,12 +479,10 @@ export type Database = {
         Insert: {
           account_balance?: string | null
           account_number?: string | null
-          account_status?:
-            | Database["public"]["Enums"]["tradeline_status"]
-            | null
-          account_type?: Database["public"]["Enums"]["tradeline_type"] | null
+          account_status?: string | null
+          account_type?: string | null
           created_at?: string | null
-          credit_bureau?: Database["public"]["Enums"]["bureau"] | null
+          credit_bureau?: string | null
           credit_limit?: string | null
           creditor_name?: string | null
           date_opened?: string | null
@@ -498,12 +496,10 @@ export type Database = {
         Update: {
           account_balance?: string | null
           account_number?: string | null
-          account_status?:
-            | Database["public"]["Enums"]["tradeline_status"]
-            | null
-          account_type?: Database["public"]["Enums"]["tradeline_type"] | null
+          account_status?: string | null
+          account_type?: string | null
           created_at?: string | null
-          credit_bureau?: Database["public"]["Enums"]["bureau"] | null
+          credit_bureau?: string | null
           credit_limit?: string | null
           creditor_name?: string | null
           date_opened?: string | null

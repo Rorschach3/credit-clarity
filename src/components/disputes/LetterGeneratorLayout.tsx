@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { LetterGeneratorForm } from "./LetterGeneratorForm";
 import { LetterPreview } from "./LetterPreview";
@@ -20,7 +21,7 @@ export function LetterGeneratorLayout({ selectedItems = [] }: LetterGeneratorLay
         <LetterGeneratorForm selectedItems={selectedItems} onGenerate={handleGenerate} />
       </div>
       <div>
-        <LetterPreview letter={generatedLetter} />
+        <LetterPreview letterContent={generatedLetter} />
       </div>
     </div>
   );

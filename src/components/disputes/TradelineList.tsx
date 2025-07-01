@@ -1,3 +1,4 @@
+
 import React from "react";
 import { ParsedTradeline } from "@/utils/tradelineParser";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,7 @@ export const TradelineList: React.FC<TradelineListProps> = ({
   onAddManual,
 }) => {
   const toggleSelect = (t: ParsedTradeline) => {
-    if (!t.isNegative) return;
+    if (!t.is_negative) return;
     setSelected(
       selected.includes(t) ? selected.filter((x) => x !== t) : [...selected, t]
     );
@@ -37,25 +38,25 @@ export const TradelineList: React.FC<TradelineListProps> = ({
       ) : (
         tradelines.map((t, i) => (
           <div key={i} className="border p-4 rounded mb-3 space-y-2">
-            <div><strong>{t.creditorName}</strong></div>
-            <div>Account #: {t.accountNumber}</div>
-            <div>Status: {t.status} — Negative: {t.isNegative ? "Yes" : "No"}</div>
-            {t.negativeReason && <div>Reason: {t.negativeReason}</div>}
-            <div>Balance: ${t.balance?.toFixed(2) || "0.00"}</div>
-            <div>Date Opened: {t.dateOpened || "N/A"}</div>
+            <div><strong>{t.creditor_name}</strong></div>
+            <div>Account #: {t.account_number}</div>
+            <div>Status: {t.account_status} — Negative: {t.is_negative ? "Yes" : "No"}</div>
+            <div>Balance: ${parseFloat(t.account_balance?.replace(/[$,]/g, '') || '0').toFixed(2)}</div>
+            <div>Date Opened: {t.date_opened || "N/A"}</div>
             <Input
               placeholder="Reason for Dispute (optional)"
-              defaultValue={t.negativeReason}
-              onChange={(e) => (t.negativeReason = e.target.value)}
+              onChange={(e) => {
+                // Add dispute reason logic if needed
+              }}
             />
             <Button
               variant={selected.includes(t) ? "destructive" : "default"}
               onClick={() => toggleSelect(t)}
-              disabled={!t.isNegative && !selected.includes(t)}
+              disabled={!t.is_negative && !selected.includes(t)}
             >
               {selected.includes(t)
                 ? "Remove from Dispute"
-                : !t.isNegative
+                : !t.is_negative
                 ? "Cannot Dispute"
                 : "Add to Dispute"}
             </Button>

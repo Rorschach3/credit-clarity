@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
@@ -56,7 +55,7 @@ function AppContent() {
       <Navbar />
       <main>
         <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname || location.key || 'default'}>
+          <Routes location={location} key={location.pathname || 'default'}>
             <Route path="/" element={
               <>
                 <Hero />

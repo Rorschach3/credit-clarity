@@ -9,4 +9,7 @@ export interface NegativeItem {
   bureaus: string[];
   isNegative: boolean;
   recommendedReason?: string;
+  amount: string;
+  dateReported: string;
+  reason: string;
 }

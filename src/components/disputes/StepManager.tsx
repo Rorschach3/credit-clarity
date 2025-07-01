@@ -1,6 +1,7 @@
+
 import { useState } from "react";
 import { EnhancedDocumentScanner } from "@/components/document/EnhancedDocumentScanner";
-import { type NegativeItem } from "@/types/document";
+import { type NegativeItem } from "@/types/negative-item";
 import { EnhancedNegativeItemsList } from "@/components/disputes/EnhancedNegativeItemsList";
 import { useToast } from "@/hooks/use-toast";
 import { DisputeAnalysis } from "@/utils/ai-service";
@@ -18,8 +19,12 @@ interface PersonalInfo {
   firstName: string
   lastName: string
   address: string
-  dob: string
-  ssnLast4: string
+  city: string
+  state: string
+  zip: string
+  phone?: string
+  email: string
+  ssnLastFour?: string
 }
 
 interface StepManagerProps {
@@ -37,7 +42,6 @@ interface StepManagerProps {
 }
 
 export function StepManager({
-  steps,
   onStepChange,
   onReset,
   personalInfo,
@@ -47,7 +51,7 @@ export function StepManager({
   const [step, setStep] = useState<Step>('personal');
   const [negativeItems, setNegativeItems] = useState<NegativeItem[]>([]);
   const [selectedItems, setSelectedItems] = useState<NegativeItem[]>(initialSelectedItems);
-  const [disputeAnalysis, setDisputeAnalysis] = useState<DisputeAnalysis | null>(null);
+  const [disputeAnalysis, setDisputeAnalysis] = useState<DisputeAnalysis | undefined>(undefined);
   const [entryMethod, setEntryMethod] = useState<'scan' | 'manual'>('scan');
   const { toast } = useToast();
 
@@ -97,8 +101,10 @@ export function StepManager({
     }
   };
 
-  const handlePersonalInfoComplete = (info: PersonalInfo) => {
-    setPersonalInfo(info);
+  const handlePersonalInfoComplete = (info?: PersonalInfo) => {
+    if (info) {
+      setPersonalInfo(info);
+    }
     setStep('scan');
     onStepChange('scan');
   };

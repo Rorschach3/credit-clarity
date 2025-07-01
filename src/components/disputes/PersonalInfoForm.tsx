@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -41,7 +40,6 @@ interface PersonalInfoFormProps {
 
 export function PersonalInfoForm({ onComplete }: PersonalInfoFormProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const [existingInfo, setExistingInfo] = useState<PersonalInfoFormValues | null>(null);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -78,18 +76,6 @@ export function PersonalInfoForm({ onComplete }: PersonalInfoFormProps) {
         }
 
         if (data) {
-          setExistingInfo({
-            firstName: data.first_name || "",
-            lastName: data.last_name || "",
-            address: data.address || "",
-            city: data.city || "",
-            state: data.state || "",
-            zip: data.zip || "",
-            phone: data.phone || "",
-            email: data.email || user?.email || "",
-            ssnLastFour: data.ssnlastfour || "",
-          });
-
           // Populate form with existing data
           form.reset({
             firstName: data.first_name || "",
