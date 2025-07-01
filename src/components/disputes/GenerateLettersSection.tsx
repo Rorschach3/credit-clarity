@@ -1,7 +1,7 @@
 
 import { Button } from "@/components/ui/button";
 import { EnhancedDisputeLetterGenerator } from "@/components/disputes/EnhancedDisputeLetterGenerator";
-import { NegativeItem } from "@/types/document";
+import { NegativeItem } from "@/types/negative-item";
 
 interface GenerateLettersSectionProps {
   selectedItems: NegativeItem[];

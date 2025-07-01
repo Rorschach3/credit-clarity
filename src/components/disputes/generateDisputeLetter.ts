@@ -1,3 +1,4 @@
+
 import { ParsedTradeline } from "@/utils/tradelineParser";
 
 interface UserInfo {
@@ -33,7 +34,7 @@ export async function generateDisputeLetter(
 
   const disputedItems = selectedTradelines
     .map((t, i) => {
-      return `${i + 1}. Creditor Name: ${t.creditorName}\n   Account Number: ${t.accountNumber}\n   Reason for Dispute: ${t.negativeReason || "This item is inaccurate or does not belong to me."}`;
+      return `${i + 1}. Creditor Name: ${t.creditor_name}\n   Account Number: ${t.account_number}\n   Reason for Dispute: This item is inaccurate or does not belong to me.`;
     })
     .join("\\n\\n");
 

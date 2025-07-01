@@ -10,7 +10,7 @@ interface LetterGeneratorLayoutProps {
 export function LetterGeneratorLayout({ selectedItems = [] }: LetterGeneratorLayoutProps) {
   const [generatedLetter, setGeneratedLetter] = useState<string>("");
 
-  const handleGenerate = (formData: any) => {
+  const handleGenerate = () => {
     // Generate letter logic here
     setGeneratedLetter("Generated letter content...");
   };
@@ -21,7 +21,7 @@ export function LetterGeneratorLayout({ selectedItems = [] }: LetterGeneratorLay
         <LetterGeneratorForm selectedItems={selectedItems} onGenerate={handleGenerate} />
       </div>
       <div>
-        <LetterPreview letterContent={generatedLetter} />
+        <LetterPreview letter={generatedLetter} />
       </div>
     </div>
   );

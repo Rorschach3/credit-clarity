@@ -1,10 +1,8 @@
-
-import { useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Info, Bot } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import type { NegativeItem } from "@/types/document";
+import type { NegativeItem } from "@/types/negative-item";
 
 interface NegativeItemCardProps {
   item: NegativeItem;

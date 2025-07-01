@@ -45,7 +45,7 @@ export const TradelineList: React.FC<TradelineListProps> = ({
             <div>Date Opened: {t.date_opened || "N/A"}</div>
             <Input
               placeholder="Reason for Dispute (optional)"
-              onChange={(e) => {
+              onChange={() => {
                 // Add dispute reason logic if needed
               }}
             />

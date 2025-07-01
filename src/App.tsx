@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
@@ -50,12 +51,14 @@ function AppContent() {
     );
   }
 
+  const routeKey = location.pathname || 'home';
+
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
       <Navbar />
       <main>
         <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname || 'default'}>
+          <Routes location={location} key={routeKey}>
             <Route path="/" element={
               <>
                 <Hero />
