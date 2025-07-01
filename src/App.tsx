@@ -21,7 +21,6 @@ import DisputeWizardPage from './pages/DisputeWizardPage';
 import DisputeLetterPage from './pages/DisputeLetterPage';
 import ContactForm from './components/Contact/ContactForm';
 import Footer from './components/Footer/Footer';
-import MainLayout from './components/layout/MainLayout';
 
 function App() {
   return (
@@ -51,7 +50,7 @@ function AppContent() {
     );
   }
 
-  const routeKey = location.pathname || '/';
+  const routeKey = location.pathname;
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
@@ -77,11 +76,7 @@ function AppContent() {
             <Route path="/credit-report-upload" element={<CreditReportUploadPage />} />
             <Route path="/dispute-letter" element={<DisputeLetterPage />} />
             <Route path="/dispute-wizard" element={<DisputeWizardPage />} />
-            <Route path="/tradelines" element={
-              <MainLayout>
-                <TradelinesPage />
-              </MainLayout>
-            } />
+            <Route path="/tradelines" element={<TradelinesPage />} />
           </Routes>
         </AnimatePresence>
       </main>
