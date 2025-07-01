@@ -46,7 +46,7 @@ export function ManualTradelineModal({ onClose, onAdd }: Props) {
       account_number: tradeline.account_number,
       account_balance: tradeline.account_balance || '$0',
       account_status: tradeline.account_status as "" | "open" | "closed" | "in_collection" | "charged_off" | "disputed" || "",
-      account_type: tradeline.account_type as "" | "credit_card" | "mortgage" | "auto_loan" | "personal_loan" | "collection" || "credit_card",
+      account_type: tradeline.account_type as "" | "credit_card" | "mortgage" | "auto_loan" | "loan" | "collection" || "credit_card",
       credit_limit: tradeline.credit_limit || '$0',
       date_opened: tradeline.date_opened || '',
       monthly_payment: tradeline.monthly_payment || '$0',
@@ -117,6 +117,25 @@ export function ManualTradelineModal({ onClose, onAdd }: Props) {
                 <SelectItem value="in_collection">In Collection</SelectItem>
                 <SelectItem value="charged_off">Charged Off</SelectItem>
                 <SelectItem value="disputed">Disputed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="account_type">Account Type</Label>
+            <Select
+              value={tradeline.account_type || ''}
+              onValueChange={(value) => updateTradeline('account_type', value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="credit_card">Credit Card</SelectItem>
+                <SelectItem value="mortgage">Mortgage</SelectItem>
+                <SelectItem value="auto_loan">Auto Loan</SelectItem>
+                <SelectItem value="loan">Personal Loan</SelectItem>
+                <SelectItem value="collection">Collection</SelectItem>
               </SelectContent>
             </Select>
           </div>

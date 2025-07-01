@@ -40,8 +40,6 @@ function isInconsistent(values: (string | number | undefined)[]) {
   return new Set(filtered).size > 1;
 }
 
-import { ParsedTradeline } from "@/utils/tradelineParser";
-
 export const TradelineGrid: React.FC<{
   tradelines: GroupedTradeline[];
   onAddManual: () => void;

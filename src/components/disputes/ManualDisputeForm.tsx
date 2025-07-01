@@ -10,6 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { type NegativeItem } from "@/types/negative-item";
 
+type AccountType = "credit_card" | "loan" | "mortgage" | "auto_loan" | "student_loan" | "collection";
+
 interface ManualDisputeFormProps {
   onItemCreated: (item: NegativeItem) => void;
 }
@@ -18,7 +20,7 @@ export function ManualDisputeForm({ onItemCreated }: ManualDisputeFormProps) {
   const [formData, setFormData] = useState({
     creditorName: "",
     accountNumber: "",
-    accountType: "credit_card" as const,
+    accountType: "credit_card" as AccountType,
     amount: "",
     dateReported: "",
     reason: "",
@@ -116,7 +118,7 @@ export function ManualDisputeForm({ onItemCreated }: ManualDisputeFormProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="accountType">Account Type</Label>
-              <Select value={formData.accountType} onValueChange={(value: "credit_card" | "loan" | "mortgage" | "auto_loan" | "student_loan" | "collection") => 
+              <Select value={formData.accountType} onValueChange={(value: AccountType) => 
                 setFormData(prev => ({ ...prev, accountType: value }))
               }>
                 <SelectTrigger>
