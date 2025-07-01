@@ -255,10 +255,48 @@ export async function saveTradelinesToDatabase(tradelines: ParsedTradeline[], us
   }
 
   try {
-    console.log('Saving tradelines to database:', tradelines); // Added console log
-    console.log("Attempting to save tradelines via Edge Function:", { count: tradelines.length, userId });
+    // Filter out partial tradelines (missing critical fields)
+    const validTradelines = tradelines.filter(tl =>
+      tl.creditor_name && tl.account_number && tl.account_type
+    );
     
-    const payload = { tradelines: tradelines.map(tl => ({ ...tl, user_id: userId })) };
+    const partialTradelines = tradelines.filter(tl =>
+      !tl.creditor_name || !tl.account_number || !tl.account_type
+    );
+    
+    if (partialTradelines.length > 0) {
+      console.warn(`⚠️ Skipping ${partialTradelines.length} partial tradelines:`, partialTradelines);
+    }
+
+    if (validTradelines.length === 0) {
+      console.warn("⚠️ No valid tradelines to save after filtering");
+      return;
+    }
+
+    // Deduplicate tradelines using the same composite key as backend
+    const dedupedTradelines = validTradelines.reduce((acc, current) => {
+      const key = `${current.user_id}|${current.creditor_name}|${current.account_number}|${current.account_type}`;
+      
+      // Only add if we haven't seen this combination before
+      if (!acc.has(key)) {
+        acc.set(key, current);
+      } else {
+        console.log(`⚠️ Skipping duplicate tradeline: ${key}`);
+      }
+      
+      return acc;
+    }, new Map<string, ParsedTradeline>());
+
+    const uniqueTradelines = Array.from(dedupedTradelines.values());
+    
+    if (uniqueTradelines.length < validTradelines.length) {
+      console.warn(`⚠️ Removed ${validTradelines.length - uniqueTradelines.length} duplicate tradelines`);
+    }
+
+    console.log('Saving tradelines to database:', uniqueTradelines);
+    console.log("Attempting to save tradelines via Edge Function:", { count: uniqueTradelines.length, userId });
+    
+    const payload = { tradelines: uniqueTradelines.map(tl => ({ ...tl, user_id: userId })) };
     console.log("Payload sent to Edge Function:", JSON.stringify(payload, null, 2));
 
     const response = await fetch('https://gywohmbqohytziwsjrps.supabase.co/functions/v1/add-tradeline', {
@@ -296,15 +334,21 @@ export const fetchUserTradelines = async (user_id: string): Promise<ParsedTradel
       .from('tradelines')
       .select('*')
       .eq('user_id', user_id);
-
+  
     if (error) {
       console.error("Database fetch error:", error);
       throw error;
     }
     
     console.log("Fetch successful:", { count: data?.length || 0, data });
+    
     // Validate and transform fetched data to ParsedTradeline schema
-    return data ? data.map(item => ParsedTradelineSchema.parse(item)) : [];
+    const parsedData = data ? data.map(item => ParsedTradelineSchema.parse(item)) : [];
+    
+    // Filter out partial tradelines (missing critical fields)
+    return parsedData.filter(tl =>
+      tl.creditor_name && tl.account_number && tl.account_type
+    );
   } catch (error) {
     console.error("Error in fetchUserTradelines:", error);
     throw error;

@@ -174,7 +174,7 @@ export async function extractTradelineData(
   }
 
   const prompt = `You are a financial document parser. Extract the following fields from this credit report tradeline section and return ONLY a valid JSON object with no additional text, markdown, or explanations.
- 
+  
  Required JSON format:
  {
    "creditor_name": "string",
@@ -186,16 +186,19 @@ export async function extractTradelineData(
    "date_opened": "string",
    "is_negative": boolean,
    "account_type": "credit_card|loan|mortgage|auto_loan|student_loan|collection",
-   "account_status": "open|closed|in_collection|charged_off|disputed",
+   "account_status": "open|closed|in_collection|charged_off|disputed|unknown",
    "dispute_count": number
  }
  
  Field constraints:
  - created_at should be today's date in ISO format if not found in text
  - account_type must be one of: "credit_card", "loan", "mortgage", "auto_loan", "student_loan", "collection"
- - account_status must be one of: "open", "closed", "in_collection", "charged_off", "disputed"
+ - account_status must be one of: "open", "closed", "in_collection", "charged_off", "disputed", "unknown"
  - is_negative should be true for negative accounts, false otherwise
  - Remove any markdown code blocks from your response
+ - creditor_name must not be empty - use "Unknown" if not found
+ - account_number must not be empty - use "0000" if not found
+ - account_type must not be empty - use "other" if not found
  - credit_limit, account_balance, and monthly_payment default to "$0" if not found
  - date_opened defaults to "Unknown" if not found
  - dispute_count should be a number, default to 0
