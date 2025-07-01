@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,12 +9,10 @@ import { aiService, type Account, type DisputeAnalysis } from "@/utils/ai-servic
 
 interface EnhancedDocumentScannerProps {
   onNegativeItemsFound: (items: NegativeItem[], analysis?: DisputeAnalysis) => void;
-  onItemCreated: (item: NegativeItem) => void;
 }
 
 export function EnhancedDocumentScanner({ 
-  onNegativeItemsFound, 
-  onItemCreated 
+  onNegativeItemsFound
 }: EnhancedDocumentScannerProps) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [scanStatus, setScanStatus] = useState<'idle' | 'uploading' | 'processing' | 'complete' | 'error'>('idle');

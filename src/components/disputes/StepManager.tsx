@@ -128,7 +128,7 @@ export function StepManager({
         <InputMethodTabs
           entryMethod={entryMethod}
           onMethodChange={(value) => setEntryMethod(value)}
-          scanContent={<EnhancedDocumentScanner onScanComplete={handleScanComplete} />}
+          scanContent={<EnhancedDocumentScanner onNegativeItemsFound={handleScanComplete} />}
           manualContent={<ManualDisputeForm onItemCreated={handleManualItemCreated} />}
         />
       )}
@@ -138,7 +138,7 @@ export function StepManager({
           <InputMethodTabs
             entryMethod={entryMethod}
             onMethodChange={(value) => setEntryMethod(value)}
-            scanContent={<EnhancedDocumentScanner onScanComplete={handleScanComplete} />}
+            scanContent={<EnhancedDocumentScanner onNegativeItemsFound={handleScanComplete} />}
             manualContent={<ManualDisputeForm onItemCreated={handleManualItemCreated} />}
           />
           <EnhancedNegativeItemsList 

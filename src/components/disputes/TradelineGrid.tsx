@@ -9,14 +9,14 @@ const BUREAUS: { key: Bureau; label: string; color: string }[] = [
 ];
 
 type FieldKey =
-  | "accountName"
-  | "accountNumber"
-  | "status"
-  | "dateOpened"
-  | "balance"
-  | "creditLimit"
-  | "monthlyPayment"
-  | "disputeCount";
+  | "account_name"
+  | "account_number"
+  | "account_status"
+  | "date_opened"
+  | "account_balance"
+  | "credit_limit"
+  | "monthly_payment"
+  | "dispute_count";
 
 type FieldConfig = {
   key: FieldKey;
@@ -25,14 +25,14 @@ type FieldConfig = {
 };
 
 const FIELDS: FieldConfig[] = [
-  { key: "accountName", label: "Account Name" },
-  { key: "accountNumber", label: "Account Number" },
-  { key: "status", label: "Status" },
-  { key: "dateOpened", label: "Date Opened" },
-  { key: "balance", label: "Balance", format: (v) => v != null ? `$${Number(v).toFixed(2)}` : "" },
-  { key: "creditLimit", label: "Credit Limit", format: (v) => v != null ? `$${Number(v).toFixed(2)}` : "" },
-  { key: "monthlyPayment", label: "Monthly Payment", format: (v) => v != null ? `$${Number(v).toFixed(2)}` : "" },
-  { key: "disputeCount", label: "Dispute Count" },
+  { key: "account_name", label: "Account Name" },
+  { key: "account_number", label: "Account Number" },
+  { key: "account_status", label: "Status" },
+  { key: "date_opened", label: "Date Opened" },
+  { key: "account_balance", label: "Balance", format: (v) => v != null ? `$${Number(v).toFixed(2)}` : "" },
+  { key: "credit_limit", label: "Credit Limit", format: (v) => v != null ? `$${Number(v).toFixed(2)}` : "" },
+  { key: "monthly_payment", label: "Monthly Payment", format: (v) => v != null ? `$${Number(v).toFixed(2)}` : "" },
+  { key: "dispute_count", label: "Dispute Count" },
 ];
 
 function isInconsistent(values: (string | number | undefined)[]) {
