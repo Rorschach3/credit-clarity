@@ -1,6 +1,4 @@
-
 import { useState, useCallback } from 'react';
-import { toast } from "@/components/ui/use-toast";
 import { parseTradelinesFromText, ParsedTradeline } from "@/utils/tradelineParser";
 
 export const useCreditReportProcessing = (userId: string) => {
