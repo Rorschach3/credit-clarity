@@ -1,3 +1,4 @@
+
 export const fileToBase64 = async (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -7,7 +8,12 @@ export const fileToBase64 = async (file: File): Promise<string> => {
   });
 };
 
-import { AIAnalysisResponse } from "@/types";
+// Define a basic AI response type for helpers
+interface AIAnalysisResponse {
+  success: boolean;
+  data?: any;
+  error?: string;
+}
 
 export const sanitizeAIResponse = (response: AIAnalysisResponse): AIAnalysisResponse => {
   // Implement sanitization logic based on AI requirements

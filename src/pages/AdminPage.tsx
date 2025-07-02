@@ -27,11 +27,6 @@ interface Dispute {
   user_id: string;
 }
 
-interface UserRole {
-  user_id: string;
-  role: string;
-}
-
 export default function AdminPage() {
   const [disputes, setDisputes] = useState<Dispute[]>([])
   const [users, setUsers] = useState<User[]>([])
@@ -123,7 +118,7 @@ export default function AdminPage() {
           // Create a map of user_id to admin status
           const adminMap = new Map<string, boolean>();
           if (rolesData && Array.isArray(rolesData)) {
-            rolesData.forEach((role: UserRole) => {
+            rolesData.forEach((role: any) => {
               adminMap.set(role.user_id, true);
             });
           }

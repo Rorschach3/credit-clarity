@@ -10,10 +10,6 @@ import { Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import MainLayout from "@/components/layout/MainLayout";
 
-interface UserRole {
-  role: string;
-}
-
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
