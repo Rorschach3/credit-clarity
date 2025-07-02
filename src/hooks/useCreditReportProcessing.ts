@@ -1,297 +1,139 @@
 
-import { useState, useRef, useCallback } from 'react';
-import { createWorker, Worker } from "tesseract.js";
+import { useState, useCallback } from 'react';
 import { toast } from "@/components/ui/use-toast";
-import { pdfToImages } from "@/utils/pdfToImage";
-import { parseTradelinesFromText } from "@/utils/tradelineParser";
-import { parseDocumentViaProxy, generateContent } from "@/services/llm-parser";
-import { DocumentAIResponse } from "@/types";
-import { fileToBase64, sanitizeAIResponse } from "@/utils/helpers";
-import { v4 as uuidv4 } from 'uuid';
-import { ParsedTradeline } from "@/utils/tradelineParser";
-
-interface AIAnalysisResponse {
-  tradelines?: Array<{
-    creditor_name?: string;
-    account_number?: string;
-    account_balance?: string;
-    account_status?: string;
-    account_type?: string;
-    credit_limit?: string;
-    date_opened?: string;
-    monthly_payment?: string;    
-    credit_bureau?: string;
-    is_negative?: boolean;
-    dispute_count?: number;
-    raw_text?: string;
-  }>;
-  keywords?: string[];
-  insights?: string;
-  negativeItems?: Array<{
-    type: string;
-    description: string;
-    impact: string;
-  }>;
-}
+import { parseTradelinesFromText, ParsedTradeline } from "@/utils/tradelineParser";
 
 export const useCreditReportProcessing = (userId: string) => {
-  const workerRef = useRef<Worker | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [extractedKeywords, setExtractedKeywords] = useState<string[]>([]);
-  const [aiInsights, setAiInsights] = useState<string>('');
-  const [extractedText, setExtractedText] = useState<string>('');
+  const [aiInsights, setAiInsights] = useState('');
+  const [extractedText, setExtractedText] = useState('');
 
-  const extractKeywordsFromText = (text: string): string[] => {
-    const creditKeywords = [
-      'credit', 'debt', 'payment', 'balance', 'collection', 'charge-off', 'charge off',
-      'bankruptcy', 'foreclosure', 'late', 'delinquent', 'dispute', 'inquiry',
-      'account', 'tradeline', 'bureau', 'experian', 'equifax', 'transunion',
-      'score', 'report', 'limit', 'utilization', 'negative', 'positive'
-    ];
+  const processWithOCR = useCallback(async (file: File): Promise<string> => {
+    setUploadProgress(10);
     
-    const foundKeywords = new Set<string>();
-    const lowerText = text.toLowerCase();
-    
-    creditKeywords.forEach(keyword => {
-      if (lowerText.includes(keyword)) {
-        foundKeywords.add(keyword);
-      }
-    });
-    
-    return Array.from(foundKeywords);
-  };
-
-  const generateAIInsights = (text: string, keywords: string[]): string => {
-    const insights = [];
-    
-    if (keywords.includes('collection') || keywords.includes('charge-off')) {
-      insights.push("⚠️ Negative items detected that may be affecting your credit score.");
-    }
-    
-    if (keywords.includes('late') || keywords.includes('delinquent')) {
-      insights.push("📉 Payment history issues found - these can be disputed if inaccurate.");
-    }
-    
-    if (keywords.includes('inquiry')) {
-      insights.push("🔍 Credit inquiries found - too many can lower your score.");
-    }
-    
-    if (keywords.includes('utilization')) {
-      insights.push("💳 Credit utilization information detected - keeping it below 30% is recommended.");
-    }
-    
-    if (insights.length === 0) {
-      insights.push("✅ Initial analysis complete. Review the extracted tradelines below.");
-    }
-    
-    return insights.join('\n\n');
-  };
-
-  const processWithOCR = async (file: File): Promise<string> => {
-    if (!workerRef.current) {
-      workerRef.current = await createWorker('eng');
-    }
-
-    const buffer = await file.arrayBuffer();
-    const images = await pdfToImages(buffer);
-    let textContent = "";
-    
-    for (let i = 0; i < images.length; i++) {
-      const { data } = await workerRef.current.recognize(images[i]);
-      textContent += data.text + "\n";
-      setUploadProgress(((i + 1) / images.length) * 70);
-    }
-    
-    return textContent;
-  };
-
-  const processAIResponse = async (aiResponse: string, extractedText: string): Promise<ParsedTradeline[]> => {
-    if (!aiResponse.trim()) {
-      console.warn('AI returned empty response, using fallback analysis');
-      
-      const keywords = extractKeywordsFromText(extractedText);
-      setExtractedKeywords(keywords);
-      setAiInsights(generateAIInsights(extractedText, keywords));
-      
-      try {
-        const fallbackTradelines = await parseTradelinesFromText(extractedText, userId);
-        return fallbackTradelines;
-      } catch (parseError) {
-        console.error('Fallback tradeline parsing failed:', parseError);
-        return [];
-      }
-    }
-
-    try {
-      let cleanedResponse = aiResponse.trim();
-      if (cleanedResponse.startsWith('```json')) {
-        cleanedResponse = cleanedResponse.replace(/```json\n?/, '').replace(/\n?```$/, '');
-      } else if (cleanedResponse.startsWith('```')) {
-        cleanedResponse = cleanedResponse.replace(/```\n?/, '').replace(/\n?```$/, '');
-      }
-
-      const sanitizedResponse = sanitizeAIResponse(cleanedResponse);
-      const parsedAI: AIAnalysisResponse = JSON.parse(sanitizedResponse);
-      
-      setExtractedKeywords(parsedAI.keywords || extractKeywordsFromText(extractedText));
-      setAiInsights(parsedAI.insights || generateAIInsights(extractedText, parsedAI.keywords || []));
-      
-      if (parsedAI.tradelines && parsedAI.tradelines.length > 0) {
-        const convertedTradelines: ParsedTradeline[] = parsedAI.tradelines.map((item) => ({
-          id: uuidv4(),
-          creditor_name: item.creditor_name || '',
-          account_number: item.account_number || '',
-          account_balance: item.account_balance || '$0',
-          account_status: (item.account_status as "" | "open" | "closed" | "in_collection" | "charged_off" | "disputed") || "",
-          account_type: (item.account_type as "" | "credit_card" | "loan" | "mortgage" | "auto_loan" | "student_loan" | "collection") || "credit_card",
-          credit_limit: item.credit_limit || '$0',
-          date_opened: item.date_opened || '',
-          monthly_payment: item.monthly_payment || '$0',
-          is_negative: Boolean(item.is_negative),
-          dispute_count: Number(item.dispute_count) || 0,
-          credit_bureau: (item.credit_bureau as "equifax" | "transunion" | "experian") || "",
-          created_at: new Date().toISOString(),
-          raw_text: extractedText,
-          user_id: userId
-        }));
-
-        return convertedTradelines;
-      }
-      return [];
-    } catch (jsonError) {
-      console.error('Failed to parse AI response as JSON:', jsonError);
-      
-      const keywords = extractKeywordsFromText(extractedText);
-      setExtractedKeywords(keywords);
-      setAiInsights(generateAIInsights(extractedText, keywords));
-      
-      try {
-        const fallbackTradelines = await parseTradelinesFromText(extractedText, userId);
-        return fallbackTradelines;
-      } catch (parseError) {
-        console.error('Traditional parser also failed:', parseError);
-        return [];
-      }
-    }
-  };
-
-  const processWithAI = async (file: File): Promise<{ tradelines: ParsedTradeline[], textContent: string }> => {
-    try {
-      console.log("Starting AI processing...");
-      setUploadProgress(10);
-
-      let textContent = '';
-      
-      try {
-        textContent = await processWithOCR(file);
+    // Simple text extraction fallback
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => {
         setUploadProgress(50);
-        console.log("OCR extraction completed, text length:", textContent.length);
-      } catch (ocrError) {
-        console.error('OCR failed, trying Document AI:', ocrError);
-        
-        const base64Content = await fileToBase64(file);
-        const documentData = await parseDocumentViaProxy(base64Content) as DocumentAIResponse | undefined;
-        
-        if (documentData?.document?.text) {
-          textContent = documentData.document.text;
-          setUploadProgress(50);
-        } else {
-          throw new Error('Both OCR and Document AI failed to extract text');
-        }
-      }
+        const text = reader.result as string || '';
+        setUploadProgress(80);
+        resolve(text);
+      };
+      reader.readAsText(file);
+    });
+  }, []);
 
-      setExtractedText(textContent);
-
-      if (textContent.trim()) {
-        try {
-          const prompt = `
-            Analyze this credit report text and extract key information. Return a JSON object with this structure:
-            {
-              "keywords": ["array", "of", "credit", "related", "terms", "found"],
-              "insights": "Brief analysis of the credit report findings and recommendations",
-              "tradelines": [
-                {
-                  "creditor_name": "Company Name",
-                  "account_number": "Account Number",
-                  "account_balance": "$Amount",
-                  "account_status": "open|closed|in_collection|charged_off|disputed",
-                  "account_type": "credit_card|loan|mortgage|auto_loan|student_loan|collection",
-                  "credit_limit": "$Amount",
-                  "date_opened": "YYYY-MM-DD",
-                  "monthly_payment": "$Amount",
-                  "credit_bureau": "experian|equifax|transunion",
-                  "is_negative": true/false
-                }
-              ]
-            }
-
-            Focus on finding negative items, payment history issues, and accounts that could be disputed.
-          `;
-
-          let aiResponse = '';
-          
-          await generateContent(
-            [
-              {
-                role: "user",
-                parts: [
-                  {
-                    text: `${prompt}\n\nCredit Report Content:\n${textContent.substring(0, 4000)}`
-                  }
-                ]
-              }
-            ],
-            (chunk: string) => {
-              aiResponse += chunk;
-            }
-          );
-
-          setUploadProgress(80);
-          console.log("AI analysis completed");
-          
-          const tradelines = await processAIResponse(aiResponse, textContent);
-          setUploadProgress(100);
-          
-          return { tradelines, textContent };
-          
-        } catch (aiError) {
-          console.error('AI analysis failed, using basic analysis:', aiError);
-          
-          const keywords = extractKeywordsFromText(textContent);
-          setExtractedKeywords(keywords);
-          setAiInsights(generateAIInsights(textContent, keywords));
-          
+  const processWithAI = useCallback(async (file: File): Promise<{ tradelines: ParsedTradeline[] }> => {
+    setUploadProgress(20);
+    
+    try {
+      const reader = new FileReader();
+      return new Promise((resolve, reject) => {
+        reader.onload = async () => {
           try {
-            const basicTradelines = await parseTradelinesFromText(textContent, userId);
-            return { tradelines: basicTradelines, textContent };
-          } catch (parseError) {
-            console.error('Basic parsing also failed:', parseError);
-            return { tradelines: [], textContent };
+            const textContent = reader.result as string || '';
+            setUploadProgress(40);
+            
+            // Extract keywords and generate insights
+            const keywords = extractKeywordsFromText(textContent);
+            setExtractedKeywords(keywords);
+            setUploadProgress(60);
+            
+            const insights = generateAIInsights(textContent, keywords);
+            setAiInsights(insights);
+            setExtractedText(textContent);
+            setUploadProgress(80);
+            
+            // Parse tradelines
+            const tradelines = await parseTradelinesFromText(textContent, userId);
+            setUploadProgress(100);
+            
+            resolve({ tradelines });
+          } catch (error) {
+            reject(error);
           }
-        }
-      }
-      
-      setUploadProgress(100);
-      return { tradelines: [], textContent };
-      
+        };
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsText(file);
+      });
     } catch (error) {
       console.error('AI processing error:', error);
-      toast({ 
-        title: "Processing Failed", 
-        description: "Failed to process document. Please try OCR method.",
-        variant: "destructive"
-      });
-      
       throw error;
     }
-  };
+  }, [userId]);
+
+  const extractKeywordsFromText = useCallback((textContent: string): string[] => {
+    if (!textContent) return [];
+    
+    const creditKeywords = [
+      'payment history', 'credit utilization', 'length of credit history',
+      'credit mix', 'new credit', 'delinquent', 'collection', 'charge off',
+      'bankruptcy', 'foreclosure', 'late payment', 'credit score',
+      'credit limit', 'balance', 'minimum payment', 'apr', 'interest rate'
+    ];
+    
+    const foundKeywords = creditKeywords.filter(keyword => 
+      textContent.toLowerCase().includes(keyword.toLowerCase())
+    );
+    
+    // Extract creditor names (common patterns)
+    const creditorPattern = /(?:CHASE|CITIBANK|BANK OF AMERICA|CAPITAL ONE|DISCOVER|AMEX|WELLS FARGO)/gi;
+    const creditorMatches = textContent.match(creditorPattern) || [];
+    const uniqueCreditors = [...new Set(creditorMatches.map(c => c.toUpperCase()))];
+    
+    return [...foundKeywords, ...uniqueCreditors].slice(0, 15);
+  }, []);
+
+  const generateAIInsights = useCallback((textContent: string, keywords: string[]): string => {
+    if (!textContent || textContent.length < 100) {
+      return "Document appears to be too short or empty for analysis.";
+    }
+    
+    let insights = "Credit Report Analysis:\n\n";
+    
+    // Account analysis
+    const accountMatches = textContent.match(/account|tradeline/gi);
+    if (accountMatches) {
+      insights += `• Found ${accountMatches.length} potential account references\n`;
+    }
+    
+    // Negative items detection
+    const negativeTerms = ['late', 'delinquent', 'collection', 'charge', 'bankruptcy'];
+    const negativeCount = negativeTerms.reduce((count, term) => {
+      const matches = textContent.toLowerCase().match(new RegExp(term, 'gi'));
+      return count + (matches ? matches.length : 0);
+    }, 0);
+    
+    if (negativeCount > 0) {
+      insights += `• Detected ${negativeCount} potential negative item indicators\n`;
+    }
+    
+    // Payment history analysis
+    if (textContent.toLowerCase().includes('payment')) {
+      insights += "• Payment history information found\n";
+    }
+    
+    // Credit utilization
+    if (textContent.toLowerCase().includes('balance') || textContent.toLowerCase().includes('limit')) {
+      insights += "• Credit utilization data detected\n";
+    }
+    
+    if (keywords.length > 0) {
+      insights += `\nKey terms identified: ${keywords.slice(0, 8).join(', ')}`;
+    }
+    
+    return insights;
+  }, []);
 
   const cleanup = useCallback(() => {
-    if (workerRef.current) {
-      workerRef.current.terminate();
-      workerRef.current = null;
-    }
+    setIsUploading(false);
+    setUploadProgress(0);
+    setExtractedKeywords([]);
+    setAiInsights('');
+    setExtractedText('');
   }, []);
 
   return {
