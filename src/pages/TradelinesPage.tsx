@@ -1,3 +1,4 @@
+
 import MainLayout from "@/components/layout/MainLayout";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,7 +34,7 @@ const NegativeTradelinesPage = () => {
           .from("tradelines")
           .select("*")
           .eq("user_id", user.id)
-          .eq("account_condition", "Negative");
+          .eq("is_negative", true);
 
         if (error) throw error;
         if (data) setAccounts(data);
@@ -82,7 +83,7 @@ const NegativeTradelinesPage = () => {
           {accounts.map((account) => (
             <Card key={account.id} className="border-red-500 bg-[rgba(255,255,255,0.08)]">
               <CardHeader>
-                <CardTitle>{account.creditor}</CardTitle>
+                <CardTitle>{account.creditor_name}</CardTitle>
                 <Badge variant="destructive">Negative</Badge>
               </CardHeader>
               <CardContent>
@@ -101,10 +102,10 @@ const NegativeTradelinesPage = () => {
                   className="mb-2"
                 />
                 <p><strong>Account Number:</strong> {account.account_number}</p>
-                <p><strong>Status:</strong> {account.status}</p>
-                <p><strong>Balance:</strong> {account.balance}</p>
+                <p><strong>Status:</strong> {account.account_status}</p>
+                <p><strong>Balance:</strong> {account.account_balance}</p>
                 <p><strong>Date Opened:</strong> {account.date_opened}</p>
-                <p><strong>Account Condition:</strong> {account.account_condition}</p>
+                <p><strong>Type:</strong> {account.account_type}</p>
               </CardContent>
               <div className="flex space-x-2 mt-2">
                 <button
@@ -188,16 +189,16 @@ const EditTradelineForm = ({ tradeline, onSave, onCancel }: { tradeline: Tradeli
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="creditor" className="text-right">Creditor</Label>
-            <Input id="creditor" name="creditor" value={formData.creditor} onChange={handleChange} className="col-span-3" />
+            <Label htmlFor="creditor_name" className="text-right">Creditor</Label>
+            <Input id="creditor_name" name="creditor_name" value={formData.creditor_name || ''} onChange={handleChange} className="col-span-3" />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="account_number" className="text-right">Account Number</Label>
-            <Input id="account_number" name="account_number" value={formData.account_number} onChange={handleChange} className="col-span-3" />
+            <Input id="account_number" name="account_number" value={formData.account_number || ''} onChange={handleChange} className="col-span-3" />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="status" className="text-right">Status</Label>
-            <Input id="status" name="status" value={formData.status} onChange={handleChange} className="col-span-3" />
+            <Label htmlFor="account_status" className="text-right">Status</Label>
+            <Input id="account_status" name="account_status" value={formData.account_status || ''} onChange={handleChange} className="col-span-3" />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>

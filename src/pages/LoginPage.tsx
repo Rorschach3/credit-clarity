@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -7,20 +8,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { toast } from 'sonner';
 import { Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/schema";
 import MainLayout from "@/components/layout/MainLayout";
 
 interface UserRole {
   role: string;
-}
-
-interface SupabaseAuthResponse {
-  data: {
-    user: {
-      id: string;
-    } | null;
-  };
-  error: any;
 }
 
 export default function LoginPage() {
@@ -42,7 +33,7 @@ export default function LoginPage() {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
-      }) as SupabaseAuthResponse;
+      });
       
       if (error) throw error;
       
@@ -50,8 +41,7 @@ export default function LoginPage() {
       const { data: roleData, error: roleError } = await supabase
         .from("user_roles")
         .select('role')
-        .eq("user_id", data.user?.id)
-        .returns<UserRole[] | null>();
+        .eq("user_id", data.user?.id);
 
       if (roleError) {
         console.error("Error fetching user role:", roleError);
@@ -60,7 +50,7 @@ export default function LoginPage() {
       toast.success("Logged in successfully!");
       
       // Redirect based on user role
-      if (roleData && roleData[0]?.role === 'admin') {
+      if (roleData && Array.isArray(roleData) && roleData.length > 0 && roleData[0]?.role === 'admin') {
         navigate('/admin');
       } else {
         navigate(returnTo);

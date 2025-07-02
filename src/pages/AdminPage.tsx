@@ -1,12 +1,12 @@
+
 import { useEffect, useState } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import type { Tables as TablesType } from "@/integrations/supabase/schema";
 import useActivityMonitoring from "@/hooks/use-activity-monitoring";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Shield, Package, Mail } from "lucide-react"
 import { DisputeManagement } from "@/components/admin/DisputeManagement"
-import { UserManagement } from "@/components/admin/UserManagement"
+import UserManagement from "@/components/admin/UserManagement"
 import PostageManagement from "@/components/admin/PostageManagement"
 import AuditLog from "@/components/admin/AuditLog"
 import MainLayout from "@/components/layout/MainLayout";
@@ -23,26 +23,13 @@ interface User {
 interface Dispute {
   id: string;
   created_at: string;
-  // Add other properties as needed
-}
-
-interface Subscriber {
+  status: string;
   user_id: string;
-  email: string;
-  subscription_tier?: string;
-  subscribed?: boolean;
 }
 
 interface UserRole {
   user_id: string;
   role: string;
-}
-
-interface Subscribers {
-  user_id: string;
-  email: string;
-  subscription_tier: string | null;
-  subscribed: boolean | null;
 }
 
 export default function AdminPage() {
@@ -96,40 +83,37 @@ export default function AdminPage() {
     console.log("Fetching users...");
     setIsLoading(true);
     try {
-      // First fetch subscribers to get user info
-      const { data: subscribersData, error: subscribersError } = await supabase
-        .from('subscribers')
-        .select('*')
-        .returns<Subscriber[] | null>();
+      // Fetch users from user_subscriptions table instead
+      const { data: subscriptionsData, error: subscriptionsError } = await supabase
+        .from('user_subscriptions')
+        .select('*');
 
-      if (subscribersError) {
-        console.error("Error fetching subscribers:", subscribersError);
+      if (subscriptionsError) {
+        console.error("Error fetching user subscriptions:", subscriptionsError);
         toast({
           title: "Error",
-          description: `Failed to fetch users: ${subscribersError.message}`,
+          description: `Failed to fetch users: ${subscriptionsError.message}`,
           variant: "destructive",
         });
         setUsers([]);
         return;
       }
 
-      console.log("Subscribers data:", subscribersData);
+      console.log("User subscriptions data:", subscriptionsData);
       
-      // Convert subscribers to user format
-      const usersFromSubscribers = subscribersData ? subscribersData.map((sub: Subscriber) => ({
+      // Convert subscriptions to user format
+      const usersFromSubscriptions = subscriptionsData ? subscriptionsData.map((sub: any) => ({
         id: sub.user_id || '',
         email: sub.email || '',
-        subscription_tier: sub.subscription_tier,
-        active: sub.subscribed,
+        subscription_tier: sub.tier,
+        active: sub.active,
       })) : [];
 
-      // Now let's check which users are admins
-      if (usersFromSubscribers.length > 0) {
-        // Fetch admin roles for these users
+      // Fetch admin roles for these users
+      if (usersFromSubscriptions.length > 0) {
         const { data: rolesData, error: rolesError } = await supabase
           .from('user_roles')
-          .select('user_id, role')
-          .returns<UserRole[] | null>();
+          .select('user_id, role');
 
         if (rolesError) {
           console.error("Error fetching roles:", rolesError);
@@ -138,14 +122,14 @@ export default function AdminPage() {
           
           // Create a map of user_id to admin status
           const adminMap = new Map<string, boolean>();
-          if (rolesData) {
+          if (rolesData && Array.isArray(rolesData)) {
             rolesData.forEach((role: UserRole) => {
               adminMap.set(role.user_id, true);
             });
           }
 
           // Update users with admin status
-          const usersWithAdminStatus = usersFromSubscribers.map(user => ({
+          const usersWithAdminStatus = usersFromSubscriptions.map((user: User) => ({
             ...user,
             is_admin: adminMap.has(user.id)
           }));
@@ -153,7 +137,7 @@ export default function AdminPage() {
           setUsers(usersWithAdminStatus);
         }
       } else {
-        setUsers(usersFromSubscribers);
+        setUsers(usersFromSubscriptions);
       }
     } catch (e) {
       console.error("Exception in fetchUsers:", e);
