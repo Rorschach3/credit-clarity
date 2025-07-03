@@ -1,24 +1,24 @@
+
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'supabase/';
-import { z } from 'zod/'; // Use the import map for zod
+import { z } from 'zod/';
 
 // Replicate the ParsedTradelineSchema for validation within the Edge Function
 const ParsedTradelineSchema = z.object({
   id: z.string().uuid().optional(),
-  user_id: z.string().uuid(), // user_id is required here
-  creditor_name: z.string().min(1).default(""),
-  account_number: z.string().min(1).default(""),
-  account_balance: z.string().default("$0"),
+  user_id: z.string().uuid(),
+  creditor_name: z.string().default(""),
+  account_number: z.string().default(""),
+  account_balance: z.string().default(""),
   created_at: z.string().datetime().default(() => new Date().toISOString()),
-  credit_limit: z.string().default("$0"),
-  monthly_payment: z.string().default("$0"),
-  date_opened: z.string().default("xxxx/xx/xx"),
+  credit_limit: z.string().default(""),
+  monthly_payment: z.string().default(""),
+  date_opened: z.string().default(""),
   is_negative: z.boolean().default(false),
-  account_type: z.enum(["credit_card", "loan", "mortgage", "auto_loan", "student_loan", "collection", ""]).default("credit_card"),
-  account_status: z.enum(["open", "closed", "in_collection", "charged_off", "disputed", ""]).default("open"),
-  credit_bureau: z.enum(["equifax", "transunion", "experian"]).default(""),
+  account_type: z.enum(["credit_card", "loan", "mortgage", "auto_loan", "student_loan", "collection", ""]).default(""),
+  account_status: z.enum(["open", "closed", "in_collection", "charged_off", "disputed", ""]).default(""),
+  credit_bureau: z.enum(["equifax", "transunion", "experian", ""]).default(""),
   dispute_count: z.number().int().min(0).default(0),
-  raw_text: z.string().default(""),
 });
 
 const RequestBodySchema = z.object({
@@ -31,7 +31,6 @@ serve(async (req) => {
   }
 
   try {
-    const { url, headers } = req;
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -66,21 +65,30 @@ serve(async (req) => {
       });
     }
 
-    // Prepare tradelines for UPSERT operation
+    // Prepare tradelines for UPSERT operation with default values
     const tradelinesToUpsert = validationResult.data.tradelines.map(tl => ({
-      ...tl,
-      user_id: user.id, // Ensure user_id is set from authenticated user
-      created_at: tl.created_at || new Date().toISOString(), // Ensure created_at is set if not provided
-      id: tl.id || crypto.randomUUID(), // Ensure ID is set, will be ignored if conflict occurs and updated
-      raw_text: tl.raw_text, // Ensure raw_text is passed correctly
+      id: tl.id || crypto.randomUUID(),
+      user_id: user.id,
+      creditor_name: tl.creditor_name || "",
+      account_number: tl.account_number || "",
+      account_balance: tl.account_balance || "",
+      created_at: tl.created_at || new Date().toISOString(),
+      credit_limit: tl.credit_limit || "",
+      monthly_payment: tl.monthly_payment || "",
+      date_opened: tl.date_opened || "",
+      is_negative: tl.is_negative || false,
+      account_type: tl.account_type || "",
+      account_status: tl.account_status || "",
+      credit_bureau: tl.credit_bureau || "",
+      dispute_count: tl.dispute_count || 0,
     }));
 
     // Use upsert to handle duplicates based on a composite unique key
     const { data, error } = await supabaseClient
       .from('tradelines')
       .upsert(tradelinesToUpsert, {
-        onConflict: 'user_id, creditor_name, account_number, account_type', // Composite unique key for deduplication
-        ignoreDuplicates: false // Set to false to update existing records on conflict
+        onConflict: 'user_id, creditor_name, account_number, account_type',
+        ignoreDuplicates: false
       })
       .select();
 

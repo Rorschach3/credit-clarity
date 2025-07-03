@@ -15,11 +15,11 @@ export async function saveTradelinesToDatabase(tradelines: ParsedTradeline[], us
   try {
     // Filter out partial tradelines (missing critical fields)
     const validTradelines = tradelines.filter(tl =>
-      tl.creditor_name && tl.account_number && tl.account_type
+      tl.creditor_name && tl.account_number
     );
     
     const partialTradelines = tradelines.filter(tl =>
-      !tl.creditor_name || !tl.account_number || !tl.account_type
+      !tl.creditor_name || !tl.account_number
     );
     
     if (partialTradelines.length > 0) {
@@ -31,54 +31,43 @@ export async function saveTradelinesToDatabase(tradelines: ParsedTradeline[], us
       return;
     }
 
-    // Deduplicate tradelines using the same composite key as backend
-    const dedupedTradelines = validTradelines.reduce((acc, current) => {
-      const key = `${current.user_id}|${current.creditor_name}|${current.account_number}|${current.account_type}`;
-      
-      // Only add if we haven't seen this combination before
-      if (!acc.has(key)) {
-        acc.set(key, current);
-      } else {
-        console.log(`⚠️ Skipping duplicate tradeline: ${key}`);
-      }
-      
-      return acc;
-    }, new Map<string, ParsedTradeline>());
+    // Prepare tradelines with only required database fields and default values
+    const tradelinesToSave = validTradelines.map(tl => ({
+      id: tl.id || crypto.randomUUID(),
+      user_id: userId,
+      creditor_name: tl.creditor_name || "",
+      account_number: tl.account_number || "",
+      account_balance: tl.account_balance || "",
+      created_at: tl.created_at || new Date().toISOString(),
+      credit_limit: tl.credit_limit || "",
+      monthly_payment: tl.monthly_payment || "",
+      date_opened: tl.date_opened || "",
+      is_negative: tl.is_negative || false,
+      account_type: tl.account_type || "",
+      account_status: tl.account_status || "",
+      credit_bureau: tl.credit_bureau || "",
+      dispute_count: tl.dispute_count || 0,
+    }));
 
-    const uniqueTradelines = Array.from(dedupedTradelines.values());
+    console.log('Saving tradelines to database:', tradelinesToSave);
     
-    if (uniqueTradelines.length < validTradelines.length) {
-      console.warn(`⚠️ Removed ${validTradelines.length - uniqueTradelines.length} duplicate tradelines`);
+    const { data, error } = await supabase
+      .from('tradelines')
+      .upsert(tradelinesToSave, {
+        onConflict: 'user_id, creditor_name, account_number, account_type',
+        ignoreDuplicates: false
+      })
+      .select();
+
+    if (error) {
+      console.error("Database insert error:", error);
+      throw error;
     }
 
-    console.log('Saving tradelines to database:', uniqueTradelines);
-    console.log("Attempting to save tradelines via Edge Function:", { count: uniqueTradelines.length, userId });
-    
-    const payload = { tradelines: uniqueTradelines.map(tl => ({ ...tl, user_id: userId })) };
-    console.log("Payload sent to Edge Function:", JSON.stringify(payload, null, 2));
-
-    const response = await fetch('https://gywohmbqohytziwsjrps.supabase.co/functions/v1/add-tradeline', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    console.log(`Edge Function response status: ${response.status} ${response.statusText}`);
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Edge Function error response body:", errorData);
-      throw new Error(`Failed to save tradelines via Edge Function: ${errorData.message || response.statusText}`);
-    }
-
-    const result = await response.json();
-    console.log("Tradeline save successful via Edge Function:", result);
-    return result;
+    console.log("Tradeline save successful:", data);
+    return data;
   } catch (error) {
-    console.error("Error in saveTradelinesToDatabase (Edge Function call):", error);
+    console.error("Error in saveTradelinesToDatabase:", error);
     throw error;
   }
 }
@@ -108,23 +97,22 @@ export const fetchUserTradelines = async (user_id: string): Promise<ParsedTradel
         user_id: item.user_id,
         creditor_name: item.creditor_name || "",
         account_number: item.account_number || "",
-        account_balance: item.account_balance || "$0",
+        account_balance: item.account_balance || "",
         created_at: item.created_at || new Date().toISOString(),
-        credit_limit: item.credit_limit || "$0",
-        monthly_payment: item.monthly_payment || "$0",
+        credit_limit: item.credit_limit || "",
+        monthly_payment: item.monthly_payment || "",
         date_opened: item.date_opened || "",
         is_negative: item.is_negative || false,
-        account_type: item.account_type || "credit_card",
-        account_status: item.account_status || "open",
+        account_type: item.account_type || "",
+        account_status: item.account_status || "",
         credit_bureau: item.credit_bureau || "",
         dispute_count: item.dispute_count || 0,
-        raw_text: item.raw_text || "",
       } as ParsedTradeline;
     }) : [];
     
     // Filter out partial tradelines (missing critical fields)
     return parsedData.filter(tl =>
-      tl.creditor_name && tl.account_number && tl.account_type
+      tl.creditor_name && tl.account_number
     );
   } catch (error) {
     console.error("Error in fetchUserTradelines:", error);

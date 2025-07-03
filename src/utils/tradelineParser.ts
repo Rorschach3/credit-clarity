@@ -1,5 +1,7 @@
-
-// Re-export everything from the refactored modules for backward compatibility
+// Re-export everything from the new modular structure
 export * from './tradeline/types';
 export * from './tradeline/parser';
-export * from './tradeline/database';
+export { saveTradelinesToDatabase as saveTradelinesToDatabase, fetchUserTradelines } from './tradeline/database';
+
+// Keep the main parsing function for backward compatibility
+export { parseTradelinesFromText } from './tradeline/parser';

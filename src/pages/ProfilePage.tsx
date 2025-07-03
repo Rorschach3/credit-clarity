@@ -51,7 +51,7 @@ export default function ProfilePage() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('first_name, last_name, address1, address2, city, state, zip, phone')
+        .select('first_name, last_name, phone')
         .eq('user_id', user.id)
         .single();
 
@@ -65,11 +65,11 @@ export default function ProfilePage() {
           last_name: data.last_name || '',
           dob: '',
           last_four_of_ssn: '',
-          address1: data.address1 || '',
-          address2: data.address2 || '',
-          city: data.city || '',
-          state: data.state || '',
-          zip: data.zip?.toString() || '',
+          address1: '',
+          address2: '',
+          city: '',
+          state: '',
+          zip: '',
           phone: data.phone || ''
         });
       }
@@ -109,14 +109,12 @@ export default function ProfilePage() {
         .from('profiles')
         .upsert({
           user_id: user.id,
+          email: user.email || '',
           first_name: profile.first_name,
           last_name: profile.last_name,
-          address1: profile.address1 || null,
-          address2: profile.address2 || null,
-          city: profile.city || null,
-          state: profile.state || null,
-          zip: profile.zip || null,
           phone: profile.phone || null,
+          created_at: new Date(),
+          ssn: profile.last_four_of_ssn || '',
           updated_at: new Date().toISOString()
         });
 

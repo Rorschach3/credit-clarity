@@ -29,7 +29,7 @@ export function parseTradeline(rawText: string, userId?: string): ParsedTradelin
 
     // Parse balance (get the last balance mentioned)
     const balanceMatches = rawText.match(TRADELINE_PATTERNS.balance);
-    const account_balance = balanceMatches ? balanceMatches[balanceMatches.length - 1] : '$0';
+    const account_balance = balanceMatches ? balanceMatches[balanceMatches.length - 1] : '';
 
     // Parse date opened
     const dateMatch = rawText.match(TRADELINE_PATTERNS.dateOpened);
@@ -37,10 +37,10 @@ export function parseTradeline(rawText: string, userId?: string): ParsedTradelin
 
     // Parse account status
     const statusMatch = rawText.match(TRADELINE_PATTERNS.accountStatus);
-    const account_status = statusMatch ? statusMatch[1].toLowerCase() : 'open';
+    const account_status = statusMatch ? statusMatch[1].toLowerCase() : '';
 
     // Determine account type based on creditor name
-    let account_type: any = 'credit_card';
+    let account_type: any = '';
     if (creditor_name.toLowerCase().includes('mortgage') || creditor_name.toLowerCase().includes('home')) {
       account_type = 'mortgage';
     } else if (creditor_name.toLowerCase().includes('auto') || creditor_name.toLowerCase().includes('car')) {
@@ -49,6 +49,8 @@ export function parseTradeline(rawText: string, userId?: string): ParsedTradelin
       account_type = 'student_loan';
     } else if (account_status.includes('collection')) {
       account_type = 'collection';
+    } else if (creditor_name.toLowerCase().includes('card')) {
+      account_type = 'credit_card';
     }
 
     // Determine if tradeline is negative
@@ -59,17 +61,16 @@ export function parseTradeline(rawText: string, userId?: string): ParsedTradelin
 
     const tradelineData = {
       user_id: userId,
-      creditor_name,
-      account_number,
-      account_balance,
-      date_opened,
-      account_type,
-      account_status,
-      is_negative,
-      raw_text: rawText,
-      credit_limit: '$0',
-      monthly_payment: '$0',
-      credit_bureau: '',
+      creditor_name: creditor_name || "",
+      account_number: account_number || "",
+      account_balance: account_balance || "",
+      date_opened: date_opened || "",
+      account_type: account_type || "",
+      account_status: account_status || "",
+      is_negative: is_negative || false,
+      credit_limit: "",
+      monthly_payment: "",
+      credit_bureau: "",
       dispute_count: 0,
     };
 
@@ -80,9 +81,17 @@ export function parseTradeline(rawText: string, userId?: string): ParsedTradelin
     // Return a minimal valid tradeline on error
     return ParsedTradelineSchema.parse({
       user_id: userId,
-      creditor_name: 'Unknown Creditor',
-      account_number: '',
-      raw_text: rawText,
+      creditor_name: "",
+      account_number: "",
+      account_balance: "",
+      credit_limit: "",
+      monthly_payment: "",
+      date_opened: "",
+      is_negative: false,
+      account_type: "",
+      account_status: "",
+      credit_bureau: "",
+      dispute_count: 0,
     });
   }
 }
@@ -96,7 +105,6 @@ export function parseTradeline(rawText: string, userId?: string): ParsedTradelin
 export function parseTradelinesFromText(creditReportText: string, userId?: string): ParsedTradeline[] {
   try {
     // Split the text into potential tradeline sections
-    // This is a simplified approach - in practice, you'd need more sophisticated parsing
     const sections = creditReportText.split(/\n\s*\n/).filter(section => 
       section.trim().length > 50 && 
       (section.includes('$') || section.toLowerCase().includes('account'))
@@ -107,7 +115,7 @@ export function parseTradelinesFromText(creditReportText: string, userId?: strin
     for (const section of sections) {
       try {
         const tradeline = parseTradeline(section, userId);
-        if (tradeline.creditor_name && tradeline.creditor_name !== 'Unknown Creditor') {
+        if (tradeline.creditor_name) {
           tradelines.push(tradeline);
         }
       } catch (error) {

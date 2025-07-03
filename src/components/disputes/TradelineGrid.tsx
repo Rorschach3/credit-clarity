@@ -1,6 +1,8 @@
 
 import React from "react";
-import { GroupedTradeline, Bureau } from "@/utils/groupTradelinesByAccount";
+import { GroupedTradeline } from "@/utils/groupTradelinesByAccount";
+
+type Bureau = "equifax" | "transunion" | "experian";
 
 const BUREAUS: { key: Bureau; label: string; color: string }[] = [
   { key: "equifax", label: "Equifax", color: "bg-green-200" },
@@ -9,7 +11,7 @@ const BUREAUS: { key: Bureau; label: string; color: string }[] = [
 ];
 
 type FieldKey =
-  | "account_name"
+  | "creditor_name"
   | "account_number"
   | "account_status"
   | "date_opened"
@@ -25,13 +27,13 @@ type FieldConfig = {
 };
 
 const FIELDS: FieldConfig[] = [
-  { key: "account_name", label: "Account Name" },
+  { key: "creditor_name", label: "Account Name" },
   { key: "account_number", label: "Account Number" },
   { key: "account_status", label: "Status" },
   { key: "date_opened", label: "Date Opened" },
-  { key: "account_balance", label: "Balance", format: (v) => v != null ? `$${Number(v).toFixed(2)}` : "" },
-  { key: "credit_limit", label: "Credit Limit", format: (v) => v != null ? `$${Number(v).toFixed(2)}` : "" },
-  { key: "monthly_payment", label: "Monthly Payment", format: (v) => v != null ? `$${Number(v).toFixed(2)}` : "" },
+  { key: "account_balance", label: "Balance" },
+  { key: "credit_limit", label: "Credit Limit" },
+  { key: "monthly_payment", label: "Monthly Payment" },
   { key: "dispute_count", label: "Dispute Count" },
 ];
 
@@ -46,12 +48,12 @@ export const TradelineGrid: React.FC<{
 }> = ({ tradelines, onAddManual }) => {
   return (
     <div className="space-y-8">
-      {tradelines.map((group) => (
-        <div key={group.key} className="overflow-x-auto rounded border shadow bg-white">
+      {tradelines.map((group, index) => (
+        <div key={`${group.creditor_name}-${index}`} className="overflow-x-auto rounded border shadow bg-white">
           <table className="min-w-[600px] w-full text-sm">
             <thead>
               <tr>
-                <th className="bg-slate-800 text-white px-3 py-2 text-left w-40"></th>
+                <th className="bg-slate-800 text-white px-3 py-2 text-left w-40">{group.creditor_name}</th>
                 {BUREAUS.map((b) => (
                   <th key={b.key} className={`px-3 py-2 text-center font-bold ${b.color}`}>{b.label}</th>
                 ))}
@@ -60,9 +62,10 @@ export const TradelineGrid: React.FC<{
             <tbody>
               {FIELDS.map((field) => {
                 const values = BUREAUS.map((b) => {
-                  const t = group[b.key];
-                  let v: string | number | undefined = t ? (t as any)[field.key] : "";
-                  if (field.format) v = field.format(v);
+                  const accounts = group.accounts.filter(acc => acc.credit_bureau === b.key);
+                  const firstAccount = accounts[0];
+                  let v: string | number | undefined = firstAccount ? (firstAccount as any)[field.key] : "";
+                  if (field.format && v) v = field.format(v);
                   return v;
                 });
                 const inconsistent = isInconsistent(values);
@@ -84,7 +87,9 @@ export const TradelineGrid: React.FC<{
           </table>
         </div>
       ))}
-      <button onClick={onAddManual}>Add Manual Tradeline</button>
+      <button onClick={onAddManual} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+        Add Manual Tradeline
+      </button>
     </div>
   );
 };
