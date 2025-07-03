@@ -180,11 +180,7 @@ export default function AdminPage() {
             </TabsContent>
             
             <TabsContent value="users">
-              <UserManagement 
-                isLoading={isLoading} 
-                users={users} 
-                fetchUsers={fetchUsers}
-              />
+              <UserManagement />
             </TabsContent>
             
             <TabsContent value="postage">
