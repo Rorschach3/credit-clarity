@@ -1,89 +1,77 @@
 
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Edit3, Save, RotateCcw } from 'lucide-react';
+import React, { useEffect } from "react";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { ParsedTradeline } from "@/utils/tradelineParser";
+import { generateDisputeLetter } from "./generateDisputeLetter";
 
 interface LetterEditorProps {
-  initialContent: string;
-  bureau: string;
-  onSave: (content: string) => void;
+  selectedTradelines: ParsedTradeline[];
+  letter: string;
+  setLetter: (letter: string) => void;
+  setShowDocsSection: (show: boolean) => void;
 }
 
-export function LetterEditor({ initialContent, bureau, onSave }: LetterEditorProps) {
-  const [content, setContent] = useState(initialContent);
-  const [isEditing, setIsEditing] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
+const BUREAU_ADDRESSES = {
+  experian: "Experian\nP.O. Box 4500\nAllen, TX 75013",
+  equifax: "Equifax Information Services LLC\nP.O. Box 740256\nAtlanta, GA 30374",
+  transunion: "TransUnion LLC\nConsumer Dispute Center\nP.O. Box 2000\nChester, PA 19016"
+};
 
-  const handleContentChange = (value: string) => {
-    setContent(value);
-    setHasChanges(value !== initialContent);
-  };
+export const LetterEditor: React.FC<LetterEditorProps> = ({
+  selectedTradelines,
+  letter,
+  setLetter,
+  setShowDocsSection
+}) => {
+  
+  useEffect(() => {
+    if (selectedTradelines.length > 0) {
+      const defaultUserInfo = {
+        firstName: "John",
+        lastName: "Doe",
+        address: "123 Main Street",
+        city: "Anytown",
+        state: "CA",
+        zip: "12345",
+        phoneNumber: "(555) 123-4567",
+        emailAddress: "john.doe@email.com"
+      };
 
-  const handleSave = () => {
-    onSave(content);
-    setIsEditing(false);
-    setHasChanges(false);
-  };
+      const defaultBureau = {
+        name: "Experian",
+        address: "P.O. Box 4500",
+        city: "Allen",
+        state: "TX",
+        zip: "75013"
+      };
 
-  const handleReset = () => {
-    setContent(initialContent);
-    setHasChanges(false);
-  };
+      generateDisputeLetter(defaultUserInfo, selectedTradelines, defaultBureau)
+        .then(generatedLetter => {
+          setLetter(generatedLetter);
+        })
+        .catch(error => {
+          console.error("Error generating letter:", error);
+        });
+    }
+  }, [selectedTradelines, setLetter]);
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Edit3 className="h-4 w-4" />
-              Letter Editor - {bureau}
-            </CardTitle>
-            <CardDescription>
-              Customize your dispute letter content
-            </CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
-            {hasChanges && <Badge variant="secondary">Unsaved Changes</Badge>}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsEditing(!isEditing)}
-            >
-              {isEditing ? 'Preview' : 'Edit'}
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isEditing ? (
-          <div className="space-y-4">
-            <Textarea
-              value={content}
-              onChange={(e) => handleContentChange(e.target.value)}
-              className="min-h-[400px] font-mono text-sm"
-              placeholder="Enter your dispute letter content..."
-            />
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={handleReset} disabled={!hasChanges}>
-                <RotateCcw className="h-4 w-4 mr-2" />
-                Reset
-              </Button>
-              <Button onClick={handleSave} disabled={!hasChanges}>
-                <Save className="h-4 w-4 mr-2" />
-                Save Changes
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="whitespace-pre-wrap font-mono text-sm p-4 bg-gray-50 rounded-md border min-h-[400px]">
-            {content}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      <div>
+        <Label htmlFor="dispute-letter">Generated Dispute Letter</Label>
+        <Textarea
+          id="dispute-letter"
+          value={letter}
+          onChange={(e) => setLetter(e.target.value)}
+          placeholder="Your dispute letter will be generated here based on selected tradelines..."
+          className="min-h-[400px] font-mono text-sm"
+        />
+      </div>
+      <p className="text-sm text-muted-foreground">
+        You can edit the letter above to customize it for your specific situation.
+        The letter is automatically generated based on your selected tradelines.
+      </p>
+    </div>
   );
-}
+};

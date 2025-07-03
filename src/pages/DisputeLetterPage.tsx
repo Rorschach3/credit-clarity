@@ -13,6 +13,11 @@ import { UserInfoForm } from "@/components/disputes/UserInfoForm";
 import { LetterEditor } from "@/components/disputes/LetterEditor";
 import { TradelineList } from "@/components/disputes/TradelineList";
 
+interface LocationState {
+  selectedTradelineIds?: string[];
+  selectedTradelines?: ParsedTradeline[];
+}
+
 const DisputeLetterPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -20,7 +25,16 @@ const DisputeLetterPage = () => {
 
   const [tradelines, setTradelines] = useState<ParsedTradeline[]>([]);
   const [selectedTradelines, setSelectedTradelines] = useState<ParsedTradeline[]>([]);
-  const [userInfo, setUserInfo] = useState({ name: "", address: "", city: "", state: "", zip: "" });
+  const [userInfo, setUserInfo] = useState({ 
+    firstName: "", 
+    lastName: "", 
+    address: "", 
+    city: "", 
+    state: "", 
+    zip: "",
+    phone: "",
+    email: ""
+  });
   const [letter, setLetter] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -38,41 +52,42 @@ const DisputeLetterPage = () => {
       console.log("Location state:", location.state);
 
       try {
-        // Fetch tradelines for user from Supabase
-        const userTradelines = await fetchUserTradelines(user.id);
-        console.log("=== Fetched tradelines from DB ===", userTradelines);
-        setTradelines(userTradelines);
-
-        // Get selected tradeline IDs from navigation state
-        const { selectedTradelineIds } = (location.state || {}) as { selectedTradelineIds?: string[] };
-        console.log("=== Selected IDs from navigation ===", selectedTradelineIds);
+        const state = location.state as LocationState;
         
-        if (selectedTradelineIds && selectedTradelineIds.length > 0) {
-          // Filter fetched tradelines based on selected IDs
-          const preSelected = userTradelines.filter(tl => {
-            console.log(`Checking tradeline ${tl.id} against selected IDs`);
-            return selectedTradelineIds.includes(tl.id || '');
-          });
-          console.log("=== Pre-selected tradelines ===", preSelected);
-          setSelectedTradelines(preSelected);
+        // If tradelines were passed directly from the previous page
+        if (state?.selectedTradelines && state.selectedTradelines.length > 0) {
+          console.log("=== Using tradelines from navigation state ===", state.selectedTradelines);
+          setTradelines(state.selectedTradelines);
+          setSelectedTradelines(state.selectedTradelines);
         } else {
-          console.log("=== No selected IDs found in navigation state ===");
+          // Fetch tradelines from database
+          const userTradelines = await fetchUserTradelines(user.id);
+          console.log("=== Fetched tradelines from DB ===", userTradelines);
+          setTradelines(userTradelines);
+
+          // Get selected tradeline IDs from navigation state
+          const selectedIds = state?.selectedTradelineIds || [];
+          console.log("=== Selected IDs from navigation ===", selectedIds);
+          
+          if (selectedIds.length > 0) {
+            const preSelected = userTradelines.filter(tl => 
+              selectedIds.includes(tl.id || '')
+            );
+            console.log("=== Pre-selected tradelines ===", preSelected);
+            setSelectedTradelines(preSelected);
+          }
         }
 
-        // Autofill user info from Supabase profile
+        // Autofill user info from profile
         setUserInfo({
-          name: user.email || "",
+          firstName: "",
+          lastName: "",
           address: "",
           city: "",
           state: "",
           zip: "",
-        });
-        console.log("User info set:", {
-          name: user.email || "",
-          address: "",
-          city: "",
-          state: "",
-          zip: "",
+          phone: "",
+          email: user.email || "",
         });
 
       } catch (error) {
@@ -80,7 +95,6 @@ const DisputeLetterPage = () => {
         toast({ title: "Error", description: "Failed to load tradelines or user info." });
       } finally {
         setLoading(false);
-        console.log("Loading finished.");
       }
     };
 
@@ -89,10 +103,14 @@ const DisputeLetterPage = () => {
 
   const handleProceed = () => {
     console.log("Proceed to Step 3 button clicked.");
-    console.log("Selected Tradelines length:", selectedTradelines.length);
     console.log("Selected Tradelines:", selectedTradelines);
-    // Navigate to dispute packet page
-    navigate("/dispute-packet");
+    navigate("/dispute-packet", {
+      state: {
+        selectedTradelines: selectedTradelines,
+        userInfo: userInfo,
+        letter: letter
+      }
+    });
   };
 
   // Only allow selection of negative tradelines
@@ -107,7 +125,10 @@ const DisputeLetterPage = () => {
           </CardHeader>
           <CardContent className="space-y-6">
             {loading ? (
-              <p>Loading...</p>
+              <div className="flex items-center justify-center p-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <p className="ml-2">Loading tradelines...</p>
+              </div>
             ) : (
               <>
                 <TradelineList
@@ -120,7 +141,6 @@ const DisputeLetterPage = () => {
                 <UserInfoForm userInfo={userInfo} onChange={setUserInfo} />
 
                 <LetterEditor
-                  userInfo={userInfo}
                   selectedTradelines={selectedTradelines}
                   letter={letter}
                   setLetter={setLetter}
@@ -128,8 +148,14 @@ const DisputeLetterPage = () => {
                 />
 
                 <div className="flex justify-end space-x-4">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => navigate("/credit-report-upload")}
+                  >
+                    Back to Step 1
+                  </Button>
                   <Button onClick={handleProceed} disabled={selectedTradelines.length === 0}>
-                    Proceed to Step 3 ({selectedTradelines.length})
+                    Proceed to Step 3 ({selectedTradelines.length} selected)
                   </Button>
                 </div>
               </>

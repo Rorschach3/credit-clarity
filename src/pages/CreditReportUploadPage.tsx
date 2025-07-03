@@ -60,7 +60,7 @@ const CreditReportUploadPage = () => {
   const saveTradelines = useCallback(async () => {
     if (user && tradelines.length > 0) {
       try {
-        console.log('Parsed tradelines before saving:', tradelines);
+        console.log('Saving tradelines to database:', tradelines);
         await saveTradelinesToDatabase(tradelines, user.id);
         console.log(`Saved ${tradelines.length} tradelines to database`);
       } catch (saveError) {
@@ -97,9 +97,11 @@ const CreditReportUploadPage = () => {
 
       if (processingMethod === 'ai') {
         const { tradelines: newTradelines } = await processWithAI(file);
+        console.log("AI Processing result:", newTradelines);
         setTradelines(newTradelines);
       } else {
         const textContent = await processWithOCR(file);
+        console.log("OCR extracted text:", textContent);
         setUploadProgress(80);
         
         const keywords = extractKeywordsFromText(textContent);
@@ -109,11 +111,16 @@ const CreditReportUploadPage = () => {
         
         try {
           const { parseTradelinesFromText } = await import("@/utils/tradelineParser");
-          const parsed = await parseTradelinesFromText(textContent, user.id);
+          const parsed = parseTradelinesFromText(textContent, user.id);
+          console.log("OCR: Parsed tradelines:", parsed);
           setTradelines(parsed);
-          console.log("OCR: Parsed tradelines successfully", parsed);
         } catch (parseError) {
           console.error("OCR tradeline parsing failed:", parseError);
+          toast({
+            title: "Parsing Error",
+            description: "Failed to parse tradelines from text. Try manual entry.",
+            variant: "destructive"
+          });
         }
         setUploadProgress(100);
       }
@@ -159,7 +166,28 @@ const CreditReportUploadPage = () => {
   };
 
   const handleProceed = () => {
-    navigate("/dispute-letter");
+    const selectedTradelines = tradelines.filter(t => selectedTradelineIds.has(t.id || ''));
+    console.log("Proceeding with selected tradelines:", selectedTradelines);
+    
+    navigate("/dispute-letter", {
+      state: {
+        selectedTradelineIds: Array.from(selectedTradelineIds),
+        selectedTradelines: selectedTradelines
+      }
+    });
+  };
+
+  const handleAddManual = (newTradeline: ParsedTradeline) => {
+    const tradelineWithUserId = {
+      ...newTradeline,
+      user_id: user?.id || ""
+    };
+    setTradelines(prev => [...prev, tradelineWithUserId]);
+    setManualModalOpen(false);
+    toast({
+      title: "Success",
+      description: "Manual tradeline added successfully."
+    });
   };
 
   return (
@@ -200,14 +228,14 @@ const CreditReportUploadPage = () => {
 
           <div className="flex justify-end space-x-4">
             <Button onClick={handleProceed} disabled={selectedTradelineIds.size === 0}>
-              Proceed to Step 2
+              Proceed to Step 2 ({selectedTradelineIds.size} selected)
             </Button>
           </div>
 
           {manualModalOpen && (
             <ManualTradelineModal
               onClose={() => setManualModalOpen(false)}
-              onAdd={(t) => setTradelines([...tradelines, t])}
+              onAdd={handleAddManual}
             />
           )}
         </CardContent>
