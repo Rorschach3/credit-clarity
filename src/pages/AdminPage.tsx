@@ -99,6 +99,7 @@ export default function AdminPage() {
               <DisputeManagement
                 isLoading={isLoading} 
                 disputes={disputes} 
+                setDisputes={setDisputes}
                 fetchDisputes={fetchDisputes}
               />
             </TabsContent>

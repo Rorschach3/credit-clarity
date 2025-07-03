@@ -10,18 +10,30 @@ import { toast } from 'sonner';
 import MainLayout from "@/components/layout/MainLayout";
 
 interface Profile {
-  username: string;
   first_name: string;
   last_name: string;
+  dob: string;
+  last_four_of_ssn: string;
+  address1: string;
+  address2: string;
+  city: string;
+  state: string;
+  zip: string;
   phone: string;
 }
 
 export default function ProfilePage() {
   const { user } = useAuth();
   const [profile, setProfile] = useState<Profile>({
-    username: '',
     first_name: '',
     last_name: '',
+    dob: '',
+    last_four_of_ssn: '',
+    address1: '',
+    address2: '',
+    city: '',
+    state: '',
+    zip: '',
     phone: ''
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -39,7 +51,7 @@ export default function ProfilePage() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('username, first_name, last_name, phone')
+        .select('first_name, last_name, dob, address1, address2, city, state, zip, phone')
         .eq('user_id', user.id)
         .single();
 
@@ -48,7 +60,18 @@ export default function ProfilePage() {
       }
 
       if (data) {
-        setProfile(data);
+        setProfile({
+          first_name: data.first_name || '',
+          last_name: data.last_name || '',
+          dob: data.dob ? new Date(data.dob).toISOString().split('T')[0] : '',
+          last_four_of_ssn: '',
+          address1: data.address1 || '',
+          address2: data.address2 || '',
+          city: data.city || '',
+          state: data.state || '',
+          zip: data.zip?.toString() || '',
+          phone: data.phone || ''
+        });
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -62,16 +85,39 @@ export default function ProfilePage() {
     e.preventDefault();
     if (!user) return;
 
+    // Validate required fields
+    if (!profile.first_name || !profile.last_name || !profile.dob) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    // Validate SSN last 4 digits
+    if (profile.last_four_of_ssn && !/^\d{4}$/.test(profile.last_four_of_ssn)) {
+      toast.error('Last 4 digits of SSN must be exactly 4 numbers');
+      return;
+    }
+
+    // Validate zip code
+    if (profile.zip && !/^\d{5}(-\d{4})?$/.test(profile.zip)) {
+      toast.error('Please enter a valid zip code');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const { error } = await supabase
         .from('profiles')
         .upsert({
           user_id: user.id,
-          username: profile.username,
           first_name: profile.first_name,
           last_name: profile.last_name,
-          phone: profile.phone,
+          dob: profile.dob ? new Date(profile.dob).toISOString() : null,
+          address1: profile.address1 || null,
+          address2: profile.address2 || null,
+          city: profile.city || null,
+          state: profile.state || null,
+          zip: profile.zip ? parseInt(profile.zip.replace(/\D/g, '')) : null,
+          phone: profile.phone || null,
           updated_at: new Date().toISOString()
         });
 
@@ -104,33 +150,99 @@ export default function ProfilePage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="firstName">First Name</Label>
+                  <Label htmlFor="firstName">First Name *</Label>
                   <Input
                     id="firstName"
                     value={profile.first_name}
                     onChange={(e) => handleInputChange('first_name', e.target.value)}
                     placeholder="Enter your first name"
+                    required
                   />
                 </div>
                 <div>
-                  <Label htmlFor="lastName">Last Name</Label>
+                  <Label htmlFor="lastName">Last Name *</Label>
                   <Input
                     id="lastName"
                     value={profile.last_name}
                     onChange={(e) => handleInputChange('last_name', e.target.value)}
                     placeholder="Enter your last name"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="dob">Date of Birth *</Label>
+                  <Input
+                    id="dob"
+                    type="date"
+                    value={profile.dob}
+                    onChange={(e) => handleInputChange('dob', e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="lastFourSSN">Last 4 digits of SSN</Label>
+                  <Input
+                    id="lastFourSSN"
+                    value={profile.last_four_of_ssn}
+                    onChange={(e) => handleInputChange('last_four_of_ssn', e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    placeholder="1234"
+                    maxLength={4}
                   />
                 </div>
               </div>
 
               <div>
-                <Label htmlFor="username">Username</Label>
+                <Label htmlFor="address1">Address Line 1</Label>
                 <Input
-                  id="username"
-                  value={profile.username}
-                  onChange={(e) => handleInputChange('username', e.target.value)}
-                  placeholder="Enter your username"
+                  id="address1"
+                  value={profile.address1}
+                  onChange={(e) => handleInputChange('address1', e.target.value)}
+                  placeholder="123 Main Street"
                 />
+              </div>
+
+              <div>
+                <Label htmlFor="address2">Address Line 2</Label>
+                <Input
+                  id="address2"
+                  value={profile.address2}
+                  onChange={(e) => handleInputChange('address2', e.target.value)}
+                  placeholder="Apt 4B, Suite 100, etc."
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="city">City</Label>
+                  <Input
+                    id="city"
+                    value={profile.city}
+                    onChange={(e) => handleInputChange('city', e.target.value)}
+                    placeholder="New York"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="state">State</Label>
+                  <Input
+                    id="state"
+                    value={profile.state}
+                    onChange={(e) => handleInputChange('state', e.target.value.toUpperCase().slice(0, 2))}
+                    placeholder="NY"
+                    maxLength={2}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="zip">Zip Code</Label>
+                  <Input
+                    id="zip"
+                    value={profile.zip}
+                    onChange={(e) => handleInputChange('zip', e.target.value)}
+                    placeholder="10001"
+                  />
+                </div>
               </div>
 
               <div>
@@ -139,7 +251,7 @@ export default function ProfilePage() {
                   id="phone"
                   value={profile.phone}
                   onChange={(e) => handleInputChange('phone', e.target.value)}
-                  placeholder="Enter your phone number"
+                  placeholder="(555) 123-4567"
                 />
               </div>
 
