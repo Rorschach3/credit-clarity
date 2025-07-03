@@ -14,7 +14,7 @@ import AdminRoute from "@/components/auth/AdminRoute";
 
 interface Dispute {
   id: string;
-  created_at: string;
+  created_at: string | null;
   status: string;
   user_id: string;
   credit_report_id: string;

@@ -51,7 +51,7 @@ export default function ProfilePage() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('first_name, last_name, dob, address1, address2, city, state, zip, phone')
+        .select('first_name, last_name, address1, address2, city, state, zip, phone')
         .eq('user_id', user.id)
         .single();
 
@@ -63,7 +63,7 @@ export default function ProfilePage() {
         setProfile({
           first_name: data.first_name || '',
           last_name: data.last_name || '',
-          dob: data.dob ? new Date(data.dob).toISOString().split('T')[0] : '',
+          dob: '',
           last_four_of_ssn: '',
           address1: data.address1 || '',
           address2: data.address2 || '',
@@ -86,7 +86,7 @@ export default function ProfilePage() {
     if (!user) return;
 
     // Validate required fields
-    if (!profile.first_name || !profile.last_name || !profile.dob) {
+    if (!profile.first_name || !profile.last_name) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -111,12 +111,11 @@ export default function ProfilePage() {
           user_id: user.id,
           first_name: profile.first_name,
           last_name: profile.last_name,
-          dob: profile.dob ? new Date(profile.dob).toISOString() : null,
           address1: profile.address1 || null,
           address2: profile.address2 || null,
           city: profile.city || null,
           state: profile.state || null,
-          zip: profile.zip ? parseInt(profile.zip.replace(/\D/g, '')) : null,
+          zip: profile.zip || null,
           phone: profile.phone || null,
           updated_at: new Date().toISOString()
         });
@@ -173,13 +172,12 @@ export default function ProfilePage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="dob">Date of Birth *</Label>
+                  <Label htmlFor="dob">Date of Birth</Label>
                   <Input
                     id="dob"
                     type="date"
                     value={profile.dob}
                     onChange={(e) => handleInputChange('dob', e.target.value)}
-                    required
                   />
                 </div>
                 <div>
