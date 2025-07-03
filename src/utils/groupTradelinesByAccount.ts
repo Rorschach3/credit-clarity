@@ -1,41 +1,40 @@
-export type Bureau = "equifax" | "transunion" | "experian";
 
-export interface BureauTradeline {
-  account_name?: string;
-  account_number?: string;
-  account_status?: string;
-  date_opened?: string;
-  account_balance?: string;
-  account_type?: string;
-  credit_limit?: string;
-  monthly_payment?: string;
-  dispute_count?: number;
-  credit_bureau?: string;
-}
+import { ParsedTradeline } from './tradeline/types';
 
 export interface GroupedTradeline {
-  key: string; // e.g., `${accountName}|${accountNumber}`
-  equifax?: BureauTradeline;
-  transunion?: BureauTradeline;
-  experian?: BureauTradeline;
+  creditor_name: string;
+  accounts: ParsedTradeline[];
+  total_balance: number;
+  is_negative: boolean;
 }
 
-export function groupTradelinesByAccount(
-  tradelines: BureauTradeline[]
-): GroupedTradeline[] {
-  const map = new Map<string, GroupedTradeline>();
-
-  tradelines.forEach((t) => {
-    const key = `${t.account_name}|${t.account_number}`;
-    if (!map.has(key)) {
-      map.set(key, { key });
+export function groupTradelinesByAccount(tradelines: ParsedTradeline[]): GroupedTradeline[] {
+  const grouped = tradelines.reduce((acc, tradeline) => {
+    const key = tradeline.creditor_name || 'Unknown Creditor';
+    
+    if (!acc[key]) {
+      acc[key] = {
+        creditor_name: key,
+        accounts: [],
+        total_balance: 0,
+        is_negative: false
+      };
     }
-    const group = map.get(key)!;
-    if (t.credit_bureau === "equifax") group.equifax = t;
-    if (t.credit_bureau === "transunion") group.transunion = t;
-    if (t.credit_bureau === "experian") group.experian = t;
-    if (t.credit_bureau === null) group[" "] = t;
-  });
+    
+    acc[key].accounts.push(tradeline);
+    
+    // Parse balance and add to total
+    const balance = parseFloat(tradeline.account_balance?.replace(/[$,]/g, '') || '0');
+    acc[key].total_balance += balance;
+    
+    // Mark as negative if any account is negative
+    if (tradeline.is_negative) {
+      acc[key].is_negative = true;
+    }
+    
+    return acc;
+  }, {} as Record<string, GroupedTradeline>);
 
-  return Array.from(map.values());
+  // Convert to array and sort by total balance (highest first)
+  return Object.values(grouped).sort((a, b) => b.total_balance - a.total_balance);
 }

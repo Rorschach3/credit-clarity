@@ -11,6 +11,7 @@ import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import ResetPasswordPage from '@/pages/ResetPasswordPage'; 
+import ProfilePage from '@/pages/ProfilePage';
 import Hero from './components/Hero/Hero';
 import { AuthProvider, useAuth } from './hooks/use-auth';
 import TradelinesPage from "@/pages/TradelinesPage";
@@ -50,7 +51,7 @@ function AppContent() {
     );
   }
 
-  const routeKey = location.pathname ?? '/';
+  const routeKey = location.pathname;
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
@@ -71,6 +72,7 @@ function AppContent() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/credit-report-upload" element={<CreditReportUploadPage />} />

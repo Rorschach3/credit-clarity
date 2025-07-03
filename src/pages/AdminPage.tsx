@@ -12,24 +12,22 @@ import AuditLog from "@/components/admin/AuditLog"
 import MainLayout from "@/components/layout/MainLayout";
 import AdminRoute from "@/components/auth/AdminRoute";
 
-interface User {
-  id: string;
-  email: string;
-  subscription_tier?: string;
-  active?: boolean;
-  is_admin?: boolean;
-}
-
 interface Dispute {
   id: string;
   created_at: string;
   status: string;
   user_id: string;
+  credit_report_id: string;
+  email: string | null;
+  lob_id: string | null;
+  mailing_address: string;
+  modified_at: string | null;
+  modified_by: string | null;
+  retention_date: string | null;
 }
 
 export default function AdminPage() {
   const [disputes, setDisputes] = useState<Dispute[]>([])
-  const [users, setUsers] = useState<User[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState('disputes');
@@ -38,8 +36,6 @@ export default function AdminPage() {
   useEffect(() => {
     if (activeTab === 'disputes') {
       fetchDisputes()
-    } else if (activeTab === 'users') {
-      fetchUsers()
     }
   }, [activeTab]);
 
@@ -67,78 +63,6 @@ export default function AdminPage() {
       toast({
         title: "Error",
         description: "An unexpected error occurred when fetching disputes",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  async function fetchUsers() {
-    console.log("Fetching users...");
-    setIsLoading(true);
-    try {
-      // Fetch users from user_subscriptions table instead
-      const { data: subscriptionsData, error: subscriptionsError } = await supabase
-        .from('user_subscriptions')
-        .select('*');
-
-      if (subscriptionsError) {
-        console.error("Error fetching user subscriptions:", subscriptionsError);
-        toast({
-          title: "Error",
-          description: `Failed to fetch users: ${subscriptionsError.message}`,
-          variant: "destructive",
-        });
-        setUsers([]);
-        return;
-      }
-
-      console.log("User subscriptions data:", subscriptionsData);
-      
-      // Convert subscriptions to user format
-      const usersFromSubscriptions = subscriptionsData ? subscriptionsData.map((sub: any) => ({
-        id: sub.user_id || '',
-        email: sub.email || '',
-        subscription_tier: sub.tier,
-        active: sub.active,
-      })) : [];
-
-      // Fetch admin roles for these users
-      if (usersFromSubscriptions.length > 0) {
-        const { data: rolesData, error: rolesError } = await supabase
-          .from('user_roles')
-          .select('user_id, role');
-
-        if (rolesError) {
-          console.error("Error fetching roles:", rolesError);
-        } else {
-          console.log("Roles data:", rolesData);
-          
-          // Create a map of user_id to admin status
-          const adminMap = new Map<string, boolean>();
-          if (rolesData && Array.isArray(rolesData)) {
-            rolesData.forEach((role: any) => {
-              adminMap.set(role.user_id, true);
-            });
-          }
-
-          // Update users with admin status
-          const usersWithAdminStatus = usersFromSubscriptions.map((user: User) => ({
-            ...user,
-            is_admin: adminMap.has(user.id)
-          }));
-
-          setUsers(usersWithAdminStatus);
-        }
-      } else {
-        setUsers(usersFromSubscriptions);
-      }
-    } catch (e) {
-      console.error("Exception in fetchUsers:", e);
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred when fetching users",
         variant: "destructive",
       });
     } finally {
