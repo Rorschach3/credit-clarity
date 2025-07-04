@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/sheet";
 import { Menu } from "lucide-react";
 import { ModeToggle } from "@/components/layout/ModeToggle";
+import { CurrentUserAvatar } from "@/components/current-user-avatar";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -37,38 +38,10 @@ export function Navbar() {
           <Link to="/about" className="text-sm font-medium transition-colors hover:text-primary">
             About
           </Link>
-          {/* <Link to="/credit-report-upload" className="text-sm font-medium transition-colors hover:text-primary">
-            Credit Report Upload
-          </Link> */}
-          {/* <Link to="/credit-reports" className="text-sm font-medium transition-colors hover:text-primary">
-            Credit Reports
-          </Link> */}
-          {/* <Link to="/dispute-letter" className="text-sm font-medium transition-colors hover:text-primary">
-            Dispute Letter
-          </Link> */}
-          {/* <Link to="/dispute-packet" className="text-sm font-medium transition-colors hover:text-primary">
-            Dispute Packet
-          </Link> */}
-          {/* <Link to="/dispute-wizard" className="text-sm font-medium transition-colors hover:text-primary">
-            Dispute Wizard
-          </Link> */}
-          {/* <Link to="/dispute-wizard2" className="text-sm font-medium transition-colors hover:text-primary">
-            Dispute Wizard 2
-          </Link> */}
+          {/* Other links commented out */}
           <Link to="/faq" className="text-sm font-medium transition-colors hover:text-primary">
             FAQ
           </Link>
-          {/* <Link to="/features" className="text-sm font-medium transition-colors hover:text-primary">
-            Features
-          </Link> */}
-          {/* <Link to="/negative-tradelines" className="text-sm font-medium transition-colors hover:text-primary">
-            Negative Tradelines
-          </Link> */}
-          {/* <Link to="/pricing" className="text-sm font-medium transition-colors hover:text-primary">
-            Pricing
-          </Link> */}
-          {/* <Link to="/billing" className="text-sm font-medium transition-colors hover:text-primary">
-          </Link> */}
         </nav>
 
         <div className="flex items-center gap-4">
@@ -76,18 +49,23 @@ export function Navbar() {
           {user ? (
             <div className="hidden md:flex items-center gap-2">
               <Link to="/profile">
-                <Button variant="outline" size="sm">
-                  Profile
+                <Button variant="none" size="xs">
+                  <CurrentUserAvatar user={user} />
                 </Button>
               </Link>
-              <Button variant="outline" size="sm" onClick={signOut}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full"
+                onClick={signOut}
+              >
                 Sign Out
               </Button>
             </div>
           ) : (
             <div className="hidden md:flex items-center gap-2">
               <Link to="/login">
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="rounded-full">
                   Sign In
                 </Button>
               </Link>
@@ -148,9 +126,9 @@ export function Navbar() {
               ) : (
                 <div className="flex flex-col gap-2">
                   <Link to="/profile" className="block text-sm font-medium transition-colors hover:text-primary">
-                    Profile
+                    <CurrentUserAvatar user={user} />
                   </Link>
-                  <Button variant="outline" size="sm" onClick={signOut}>
+                  <Button variant="outline" size="sm" onClick={signOut} className="rounded-full">
                     Sign Out
                   </Button>
                 </div>

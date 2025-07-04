@@ -376,55 +376,49 @@ export type Database = {
       }
       profiles: {
         Row: {
-          address: string | null
-          avatar_url: string | null
+          id: string
+          address1: string | null
           city: string | null
-          email: string | null
+          address2: string | null
           first_name: string | null
-          id: number
           last_name: string | null
-          phone: string | null
-          ssnlastfour: string | null
+          phone_number: string | null
+          last_four_of_ssn: string | null
           state: string | null
           updated_at: string | null
           user_id: string
-          username: string | null
-          website: string | null
-          zip: string | null
+          zip_code: string | null
+          dob: string | null
         }
         Insert: {
-          address?: string | null
-          avatar_url?: string | null
+          address1?: string | null
+          address2?: string | null
           city?: string | null
-          email?: string | null
           first_name?: string | null
           id?: never
           last_name?: string | null
-          phone?: string | null
-          ssnlastfour?: string | null
+          phone_number?: string | null
+          last_four_of_ssn?: string | null
           state?: string | null
           updated_at?: string | null
           user_id: string
-          username?: string | null
-          website?: string | null
-          zip?: string | null
+          zip_code?: string | null
+          dob?: string | null
         }
         Update: {
-          address?: string | null
-          avatar_url?: string | null
+          address1?: string | null
+          address2?: string | null
           city?: string | null
-          email?: string | null
           first_name?: string | null
           id?: never
           last_name?: string | null
-          phone?: string | null
-          ssnlastfour?: string | null
+          phone_number?: string | null
+          last_four_of_ssn?: string | null
           state?: string | null
           updated_at?: string | null
           user_id?: string
-          username?: string | null
-          website?: string | null
-          zip?: string | null
+          zip_code?: string | null
+          dob?: string | null
         }
         Relationships: []
       }

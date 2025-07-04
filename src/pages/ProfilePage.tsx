@@ -7,34 +7,24 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from 'sonner';
-import MainLayout from "@/components/layout/MainLayout";
 
-interface Profile {
-  first_name: string;
-  last_name: string;
-  dob: string;
-  last_four_of_ssn: string;
-  address1: string;
-  address2: string;
-  city: string;
-  state: string;
-  zip: string;
-  phone: string;
-}
+import type { Database } from '../types/database';
+
+type Profile = Database['public']['Tables']['profiles']['Row'];
 
 export default function ProfilePage() {
   const { user } = useAuth();
-  const [profile, setProfile] = useState<Profile>({
+  const [profile, setProfile] = useState<Partial<Profile>>({
     first_name: '',
     last_name: '',
-    dob: '',
-    last_four_of_ssn: '',
-    address1: '',
-    address2: '',
-    city: '',
-    state: '',
-    zip: '',
-    phone: ''
+    address1: null,
+    address2: null,
+    city: null,
+    state: null,
+    zip_code: null,
+    phone_number: null,
+    last_four_of_ssn: null,
+    dob: null
   });
   const [isLoading, setIsLoading] = useState(false);
 
@@ -51,30 +41,30 @@ export default function ProfilePage() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('first_name, last_name, phone')
+        .select('first_name, last_name, address1, address2, city, state, zip_code, phone_number, last_four_of_ssn, dob')
         .eq('user_id', user.id)
         .single();
 
       if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching profile:', error);
         throw error;
       }
 
       if (data) {
         setProfile({
-          first_name: data.first_name || '',
-          last_name: data.last_name || '',
-          dob: '',
-          last_four_of_ssn: '',
-          address1: '',
-          address2: '',
-          city: '',
-          state: '',
-          zip: '',
-          phone: data.phone || ''
+          first_name: data.first_name ?? '',
+          last_name: data.last_name ?? '',
+          address1: data.address1 ?? null,
+          address2: data.address2 ?? null,
+          city: data.city ?? null,
+          state: data.state ?? null,
+          zip_code: data.zip_code ?? null,
+          phone_number: data.phone_number ?? null,
+          last_four_of_ssn: data.last_four_of_ssn ?? null
         });
       }
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error('Error fetching profile:', error instanceof Error ? error.message : 'Unknown error');
       toast.error('Failed to load profile');
     } finally {
       setIsLoading(false);
@@ -98,7 +88,7 @@ export default function ProfilePage() {
     }
 
     // Validate zip code
-    if (profile.zip && !/^\d{5}(-\d{4})?$/.test(profile.zip)) {
+    if (profile.zip_code && !/^\d{5}(-\d{4})?$/.test(profile.zip_code)) {
       toast.error('Please enter a valid zip code');
       return;
     }
@@ -107,16 +97,19 @@ export default function ProfilePage() {
     try {
       const { error } = await supabase
         .from('profiles')
-        .upsert({
-          user_id: user.id,
-          email: user.email || '',
+        .update({
           first_name: profile.first_name,
           last_name: profile.last_name,
-          phone: profile.phone || null,
-          created_at: new Date(),
-          ssn: profile.last_four_of_ssn || '',
+          address1: profile.address1 || null,
+          address2: profile.address2 || null,
+          city: profile.city || null,
+          state: profile.state || null,
+          zip_code: profile.zip_code || null,
+          phone_number: profile.phone_number || null,
+          last_four_of_ssn: profile.last_four_of_ssn || null,
           updated_at: new Date().toISOString()
-        });
+        })
+        .eq('user_id', user.id);
 
       if (error) throw error;
 
@@ -134,7 +127,6 @@ export default function ProfilePage() {
   };
 
   return (
-    <MainLayout>
       <div className="container mx-auto py-10 max-w-2xl">
         <Card>
           <CardHeader>
@@ -174,8 +166,8 @@ export default function ProfilePage() {
                   <Input
                     id="dob"
                     type="date"
-                    value={profile.dob}
-                    onChange={(e) => handleInputChange('dob', e.target.value)}
+                    value={''}
+                    disabled
                   />
                 </div>
                 <div>
@@ -234,8 +226,8 @@ export default function ProfilePage() {
                   <Label htmlFor="zip">Zip Code</Label>
                   <Input
                     id="zip"
-                    value={profile.zip}
-                    onChange={(e) => handleInputChange('zip', e.target.value)}
+                    value={profile.zip_code}
+                    onChange={(e) => handleInputChange('zip_code', e.target.value)}
                     placeholder="10001"
                   />
                 </div>
@@ -245,8 +237,8 @@ export default function ProfilePage() {
                 <Label htmlFor="phone">Phone Number</Label>
                 <Input
                   id="phone"
-                  value={profile.phone}
-                  onChange={(e) => handleInputChange('phone', e.target.value)}
+                  value={profile.phone_number}
+                  onChange={(e) => handleInputChange('phone_number', e.target.value)}
                   placeholder="(555) 123-4567"
                 />
               </div>
@@ -258,6 +250,5 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
       </div>
-    </MainLayout>
   );
 }

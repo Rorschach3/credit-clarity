@@ -13,6 +13,7 @@ import { UploadActions } from "@/components/credit-upload/UploadActions";
 import { useCreditReportProcessing } from "@/hooks/useCreditReportProcessing";
 import { useCreditUploadState } from "@/hooks/useCreditUploadState";
 import { useFileUploadHandler } from "@/components/credit-upload/FileUploadHandler";
+import { CreditNavbar } from "@/components/navbar/CreditNavbar";
 
 const CreditReportUploadPage = () => {
   const { user } = useAuth();
@@ -119,6 +120,7 @@ const CreditReportUploadPage = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground py-10 px-4 md:px-10">
+      <CreditNavbar />
       <Card className="max-w-6xl mx-auto space-y-6">
         <CardHeader>
           <CardTitle className="text-2xl">Step 1: Upload or Add Tradelines</CardTitle>

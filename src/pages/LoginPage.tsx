@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import MainLayout from "@/components/layout/MainLayout";
+import { signIn } from "next-auth/react"; // Import signIn function
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -51,7 +52,7 @@ export default function LoginPage() {
       } else {
         navigate(returnTo);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       setIsLoading(false);
       
       if (error instanceof Error && error.message === "Invalid login credentials") {
@@ -118,6 +119,14 @@ export default function LoginPage() {
          {isLoading ? "Logging in..." : "Log in"}
         </Button>
        </form>
+       <div className="flex justify-center space-x-4 mt-4">
+         <Button onClick={() => signIn('google')} className="w-full" variant="outline">
+           Sign in with Google
+         </Button>
+         <Button onClick={() => signIn('github')} className="w-full" variant="outline">
+           Sign in with GitHub
+         </Button>
+       </div>
       </CardContent>
       <CardFooter className="flex justify-center">
        <div className="text-sm text-gray-500">

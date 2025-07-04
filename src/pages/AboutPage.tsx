@@ -1,9 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { BarChart, Shield, FileSearch, User2, UserCheck, BookOpen } from "lucide-react";
-
-import MainLayout from "@/components/layout/MainLayout";
-import { Navbar } from "@/components/layout/Navbar";
+import { Shield, UserCheck, BookOpen } from "lucide-react";
 
 export default function AboutPage() {
   const teamMembers = [
@@ -30,12 +27,12 @@ export default function AboutPage() {
   ];
 
   return (
-    <MainLayout>
-      {/* Hero Section */}
-      <section className="bg-brand-50 py-20">
+    <>
+      <div className="bg-gradient-to-r from-brand-900 to-brand-700 text-white py-20">
+        {/* Hero Section */}
         <div className="container px-4 mx-auto">
           <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-4xl font-bold mb-6">About CreditClarityAI</h1>
+            <h1 className="text-4xl font-bold mb-6">About Credit Clarity</h1>
             <p className="text-xl text-gray-700 mb-8">
               We're on a mission to help millions of Americans improve their credit scores through the power of artificial intelligence.
             </p>
@@ -49,10 +46,11 @@ export default function AboutPage() {
             </div>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* Our Story Section */}
       <section className="py-16">
+      <div className="container px-4 mx-auto mt-12">
+        {/* Our Story Section */}
         <div className="container px-4 mx-auto">
           <div className="max-w-3xl mx-auto">
             <h2 className="text-3xl font-bold mb-6 text-center">Our Story</h2>
@@ -72,6 +70,7 @@ export default function AboutPage() {
             </div>
           </div>
         </div>
+      </div>
       </section>
 
       {/* Our Values Section */}
@@ -182,6 +181,6 @@ export default function AboutPage() {
           </div>
         </div>
       </section>
-    </MainLayout>
+    </>
   );
 }

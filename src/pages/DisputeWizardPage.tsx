@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import { DocumentUploadSection } from "@/components/disputes/DocumentUploadSection";
 import { MailingInstructions } from "@/components/disputes/MailingInstructions";
+import { CreditNavbar } from "@/components/navbar/CreditNavbar";
 
 const DisputePacketPage = () => {
   const [showDocsSection, setShowDocsSection] = useState(false);
@@ -17,6 +18,7 @@ const DisputePacketPage = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground py-10 px-4 md:px-10">
+      <CreditNavbar />
       <Card className="max-w-6xl mx-auto space-y-6">
         <CardHeader>
           <CardTitle className="text-2xl">Step 3: Generate Dispute Packet</CardTitle>

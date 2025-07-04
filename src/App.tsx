@@ -1,4 +1,4 @@
-
+//  src/App.tsx
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
@@ -19,9 +19,11 @@ import ServicesGrid from './components/Services/ServicesGrid';
 import ProcessTimeline from './components/Process/ProcessTimeline';
 import CreditReportUploadPage from './pages/CreditReportUploadPage';
 import DisputeWizardPage from './pages/DisputeWizardPage';
-import DisputeLetterPage from './pages/DisputeLetterPage';
 import ContactForm from './components/Contact/ContactForm';
 import Footer from './components/Footer/Footer';
+import FaqPage from './pages/FaqPage';
+import PricingPage from './pages/PricingPage';
+import BlogPage from './pages/BlogPage';
 
 function App() {
   return (
@@ -40,7 +42,7 @@ function AppContent() {
 
   useEffect(() => {
     document.documentElement.classList.remove('light', 'dark');
-    document.documentElement.classList.add(theme);
+    document.documentElement.classList.add(theme ?? 'dark');
   }, [theme]);
 
   if (isLoading) {
@@ -67,7 +69,7 @@ function AppContent() {
                 <ContactForm />
               </>
             } />
-            <Route path="/home" element={<HomePage />} />
+            <Route path="/" element={<HomePage />} />
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -76,9 +78,13 @@ function AppContent() {
             <Route path="/about" element={<AboutPage />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/credit-report-upload" element={<CreditReportUploadPage />} />
-            <Route path="/dispute-letter" element={<DisputeLetterPage />} />
             <Route path="/dispute-wizard" element={<DisputeWizardPage />} />
             <Route path="/tradelines" element={<TradelinesPage />} />
+            <Route path="/contact" element={<ContactForm />} />
+            <Route path="/Faq" element={<FaqPage />} />
+            <Route path="/Home" element={<HomePage />} />
+            <Route path="/Pricing" element={<PricingPage />} />
+            <Route path="/Blog" element={<BlogPage />} />
           </Routes>
         </AnimatePresence>
       </main>

@@ -1,3 +1,6 @@
+// src/types/index.ts
+// This file exports types used across the application, including user and document AI response types.
+// It also re-exports the ParsedTradeline type for convenience.
 import { ParsedTradeline } from "@/utils/tradelineParser";
 
 export interface DocumentAIResponse {
@@ -25,13 +28,12 @@ export interface DocumentAIResponse {
   };
 }
 
-// Removed AIAnalysisResponse as it's no longer used after removing AI analysis from CreditReportUploadPage.tsx
-// export interface AIAnalysisResponse { ... }
-
-// Removed ProcessingMethod as it's no longer used
-// export type ProcessingMethod = 'ocr' | 'ai';
-
-// Removed CreditBureau as it's no longer used directly in types/index.ts
-// export type CreditBureau = "equifax" | "transunion" | "experian" | "";
+export interface User {
+  id: string;
+  email?: string;
+  name?: string;
+  avatar?: string;
+  // Add other user properties needed by your application
+}
 
 export type { ParsedTradeline };
