@@ -40,8 +40,6 @@ const CreditReportUploadPage = () => {
     extractedKeywords,
     aiInsights,
     extractedText,
-    processWithOCR,
-    processWithAI,
     setIsUploading,
     setUploadProgress,
     setExtractedKeywords,
@@ -89,8 +87,6 @@ const CreditReportUploadPage = () => {
       setIsUploading(false);
       setUploadProgress(0);
     },
-    processWithOCR,
-    processWithAI,
     setUploadProgress,
     setExtractedKeywords,
     setAiInsights,

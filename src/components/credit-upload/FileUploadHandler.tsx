@@ -1,5 +1,5 @@
 
-import React, { ChangeEvent } from 'react';
+import { ChangeEvent } from 'react';
 import { toast } from "@/components/ui/use-toast";
 import { ParsedTradeline } from "@/utils/tradelineParser";
 import { processPdfFile, validatePdfFile } from "@/utils/pdf-processor";
@@ -21,7 +21,6 @@ interface FileUploadHandlerProps {
 
 export const useFileUploadHandler = ({
   user,
-  processingMethod,
   onUploadStart,
   onUploadComplete,
   onUploadError,

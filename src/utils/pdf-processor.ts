@@ -10,7 +10,8 @@ export interface PDFProcessingResult {
 export async function processPdfFile(file: File): Promise<PDFProcessingResult> {
   try {
     const arrayBuffer = await file.arrayBuffer();
-    const data = await pdfParse(arrayBuffer);
+    const buffer = Buffer.from(arrayBuffer);
+    const data = await pdfParse(buffer);
     
     return {
       text: data.text,

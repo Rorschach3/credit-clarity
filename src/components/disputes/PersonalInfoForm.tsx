@@ -80,13 +80,13 @@ export function PersonalInfoForm({ onComplete }: PersonalInfoFormProps) {
           form.reset({
             firstName: data.first_name || "",
             lastName: data.last_name || "",
-            address: data.address || "",
+            address: data.address1 || "",
             city: data.city || "",
             state: data.state || "",
-            zip: data.zip || "",
-            phone: data.phone || "",
-            email: data.email || user?.email || "",
-            ssnLastFour: data.ssnlastfour || "",
+            zip: data.zip_code || "",
+            phone: data.phone_number || "",
+            email: user?.email || "",
+            ssnLastFour: data.last_four_of_ssn || "",
           });
         }
       } catch (error) {

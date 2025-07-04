@@ -1,16 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import MainLayout from "@/components/layout/MainLayout";
 import { Helmet } from "react-helmet";
 
 const HomePage = React.memo(function HomePage() {
-  const [email, setEmail] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Here you would handle the form submission, e.g. send to API
-    setSubmitted(true);
-  };
 
   return (
     <MainLayout>

@@ -142,7 +142,7 @@ export default function ProfilePage() {
                   <Label htmlFor="firstName">First Name *</Label>
                   <Input
                     id="firstName"
-                    value={profile.first_name}
+                    value={profile.first_name || ''}
                     onChange={(e) => handleInputChange('first_name', e.target.value)}
                     placeholder="Enter your first name"
                     required
@@ -152,7 +152,7 @@ export default function ProfilePage() {
                   <Label htmlFor="lastName">Last Name *</Label>
                   <Input
                     id="lastName"
-                    value={profile.last_name}
+                    value={profile.last_name || ''}
                     onChange={(e) => handleInputChange('last_name', e.target.value)}
                     placeholder="Enter your last name"
                     required
@@ -174,7 +174,7 @@ export default function ProfilePage() {
                   <Label htmlFor="lastFourSSN">Last 4 digits of SSN</Label>
                   <Input
                     id="lastFourSSN"
-                    value={profile.last_four_of_ssn}
+                    value={profile.last_four_of_ssn || ''}
                     onChange={(e) => handleInputChange('last_four_of_ssn', e.target.value.replace(/\D/g, '').slice(0, 4))}
                     placeholder="1234"
                     maxLength={4}
@@ -186,7 +186,7 @@ export default function ProfilePage() {
                 <Label htmlFor="address1">Address Line 1</Label>
                 <Input
                   id="address1"
-                  value={profile.address1}
+                  value={profile.address1 || ''}
                   onChange={(e) => handleInputChange('address1', e.target.value)}
                   placeholder="123 Main Street"
                 />
@@ -196,7 +196,7 @@ export default function ProfilePage() {
                 <Label htmlFor="address2">Address Line 2</Label>
                 <Input
                   id="address2"
-                  value={profile.address2}
+                  value={profile.address2 || ''}
                   onChange={(e) => handleInputChange('address2', e.target.value)}
                   placeholder="Apt 4B, Suite 100, etc."
                 />
@@ -207,7 +207,7 @@ export default function ProfilePage() {
                   <Label htmlFor="city">City</Label>
                   <Input
                     id="city"
-                    value={profile.city}
+                    value={profile.city || ''}
                     onChange={(e) => handleInputChange('city', e.target.value)}
                     placeholder="New York"
                   />
@@ -216,7 +216,7 @@ export default function ProfilePage() {
                   <Label htmlFor="state">State</Label>
                   <Input
                     id="state"
-                    value={profile.state}
+                    value={profile.state || ''}
                     onChange={(e) => handleInputChange('state', e.target.value.toUpperCase().slice(0, 2))}
                     placeholder="NY"
                     maxLength={2}
@@ -226,7 +226,7 @@ export default function ProfilePage() {
                   <Label htmlFor="zip">Zip Code</Label>
                   <Input
                     id="zip"
-                    value={profile.zip_code}
+                    value={profile.zip_code || ''}
                     onChange={(e) => handleInputChange('zip_code', e.target.value)}
                     placeholder="10001"
                   />
@@ -237,7 +237,7 @@ export default function ProfilePage() {
                 <Label htmlFor="phone">Phone Number</Label>
                 <Input
                   id="phone"
-                  value={profile.phone_number}
+                  value={profile.phone_number || ''}
                   onChange={(e) => handleInputChange('phone_number', e.target.value)}
                   placeholder="(555) 123-4567"
                 />

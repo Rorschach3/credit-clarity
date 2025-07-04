@@ -49,7 +49,7 @@ export function Navbar() {
           {user ? (
             <div className="hidden md:flex items-center gap-2">
               <Link to="/profile">
-                <Button variant="none" size="xs">
+                <Button variant="ghost" size="sm">
                   <CurrentUserAvatar user={user} />
                 </Button>
               </Link>

@@ -1,5 +1,5 @@
 // src/pages/DashboardPage.tsx
-import MainLayout from "@/components/layout/MainLayout"
+
 import { RecentActivity } from "../components/dashboard/RecentActivity"
 import { DisputeSummary } from "../components/dashboard/DisputeSummary"
 import { useAuth } from "@/hooks/use-auth"
