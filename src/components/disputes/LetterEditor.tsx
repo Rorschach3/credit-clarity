@@ -9,20 +9,12 @@ interface LetterEditorProps {
   selectedTradelines: ParsedTradeline[];
   letter: string;
   setLetter: (letter: string) => void;
-  setShowDocsSection: (show: boolean) => void;
 }
-
-const BUREAU_ADDRESSES = {
-  experian: "Experian\nP.O. Box 4500\nAllen, TX 75013",
-  equifax: "Equifax Information Services LLC\nP.O. Box 740256\nAtlanta, GA 30374",
-  transunion: "TransUnion LLC\nConsumer Dispute Center\nP.O. Box 2000\nChester, PA 19016"
-};
 
 export const LetterEditor: React.FC<LetterEditorProps> = ({
   selectedTradelines,
   letter,
-  setLetter,
-  setShowDocsSection
+  setLetter
 }) => {
   
   useEffect(() => {

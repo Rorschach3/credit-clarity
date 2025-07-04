@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ParsedTradeline } from "@/utils/tradelineParser";
+import { ParsedTradeline, AccountType, AccountStatus, CreditBureau } from "@/utils/tradelineParser";
 
 interface ManualTradelineModalProps {
   onClose: () => void;
@@ -41,9 +41,9 @@ export const ManualTradelineModal: React.FC<ManualTradelineModalProps> = ({ onCl
       monthly_payment: formData.monthly_payment || "",
       date_opened: formData.date_opened || "",
       is_negative: formData.is_negative || false,
-      account_type: formData.account_type || "",
-      account_status: formData.account_status || "",
-      credit_bureau: formData.credit_bureau || "",
+      account_type: (formData.account_type as AccountType) || "",
+      account_status: (formData.account_status as AccountStatus) || "",
+      credit_bureau: (formData.credit_bureau as CreditBureau) || "",
       dispute_count: formData.dispute_count || 0,
     };
 
@@ -112,7 +112,7 @@ export const ManualTradelineModal: React.FC<ManualTradelineModalProps> = ({ onCl
             </div>
             <div>
               <Label htmlFor="account_type">Account Type</Label>
-              <Select onValueChange={(value) => setFormData(prev => ({ ...prev, account_type: value }))}>
+              <Select onValueChange={(value: AccountType) => setFormData(prev => ({ ...prev, account_type: value }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select account type" />
                 </SelectTrigger>
@@ -128,7 +128,7 @@ export const ManualTradelineModal: React.FC<ManualTradelineModalProps> = ({ onCl
             </div>
             <div>
               <Label htmlFor="account_status">Account Status</Label>
-              <Select onValueChange={(value) => setFormData(prev => ({ ...prev, account_status: value }))}>
+              <Select onValueChange={(value: AccountStatus) => setFormData(prev => ({ ...prev, account_status: value }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select account status" />
                 </SelectTrigger>
@@ -143,7 +143,7 @@ export const ManualTradelineModal: React.FC<ManualTradelineModalProps> = ({ onCl
             </div>
             <div>
               <Label htmlFor="credit_bureau">Credit Bureau</Label>
-              <Select onValueChange={(value) => setFormData(prev => ({ ...prev, credit_bureau: value }))}>
+              <Select onValueChange={(value: CreditBureau) => setFormData(prev => ({ ...prev, credit_bureau: value }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select credit bureau" />
                 </SelectTrigger>

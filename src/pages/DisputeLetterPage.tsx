@@ -18,6 +18,14 @@ interface LocationState {
   selectedTradelines?: ParsedTradeline[];
 }
 
+interface UserInfo {
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+}
+
 const DisputeLetterPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -25,15 +33,12 @@ const DisputeLetterPage = () => {
 
   const [tradelines, setTradelines] = useState<ParsedTradeline[]>([]);
   const [selectedTradelines, setSelectedTradelines] = useState<ParsedTradeline[]>([]);
-  const [userInfo, setUserInfo] = useState({ 
-    firstName: "", 
-    lastName: "", 
+  const [userInfo, setUserInfo] = useState<UserInfo>({ 
+    name: "",
     address: "", 
     city: "", 
     state: "", 
-    zip: "",
-    phone: "",
-    email: ""
+    zip: ""
   });
   const [letter, setLetter] = useState("");
   const [loading, setLoading] = useState(true);
@@ -80,14 +85,11 @@ const DisputeLetterPage = () => {
 
         // Autofill user info from profile
         setUserInfo({
-          firstName: "",
-          lastName: "",
+          name: user.email || "",
           address: "",
           city: "",
           state: "",
-          zip: "",
-          phone: "",
-          email: user.email || "",
+          zip: ""
         });
 
       } catch (error) {
@@ -144,7 +146,6 @@ const DisputeLetterPage = () => {
                   selectedTradelines={selectedTradelines}
                   letter={letter}
                   setLetter={setLetter}
-                  setShowDocsSection={() => {}}
                 />
 
                 <div className="flex justify-end space-x-4">

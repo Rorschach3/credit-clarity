@@ -1,27 +1,37 @@
 
-import React, { useState, useEffect, useCallback, ChangeEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/components/ui/use-toast";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
-import { saveTradelinesToDatabase, ParsedTradeline } from "@/utils/tradelineParser";
+import { saveTradelinesToDatabase } from "@/utils/tradelineParser";
 import { ManualTradelineModal } from "@/components/disputes/ManualTradelineModal";
 import { ProcessingMethodSelector } from "@/components/credit-upload/ProcessingMethodSelector";
 import { FileUploadSection } from "@/components/credit-upload/FileUploadSection";
 import { AIAnalysisResults } from "@/components/credit-upload/AIAnalysisResults";
 import { TradelinesList } from "@/components/credit-upload/TradelinesList";
+import { UploadActions } from "@/components/credit-upload/UploadActions";
 import { useCreditReportProcessing } from "@/hooks/useCreditReportProcessing";
+import { useCreditUploadState } from "@/hooks/useCreditUploadState";
+import { useFileUploadHandler } from "@/components/credit-upload/FileUploadHandler";
 
 const CreditReportUploadPage = () => {
-  const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [tradelines, setTradelines] = useState<ParsedTradeline[]>([]);
-  const [selectedTradelineIds, setSelectedTradelineIds] = useState<Set<string>>(new Set());
-  const [manualModalOpen, setManualModalOpen] = useState(false);
-  const [processingMethod, setProcessingMethod] = useState<'ocr' | 'ai'>('ai');
-  const [showAiResults, setShowAiResults] = useState(false);
+  const {
+    tradelines,
+    setTradelines,
+    selectedTradelineIds,
+    manualModalOpen,
+    setManualModalOpen,
+    processingMethod,
+    setProcessingMethod,
+    showAiResults,
+    setShowAiResults,
+    handleSelectTradeline,
+    updateTradeline,
+    deleteTradeline,
+    handleAddManual
+  } = useCreditUploadState();
 
   const {
     isUploading,
@@ -45,18 +55,6 @@ const CreditReportUploadPage = () => {
     return cleanup;
   }, [cleanup]);
 
-  const handleSelectTradeline = (id: string, isSelected: boolean) => {
-    setSelectedTradelineIds(prev => {
-      const newSet = new Set(prev);
-      if (isSelected) {
-        newSet.add(id);
-      } else {
-        newSet.delete(id);
-      }
-      return newSet;
-    });
-  };
-
   const saveTradelines = useCallback(async () => {
     if (user && tradelines.length > 0) {
       try {
@@ -74,73 +72,32 @@ const CreditReportUploadPage = () => {
     }
   }, [user, tradelines]);
 
-  const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    console.log("handleFileUpload triggered");
-    try {
-      const file = event.target.files?.[0];
-      if (!file || file.type !== "application/pdf") {
-        toast({ title: "Invalid file", description: "Please upload a PDF file." });
-        return;
-      }
-      if (!user || !user.id) {
-        toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
-        return;
-      }
-
+  const { handleFileUpload } = useFileUploadHandler({
+    user,
+    processingMethod,
+    onUploadStart: () => {
       setIsUploading(true);
       setTradelines([]);
-      setUploadProgress(0);
-      setExtractedKeywords([]);
-      setAiInsights('');
-      setExtractedText('');
-      setShowAiResults(true);
-
-      if (processingMethod === 'ai') {
-        const { tradelines: newTradelines } = await processWithAI(file);
-        console.log("AI Processing result:", newTradelines);
-        setTradelines(newTradelines);
-      } else {
-        const textContent = await processWithOCR(file);
-        console.log("OCR extracted text:", textContent);
-        setUploadProgress(80);
-        
-        const keywords = extractKeywordsFromText(textContent);
-        setExtractedKeywords(keywords);
-        setAiInsights(generateAIInsights(textContent, keywords));
-        setExtractedText(textContent);
-        
-        try {
-          const { parseTradelinesFromText } = await import("@/utils/tradelineParser");
-          const parsed = parseTradelinesFromText(textContent, user.id);
-          console.log("OCR: Parsed tradelines:", parsed);
-          setTradelines(parsed);
-        } catch (parseError) {
-          console.error("OCR tradeline parsing failed:", parseError);
-          toast({
-            title: "Parsing Error",
-            description: "Failed to parse tradelines from text. Try manual entry.",
-            variant: "destructive"
-          });
-        }
-        setUploadProgress(100);
-      }
-      
-      toast({
-        title: "Upload complete",
-        description: `Document processed using ${processingMethod.toUpperCase()}.`
-      });
-    } catch (error) {
-      console.error("PDF processing error:", error instanceof Error ? error.message : String(error));
-      toast({
-        title: "Error",
-        description: "Failed to process PDF. Please try again or use a different processing method.",
-        variant: "destructive"
-      });
-    } finally {
+    },
+    onUploadComplete: (newTradelines) => {
+      setTradelines(newTradelines);
       setIsUploading(false);
       setUploadProgress(0);
-    }
-  };
+    },
+    onUploadError: () => {
+      setIsUploading(false);
+      setUploadProgress(0);
+    },
+    processWithOCR,
+    processWithAI,
+    setUploadProgress,
+    setExtractedKeywords,
+    setAiInsights,
+    setExtractedText,
+    setShowAiResults,
+    extractKeywordsFromText,
+    generateAIInsights
+  });
 
   useEffect(() => {
     if (tradelines.length > 0 && user?.id) {
@@ -152,38 +109,8 @@ const CreditReportUploadPage = () => {
     }
   }, [tradelines, user, saveTradelines]);
 
-  const updateTradeline = (index: number, updated: Partial<ParsedTradeline>) => {
-    setTradelines((prev) => {
-      const newTradelines = [...prev];
-      newTradelines[index] = { ...newTradelines[index], ...updated };
-      console.log("Updated tradeline:", newTradelines[index]);
-      return newTradelines;
-    });
-  };
-
-  const deleteTradeline = (index: number) => {
-    setTradelines((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleProceed = () => {
-    const selectedTradelines = tradelines.filter(t => selectedTradelineIds.has(t.id || ''));
-    console.log("Proceeding with selected tradelines:", selectedTradelines);
-    
-    navigate("/dispute-letter", {
-      state: {
-        selectedTradelineIds: Array.from(selectedTradelineIds),
-        selectedTradelines: selectedTradelines
-      }
-    });
-  };
-
-  const handleAddManual = (newTradeline: ParsedTradeline) => {
-    const tradelineWithUserId = {
-      ...newTradeline,
-      user_id: user?.id || ""
-    };
-    setTradelines(prev => [...prev, tradelineWithUserId]);
-    setManualModalOpen(false);
+  const handleManualAdd = (newTradeline: any) => {
+    handleAddManual(newTradeline, user?.id || "");
     toast({
       title: "Success",
       description: "Manual tradeline added successfully."
@@ -226,16 +153,15 @@ const CreditReportUploadPage = () => {
             onAddManual={() => setManualModalOpen(true)}
           />
 
-          <div className="flex justify-end space-x-4">
-            <Button onClick={handleProceed} disabled={selectedTradelineIds.size === 0}>
-              Proceed to Step 2 ({selectedTradelineIds.size} selected)
-            </Button>
-          </div>
+          <UploadActions
+            selectedTradelineIds={selectedTradelineIds}
+            tradelines={tradelines}
+          />
 
           {manualModalOpen && (
             <ManualTradelineModal
               onClose={() => setManualModalOpen(false)}
-              onAdd={handleAddManual}
+              onAdd={handleManualAdd}
             />
           )}
         </CardContent>
