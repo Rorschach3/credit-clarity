@@ -18,6 +18,10 @@ export const UploadActions: React.FC<UploadActionsProps> = ({
     const selectedTradelines = tradelines.filter(t => selectedTradelineIds.has(t.id || ''));
     console.log("Proceeding with selected tradelines:", selectedTradelines);
     
+    if (selectedTradelines.length === 0) {
+      return;
+    }
+    
     navigate("/dispute-letter", {
       state: {
         selectedTradelineIds: Array.from(selectedTradelineIds),
@@ -28,8 +32,12 @@ export const UploadActions: React.FC<UploadActionsProps> = ({
 
   return (
     <div className="flex justify-end space-x-4">
-      <Button onClick={handleProceed} disabled={selectedTradelineIds.size === 0}>
-        Proceed to Step 2 ({selectedTradelineIds.size} selected)
+      <Button 
+        onClick={handleProceed} 
+        disabled={selectedTradelineIds.size === 0}
+        className="min-w-[200px]"
+      >
+        Generate Dispute Letters ({selectedTradelineIds.size} selected)
       </Button>
     </div>
   );

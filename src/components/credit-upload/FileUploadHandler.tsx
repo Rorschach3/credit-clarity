@@ -2,6 +2,7 @@
 import React, { ChangeEvent } from 'react';
 import { toast } from "@/components/ui/use-toast";
 import { ParsedTradeline } from "@/utils/tradelineParser";
+import { processPdfFile, validatePdfFile } from "@/utils/pdf-processor";
 
 interface FileUploadHandlerProps {
   user: any;
@@ -9,8 +10,6 @@ interface FileUploadHandlerProps {
   onUploadStart: () => void;
   onUploadComplete: (tradelines: ParsedTradeline[]) => void;
   onUploadError: (error: string) => void;
-  processWithOCR: (file: File) => Promise<string>;
-  processWithAI: (file: File) => Promise<{ tradelines: ParsedTradeline[] }>;
   setUploadProgress: (progress: number) => void;
   setExtractedKeywords: (keywords: string[]) => void;
   setAiInsights: (insights: string) => void;
@@ -26,8 +25,6 @@ export const useFileUploadHandler = ({
   onUploadStart,
   onUploadComplete,
   onUploadError,
-  processWithOCR,
-  processWithAI,
   setUploadProgress,
   setExtractedKeywords,
   setAiInsights,
@@ -41,59 +38,85 @@ export const useFileUploadHandler = ({
     console.log("handleFileUpload triggered");
     try {
       const file = event.target.files?.[0];
-      if (!file || file.type !== "application/pdf") {
-        toast({ title: "Invalid file", description: "Please upload a PDF file." });
+      if (!file) {
         return;
       }
+
+      // Validate file
+      try {
+        validatePdfFile(file);
+      } catch (validationError) {
+        toast({ 
+          title: "Invalid file", 
+          description: validationError instanceof Error ? validationError.message : "Invalid file format",
+          variant: "destructive"
+        });
+        return;
+      }
+
       if (!user || !user.id) {
         toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
         return;
       }
 
       onUploadStart();
-      setUploadProgress(0);
+      setUploadProgress(10);
       setExtractedKeywords([]);
       setAiInsights('');
       setExtractedText('');
       setShowAiResults(true);
 
-      if (processingMethod === 'ai') {
-        const { tradelines: newTradelines } = await processWithAI(file);
-        console.log("AI Processing result:", newTradelines);
-        onUploadComplete(newTradelines);
-      } else {
-        const textContent = await processWithOCR(file);
-        console.log("OCR extracted text:", textContent);
-        setUploadProgress(80);
+      // Process PDF file
+      setUploadProgress(30);
+      const pdfResult = await processPdfFile(file);
+      console.log(`PDF processed: ${pdfResult.pages} pages, ${pdfResult.text.length} characters`);
+      
+      setUploadProgress(50);
+      setExtractedText(pdfResult.text);
+
+      // Extract keywords and generate insights
+      const keywords = extractKeywordsFromText(pdfResult.text);
+      setExtractedKeywords(keywords);
+      
+      const insights = generateAIInsights(pdfResult.text, keywords);
+      setAiInsights(insights);
+      
+      setUploadProgress(70);
+
+      // Parse tradelines from extracted text
+      try {
+        const { parseTradelinesFromText } = await import("@/utils/tradelineParser");
+        const parsed = parseTradelinesFromText(pdfResult.text, user.id);
+        console.log("Parsed tradelines:", parsed);
         
-        const keywords = extractKeywordsFromText(textContent);
-        setExtractedKeywords(keywords);
-        setAiInsights(generateAIInsights(textContent, keywords));
-        setExtractedText(textContent);
-        
-        try {
-          const { parseTradelinesFromText } = await import("@/utils/tradelineParser");
-          const parsed = parseTradelinesFromText(textContent, user.id);
-          console.log("OCR: Parsed tradelines:", parsed);
-          onUploadComplete(parsed);
-        } catch (parseError) {
-          console.error("OCR tradeline parsing failed:", parseError);
+        if (parsed.length === 0) {
           toast({
-            title: "Parsing Error",
-            description: "Failed to parse tradelines from text. Try manual entry.",
+            title: "No tradelines found",
+            description: "Could not identify any tradelines in this document. Try manual entry or a different document.",
             variant: "destructive"
           });
         }
-        setUploadProgress(100);
+        
+        onUploadComplete(parsed);
+      } catch (parseError) {
+        console.error("Tradeline parsing failed:", parseError);
+        toast({
+          title: "Parsing Error",
+          description: "Failed to parse tradelines from document. Try manual entry.",
+          variant: "destructive"
+        });
+        onUploadComplete([]);
       }
+      
+      setUploadProgress(100);
       
       toast({
         title: "Upload complete",
-        description: `Document processed using ${processingMethod.toUpperCase()}.`
+        description: `Document processed successfully. Found ${pdfResult.pages} pages.`
       });
     } catch (error) {
       console.error("PDF processing error:", error instanceof Error ? error.message : String(error));
-      const errorMessage = "Failed to process PDF. Please try again or use a different processing method.";
+      const errorMessage = error instanceof Error ? error.message : "Failed to process PDF. Please try again.";
       onUploadError(errorMessage);
       toast({
         title: "Error",

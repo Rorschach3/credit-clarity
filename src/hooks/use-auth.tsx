@@ -27,6 +27,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+
     // Check for existing session
     const getUser = async () => {
       try {
@@ -34,76 +36,98 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         if (error) {
           console.error("Error getting session:", error);
-          setIsLoading(false);
+          if (mounted) {
+            setUser(null);
+            setIsLoading(false);
+          }
           return;
         }
 
-        setUser(session ? session.user : null);
+        if (mounted) {
+          setUser(session ? session.user : null);
+          setIsLoading(false);
+        }
       } catch (error) {
         console.error("Unexpected error:", error);
-      } finally {
-        setIsLoading(false);
+        if (mounted) {
+          setUser(null);
+          setIsLoading(false);
+        }
       }
     };
 
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUser(session?.user || null);
-        setIsLoading(false);
+      async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.id);
+        
+        if (mounted) {
+          setUser(session?.user || null);
+          setIsLoading(false);
+        }
       }
     );
 
     getUser();
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
 
   const login = async (email: string, password: string) => {
     try {
+      setIsLoading(true);
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
+        setIsLoading(false);
         return { error: error as Error };
       }
 
-      // Don't manually set user here - let the auth state listener handle it
+      // Auth state listener will handle setting the user
       return {};
     } catch (error) {
       console.error("Login error:", error);
+      setIsLoading(false);
       return { error: error as Error };
     }
   };
 
   const signup = async (email: string, password: string) => {
     try {
+      setIsLoading(true);
       const { error } = await supabase.auth.signUp({
         email,
         password,
       });
 
       if (error) {
+        setIsLoading(false);
         return { error: error as Error };
       }
 
+      setIsLoading(false);
       return {};
     } catch (error) {
       console.error("Signup error:", error);
+      setIsLoading(false);
       return { error: error as Error };
     }
   };
 
   const logout = async () => {
     try {
+      setIsLoading(true);
       await supabase.auth.signOut();
-      // Don't manually set user here - let the auth state listener handle it
+      // Auth state listener will handle clearing the user
     } catch (error) {
       console.error("Logout error:", error);
+      setIsLoading(false);
     }
   };
 

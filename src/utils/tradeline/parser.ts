@@ -2,51 +2,66 @@
 import { ParsedTradeline, ParsedTradelineSchema } from './types';
 import { ZodError } from 'zod';
 
-// Enhanced patterns for parsing credit report text
+// Enhanced patterns for real credit report formats
 const TRADELINE_PATTERNS = {
-  // Creditor name patterns - look for company names at start of lines
-  creditorName: [
-    /^([A-Z][A-Z\s&'-]+(?:BANK|CARD|CREDIT|FINANCIAL|CORP|INC|LLC|CO|CAPITAL|CHASE|WELLS|CITI|DISCOVER|AMEX|AMERICAN\s+EXPRESS))[^\n]*$/gim,
-    /^([A-Z][A-Z\s&'-]{3,})\s*(?:\*{4}\d{4}|Account|Acct)/gim,
-    /^([A-Z\s&'-]{4,})\s+\d{4}\s*$/gim
+  // Account section markers - these help identify where tradelines start
+  sectionMarkers: [
+    /^(CREDIT CARD|INSTALLMENT|MORTGAGE|AUTO|STUDENT LOAN|COLLECTION)/gim,
+    /^(Account Type:|Account Name:|Company Name:)/gim,
+    /^\s*([A-Z][A-Z\s&'-]+(?:BANK|CARD|CREDIT|FINANCIAL|CORP|INC|LLC|CO|CAPITAL|CHASE|WELLS|CITI|DISCOVER|AMEX|AMERICAN\s+EXPRESS))/gim
   ],
   
-  // Account number patterns
+  // Creditor name patterns - look for company names
+  creditorName: [
+    /^([A-Z][A-Z\s&'-]+(?:BANK|CARD|CREDIT|FINANCIAL|CORP|INC|LLC|CO|CAPITAL|CHASE|WELLS|CITI|DISCOVER|AMEX|AMERICAN\s+EXPRESS))/gim,
+    /Company Name:\s*([A-Z][A-Z\s&'-]+)/gi,
+    /Account Name:\s*([A-Z][A-Z\s&'-]+)/gi,
+    /^([A-Z\s&'-]{4,})\s+(?:Account|Acct)/gim
+  ],
+  
+  // Account number patterns - various formats used by bureaus
   accountNumber: [
-    /(?:Account|Acct|#|Number)[:\s]*(\*{4}\d{4}|\d{4})/gi,
-    /\*{4}(\d{4})/g,
-    /(?:ending|last\s+4)[:\s]*(\d{4})/gi
+    /Account\s*(?:Number|#):\s*(\*{4}\d{4}|\d{4}|[X]{4}\d{4})/gi,
+    /Acct\s*(?:Number|#):\s*(\*{4}\d{4}|\d{4}|[X]{4}\d{4})/gi,
+    /(\*{4}\d{4}|[X]{4}\d{4})/g,
+    /ending\s+in\s+(\d{4})/gi,
+    /last\s+4:\s*(\d{4})/gi
   ],
   
   // Balance patterns
   balance: [
-    /(?:Balance|Bal|Amount|Outstanding)[:\s]*\$?([\d,]+\.?\d*)/gi,
-    /\$\s?([\d,]+\.?\d*)/g,
-    /(?:Current|Present|Total)[:\s]*\$?([\d,]+\.?\d*)/gi
+    /Balance:\s*\$?([\d,]+\.?\d*)/gi,
+    /Current\s+Balance:\s*\$?([\d,]+\.?\d*)/gi,
+    /Outstanding:\s*\$?([\d,]+\.?\d*)/gi,
+    /Amount\s+Owed:\s*\$?([\d,]+\.?\d*)/gi
   ],
   
   // Date patterns
   dateOpened: [
-    /(?:Opened|Date\s+Opened|Open\s+Date)[:\s]*(\d{1,2}\/\d{1,2}\/\d{2,4})/gi,
-    /(\d{1,2}\/\d{1,2}\/\d{2,4})/g
+    /Date\s+Opened:\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/gi,
+    /Opened:\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/gi,
+    /Open\s+Date:\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/gi
   ],
   
-  // Status patterns
+  // Status patterns - key for identifying negative items
   accountStatus: [
-    /(?:Status|Account\s+Status)[:\s]*(Open|Closed|Charged\s+Off|Collection|Disputed|Current|Delinquent)/gi,
-    /(Open|Closed|Charged\s+Off|Collection|Disputed|Current|Delinquent)/gi
+    /Status:\s*(Open|Closed|Charged\s+Off|Collection|Disputed|Current|Delinquent|Past\s+Due)/gi,
+    /Account\s+Status:\s*(Open|Closed|Charged\s+Off|Collection|Disputed|Current|Delinquent|Past\s+Due)/gi,
+    /(Charged\s+Off|Collection|Delinquent|Past\s+Due|Late)/gi
   ],
   
   // Credit limit patterns
   creditLimit: [
-    /(?:Credit\s+Limit|Limit|High\s+Credit)[:\s]*\$?([\d,]+\.?\d*)/gi,
-    /(?:CL|CR\s+LMT)[:\s]*\$?([\d,]+\.?\d*)/gi
+    /Credit\s+Limit:\s*\$?([\d,]+\.?\d*)/gi,
+    /High\s+Credit:\s*\$?([\d,]+\.?\d*)/gi,
+    /Limit:\s*\$?([\d,]+\.?\d*)/gi
   ],
   
-  // Monthly payment patterns
+  // Payment patterns
   monthlyPayment: [
-    /(?:Monthly\s+Payment|Payment|Pmt)[:\s]*\$?([\d,]+\.?\d*)/gi,
-    /(?:Min\s+Payment|Minimum)[:\s]*\$?([\d,]+\.?\d*)/gi
+    /Monthly\s+Payment:\s*\$?([\d,]+\.?\d*)/gi,
+    /Payment:\s*\$?([\d,]+\.?\d*)/gi,
+    /Min\s+Payment:\s*\$?([\d,]+\.?\d*)/gi
   ]
 };
 
@@ -58,14 +73,15 @@ function extractValue(text: string, patterns: RegExp[]): string {
     const matches = text.match(pattern);
     if (matches && matches.length > 0) {
       // Return the first capture group if it exists, otherwise the full match
-      return matches[1] || matches[0];
+      const value = matches[1] || matches[0];
+      return value.trim();
     }
   }
   return "";
 }
 
 /**
- * Determines account type based on creditor name and other context
+ * Determines account type based on creditor name and context
  */
 function determineAccountType(creditorName: string, context: string): string {
   const name = creditorName.toLowerCase();
@@ -99,6 +115,7 @@ function isNegativeTradeline(status: string, context: string): boolean {
          statusLower.includes('collection') || 
          statusLower.includes('delinquent') ||
          statusLower.includes('late') ||
+         statusLower.includes('past due') ||
          contextLower.includes('delinquent') ||
          contextLower.includes('past due') ||
          contextLower.includes('charge off') ||
@@ -120,7 +137,7 @@ export function parseTradeline(rawText: string, userId?: string): ParsedTradelin
     
     // Extract account number
     const accountMatch = extractValue(cleanText, TRADELINE_PATTERNS.accountNumber);
-    const account_number = accountMatch ? `****${accountMatch.replace(/\*+/, '')}` : '';
+    const account_number = accountMatch ? `****${accountMatch.replace(/[\*X]+/, '')}` : '';
     
     // Extract balance
     const balanceRaw = extractValue(cleanText, TRADELINE_PATTERNS.balance);
@@ -202,16 +219,19 @@ export function parseTradelinesFromText(creditReportText: string, userId?: strin
     }
     
     // Split the text into potential tradeline sections using various delimiters
+    // Look for section breaks, page breaks, or major formatting changes
     const sections = creditReportText
-      .split(/\n\s*\n|_{3,}|-{3,}|={3,}|\f/)
+      .split(/\n\s*\n|_{3,}|-{3,}|={3,}|\f|Account\s+Type:/i)
       .filter(section => {
         const trimmed = section.trim();
-        return trimmed.length > 20 && (
+        return trimmed.length > 50 && ( // Increased minimum length for better quality
+          // Look for indicators this might be a tradeline section
+          TRADELINE_PATTERNS.sectionMarkers.some(pattern => pattern.test(trimmed)) ||
           trimmed.match(/[A-Z]{2,}/g) || // Has uppercase words
           trimmed.includes('$') || // Has currency
           trimmed.toLowerCase().includes('account') ||
-          trimmed.toLowerCase().includes('credit') ||
-          trimmed.toLowerCase().includes('balance')
+          trimmed.toLowerCase().includes('balance') ||
+          trimmed.toLowerCase().includes('payment')
         );
       });
 
@@ -226,12 +246,22 @@ export function parseTradelinesFromText(creditReportText: string, userId?: strin
       try {
         const tradeline = parseTradeline(section, userId);
         
-        // Only add tradelines that have at least a creditor name
+        // Only add tradelines that have meaningful data
         if (tradeline.creditor_name && tradeline.creditor_name.length > 2) {
-          tradelines.push(tradeline);
-          console.log(`Successfully parsed tradeline: ${tradeline.creditor_name}`);
+          // Check for duplicates based on creditor name and account number
+          const isDuplicate = tradelines.some(existing => 
+            existing.creditor_name === tradeline.creditor_name &&
+            existing.account_number === tradeline.account_number
+          );
+          
+          if (!isDuplicate) {
+            tradelines.push(tradeline);
+            console.log(`Successfully parsed tradeline: ${tradeline.creditor_name}`);
+          } else {
+            console.log(`Skipping duplicate tradeline: ${tradeline.creditor_name}`);
+          }
         } else {
-          console.log("Skipping tradeline with no creditor name");
+          console.log("Skipping tradeline with insufficient data");
         }
       } catch (error) {
         console.warn(`Failed to parse section ${i + 1}:`, error);
@@ -239,7 +269,7 @@ export function parseTradelinesFromText(creditReportText: string, userId?: strin
       }
     }
 
-    console.log(`Successfully parsed ${tradelines.length} tradelines`);
+    console.log(`Successfully parsed ${tradelines.length} unique tradelines`);
     return tradelines;
     
   } catch (error) {
