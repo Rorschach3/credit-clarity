@@ -12,7 +12,7 @@ export async function processPdfFile(file: File): Promise<PDFProcessingResult> {
       new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
     );
     
-    // Call your Document AI proxy server
+    // Call your Document AI proxy server (Express server with real Document AI)
     const response = await fetch('http://localhost:8000/document-ai', {
       method: 'POST',
       headers: {
