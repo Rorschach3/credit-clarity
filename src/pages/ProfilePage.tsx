@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from 'sonner';
 
-import type { Database } from '../types/database';
+import type { Database } from '../integrations/supabase/types';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -28,13 +27,8 @@ export default function ProfilePage() {
   });
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      fetchProfile();
-    }
-  }, [user]);
-
-  const fetchProfile = async () => {
+  // Memoize fetchProfile with useCallback
+  const fetchProfile = useCallback(async () => {
     if (!user) return;
     
     setIsLoading(true);
@@ -60,7 +54,8 @@ export default function ProfilePage() {
           state: data.state ?? null,
           zip_code: data.zip_code ?? null,
           phone_number: data.phone_number ?? null,
-          last_four_of_ssn: data.last_four_of_ssn ?? null
+          last_four_of_ssn: data.last_four_of_ssn ?? null,
+          dob: data.dob ?? null
         });
       }
     } catch (error) {
@@ -69,7 +64,14 @@ export default function ProfilePage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]); // Include user in dependencies
+
+  // Simplified useEffect with proper dependencies
+  useEffect(() => {
+    if (user) {
+      fetchProfile();
+    }
+  }, [user, fetchProfile]); // Include both user and fetchProfile
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,8 +116,20 @@ export default function ProfilePage() {
       if (error) throw error;
 
       toast.success('Profile updated successfully!');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error updating profile:', error);
+      
+      // Type-safe error handling
+      if (error instanceof Error) {
+        console.error('API Error:', {
+          message: error.message,
+          name: error.name,
+          stack: error.stack
+        });
+      } else {
+        console.error('Unknown error type:', error);
+      }
+      
       toast.error('Failed to update profile');
     } finally {
       setIsLoading(false);
@@ -166,8 +180,8 @@ export default function ProfilePage() {
                   <Input
                     id="dob"
                     type="date"
-                    value={''}
-                    disabled
+                    value={profile.dob || ''}
+                    onChange={(e) => handleInputChange('dob', e.target.value)}
                   />
                 </div>
                 <div>

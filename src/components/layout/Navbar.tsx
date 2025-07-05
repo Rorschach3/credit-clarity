@@ -26,7 +26,7 @@ export function Navbar() {
         </Link>
 
         <nav className="hidden md:flex items-center gap-6">
-          <Link to="/" className="text-sm font-medium transition-colors hover:text-primary">
+          <Link to="/dashboard" className="text-sm font-medium transition-colors hover:text-primary">
             Home
           </Link>
           <Link to="/admin" className="text-sm font-medium transition-colors hover:text-primary">
@@ -49,7 +49,7 @@ export function Navbar() {
           {user ? (
             <div className="hidden md:flex items-center gap-2">
               <Link to="/profile">
-                <Button variant="ghost" size="sm">
+                <Button variant="outline" size="sm">
                   <CurrentUserAvatar user={user} />
                 </Button>
               </Link>
@@ -90,7 +90,7 @@ export function Navbar() {
               </SheetDescription>
             </SheetHeader>
             <div className="grid gap-4 py-2">
-              <Link to="/" className="block text-sm font-medium transition-colors hover:text-primary">
+              <Link to="/dashboard" className="block text-sm font-medium transition-colors hover:text-primary">
                 Home
               </Link>
               <Link to="/about" className="block text-sm font-medium transition-colors hover:text-primary">

@@ -1,5 +1,5 @@
 // src/utils/pdf-parser.test.ts
-import { parsePdfDocument } from './pdf-parser';
+import { pdfParse } from './pdf-parser';
 import OpenAI from 'openai';
 import fs from 'fs';
 
@@ -7,7 +7,7 @@ import fs from 'fs';
 jest.mock('openai');
 jest.mock('fs');
 
-describe('parsePdfDocument', () => {
+describe('pdfParse', () => {
   const mockExtractionResponse = {
     choices: [
       {
@@ -58,7 +58,7 @@ describe('parsePdfDocument', () => {
     const mockInstance = new OpenAI({ apiKey: 'test' });
     (mockInstance.chat.completions.create as jest.Mock).mockResolvedValue(mockExtractionResponse);
 
-    const result = await parsePdfDocument(mockPdfPath, 'test-api-key');
+    const result = await pdfParse(mockPdfPath, 'test-api-key');
 
     expect(result).toBeDefined();
     expect(result.accounts).toHaveLength(1);

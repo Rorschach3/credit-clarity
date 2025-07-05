@@ -1,12 +1,10 @@
 
 import React from "react";
-import MainLayout from "@/components/layout/MainLayout";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { FileText, Brain, Rocket } from "lucide-react";
 
 export default function FaqPage() {
   return (
-    <MainLayout>
       <div className="container py-12 max-w-4xl mx-auto">
         <h1 className="text-4xl font-bold text-center mb-2">Frequently Asked Questions</h1>
         <p className="text-center text-gray-600 mb-12">Understanding Credit Repair and Our AI-Powered Dispute Process</p>
@@ -229,6 +227,5 @@ export default function FaqPage() {
           </AccordionItem>
         </Accordion>
       </div>
-    </MainLayout>
   );
 }

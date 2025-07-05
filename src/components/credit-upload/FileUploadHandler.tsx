@@ -2,10 +2,10 @@
 import { ChangeEvent } from 'react';
 import { toast } from "@/components/ui/use-toast";
 import { ParsedTradeline } from "@/utils/tradelineParser";
-import { processPdfFile, validatePdfFile } from "@/utils/pdf-processor";
+import { processPdfFile } from "@/utils/pdf-processor";
 
 interface FileUploadHandlerProps {
-  user: any;
+  user: { id: string; email?: string } | null;
   processingMethod: 'ocr' | 'ai';
   onUploadStart: () => void;
   onUploadComplete: (tradelines: ParsedTradeline[]) => void;
@@ -18,6 +18,24 @@ interface FileUploadHandlerProps {
   extractKeywordsFromText: (text: string) => string[];
   generateAIInsights: (text: string, keywords: string[]) => string;
 }
+
+// File validation utility
+const validateFile = (file: File): void => {
+  const allowedTypes = ['application/pdf'];
+  const maxSize = 10 * 1024 * 1024; // 10MB
+
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error('Only PDF files are allowed');
+  }
+
+  if (file.size > maxSize) {
+    throw new Error('File size must be less than 10MB');
+  }
+
+  if (file.size === 0) {
+    throw new Error('File is empty');
+  }
+};
 
 export const useFileUploadHandler = ({
   user,
@@ -43,7 +61,7 @@ export const useFileUploadHandler = ({
 
       // Validate file
       try {
-        validatePdfFile(file);
+        validateFile(file);
       } catch (validationError) {
         toast({ 
           title: "Invalid file", 

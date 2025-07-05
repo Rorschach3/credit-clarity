@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@supabase/supabase-js';
 import { useEffect, useState } from 'react'
 
 export const useCurrentUserImage = () => {
