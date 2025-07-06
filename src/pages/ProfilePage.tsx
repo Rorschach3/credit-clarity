@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,8 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from 'sonner';
+import { Camera } from 'lucide-react';
+import { CurrentUserAvatar } from '@/components/current-user-avatar';
 
 import type { Database } from '../integrations/supabase/types';
 
@@ -26,6 +28,9 @@ export default function ProfilePage() {
     dob: null
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Memoize fetchProfile with useCallback
   const fetchProfile = useCallback(async () => {
@@ -140,6 +145,62 @@ export default function ProfilePage() {
     setProfile(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be less than 5MB');
+      return;
+    }
+
+    setUploadingAvatar(true);
+    try {
+      // Upload to Supabase storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(uploadData.path);
+
+      const newAvatarUrl = urlData.publicUrl;
+
+      // Update profile with new avatar URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ 
+          avatar_url: newAvatarUrl,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('user_id', user.id);
+
+      if (updateError) throw updateError;
+
+      setAvatarUrl(newAvatarUrl);
+      toast.success('Avatar updated successfully!');
+    } catch (error) {
+      console.error('Avatar upload error:', error);
+      toast.error('Failed to update avatar');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   return (
       <div className="container mx-auto py-10 max-w-2xl">
         <Card>
@@ -150,6 +211,45 @@ export default function ProfilePage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Avatar Section */}
+            <div className="flex flex-col items-center mb-6 p-4 border rounded-lg">
+              <div className="relative mb-4">
+                {user && (
+                  <CurrentUserAvatar 
+                    user={{
+                      id: user.id,
+                      name: `${profile.first_name} ${profile.last_name}`.trim() || undefined,
+                      email: user.email || undefined,
+                      avatar: avatarUrl || undefined
+                    }} 
+                  />
+                )}
+                <Button
+                  type="button"
+                  size="icon"
+                  className="absolute -bottom-2 -right-2 rounded-full"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingAvatar}
+                >
+                  {uploadingAvatar ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                  ) : (
+                    <Camera className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                className="hidden"
+              />
+              <p className="text-sm text-muted-foreground text-center">
+                Click the camera icon to update your profile picture
+              </p>
+            </div>
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>

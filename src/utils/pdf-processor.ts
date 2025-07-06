@@ -4,36 +4,31 @@ export interface PDFProcessingResult {
   metadata?: Record<string, unknown>;
 }
 
-// Update function signature to require API key
+// Client-side PDF processing using pdf-parse
 export async function processPdfFile(file: File): Promise<PDFProcessingResult> {
   try {
+    console.log('Processing PDF file with client-side parser...');
+    
+    // Dynamic import with proper typing
+    const pdfParse = await import('pdf-parse');
+    
     const arrayBuffer = await file.arrayBuffer();
-    const base64Data = btoa(
-      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-    );
+    const buffer = Buffer.from(arrayBuffer);
     
-    // Call your Document AI proxy server (Express server with real Document AI)
-    const response = await fetch('http://localhost:8000/document-ai', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ base64: base64Data }),
-    });
+    const data = await pdfParse.default(buffer);
     
-    if (!response.ok) {
-      throw new Error(`Document AI proxy returned ${response.status}: ${response.statusText}`);
-    }
-    
-    const result = await response.json();
+    console.log(`PDF parsed successfully: ${data.numpages} pages, ${data.text.length} characters`);
     
     return {
-      text: result.document?.text || '',
-      pages: result.document?.pages?.length || 1,
-      metadata: result
+      text: data.text || '',
+      pages: data.numpages || 1,
+      metadata: {
+        info: data.info,
+        version: data.version
+      }
     };
   } catch (error) {
-    console.error('PDF processing error:', error);
-    throw new Error('Failed to process PDF file with Document AI proxy.');
+    console.error('Client-side PDF processing error:', error);
+    throw new Error('Failed to process PDF file. Please ensure the file is a valid, text-based PDF.');
   }
 }
