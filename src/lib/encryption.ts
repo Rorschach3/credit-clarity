@@ -1,15 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
-if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-  throw new Error('Missing Supabase environment variables - check .env file');
-}
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
-
-const CRYPTO_KEY_VAULT = 'credit_report_keys';
+// Encryption utilities for credit report data
 
 export async function generateCryptoKey() {
   return await crypto.subtle.generateKey(
@@ -58,8 +47,9 @@ export async function decryptData(key: CryptoKey, data: ArrayBuffer) {
 }
 
 // Placeholder for storing key in Supabase Vault (to be implemented server-side)
-export async function storeKeyInVault(keyId: string, jwk: JsonWebKey) {
+export async function storeKeyInVault(_keyId: string, _jwk: JsonWebKey) {
   // Implement RPC or API call to store key securely
   // Example:
   // await supabase.rpc('store_key', { key_id: keyId, key_data: jwk });
+  console.log('Key vault storage not yet implemented');
 }

@@ -96,13 +96,12 @@ class AIService {
     });
   }
 
-  async chatCompletion(messages: ChatMessage[], model: string = 'gpt-4', maxTokens: number = 256): Promise<string> {
+  async chatCompletion(messages: ChatMessage[], model: string = 'gpt-4', _maxTokens: number = 256): Promise<string> {
     // Mock implementation for chat completion
     console.log(`Chat completion with ${messages.length} messages using ${model}`);
     
     return new Promise((resolve) => {
       setTimeout(() => {
-        const lastMessage = messages[messages.length - 1];
         const mockResponses = [
           "I understand you're asking about credit reports. Let me help you with that.",
           "Credit disputes are an important part of maintaining good credit health.",
