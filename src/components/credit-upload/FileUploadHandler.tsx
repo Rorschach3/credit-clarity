@@ -3,6 +3,7 @@ import { ChangeEvent } from 'react';
 import { toast } from "@/components/ui/use-toast";
 import { ParsedTradeline } from "@/utils/tradelineParser";
 import { processPdfFile } from "@/utils/pdf-processor";
+import { processAndSaveTradelines } from "@/utils/document-ai-parser";
 
 interface FileUploadHandlerProps {
   user: { id: string; email?: string } | null;
@@ -83,54 +84,95 @@ export const useFileUploadHandler = ({
       setExtractedText('');
       setShowAiResults(true);
 
-      // Process PDF file
+      // Process PDF with Google Document AI for enhanced tradeline extraction
       setUploadProgress(30);
-      const pdfResult = await processPdfFile(file);
-      console.log(`PDF processed: ${pdfResult.pages} pages, ${pdfResult.text.length} characters`);
+      console.log("🔍 Processing PDF with Google Document AI...");
       
-      setUploadProgress(50);
-      setExtractedText(pdfResult.text);
-
-      // Extract keywords and generate insights
-      const keywords = extractKeywordsFromText(pdfResult.text);
-      setExtractedKeywords(keywords);
-      
-      const insights = generateAIInsights(pdfResult.text, keywords);
-      setAiInsights(insights);
-      
-      setUploadProgress(70);
-
-      // Parse tradelines from extracted text
       try {
-        const { parseTradelinesFromText } = await import("@/utils/tradelineParser");
-        const parsed = parseTradelinesFromText(pdfResult.text, user.id);
-        console.log("Parsed tradelines:", parsed);
+        // Use Google Document AI for enhanced processing and automatic tradeline extraction
+        const parsedTradelines = await processAndSaveTradelines(
+          file, 
+          user.id, 
+          true // Update existing records
+        );
         
-        if (parsed.length === 0) {
+        console.log("✅ Successfully processed with Document AI:", parsedTradelines.length);
+        
+        setUploadProgress(70);
+        setExtractedText(`Document processed successfully with Google Document AI. Found ${parsedTradelines.length} tradelines.`);
+        
+        // Extract keywords and generate insights from the first few tradelines for display
+        const tradelineText = parsedTradelines.map(t => 
+          `${t.creditor_name} ${t.account_type} ${t.account_status}`
+        ).join(' ');
+        
+        const keywords = extractKeywordsFromText(tradelineText);
+        setExtractedKeywords(keywords);
+        
+        const insights = generateAIInsights(tradelineText, keywords);
+        setAiInsights(insights);
+        
+        setUploadProgress(90);
+        onUploadComplete(parsedTradelines);
+        
+        setUploadProgress(100);
+        
+        toast({
+          title: "Upload complete",
+          description: `Document processed successfully with Google Document AI. Found ${parsedTradelines.length} tradelines.`
+        });
+        
+      } catch (documentAIError) {
+        console.warn("Document AI processing failed, falling back to basic PDF processing:", documentAIError);
+        
+        // Fallback to basic PDF processing
+        const pdfResult = await processPdfFile(file);
+        console.log(`PDF processed: ${pdfResult.pages} pages, ${pdfResult.text.length} characters`);
+        
+        setUploadProgress(50);
+        setExtractedText(pdfResult.text);
+
+        // Extract keywords and generate insights
+        const keywords = extractKeywordsFromText(pdfResult.text);
+        setExtractedKeywords(keywords);
+        
+        const insights = generateAIInsights(pdfResult.text, keywords);
+        setAiInsights(insights);
+        
+        setUploadProgress(70);
+
+        // Parse tradelines from extracted text using fallback method
+        try {
+          const { parseTradelinesFromText } = await import("@/utils/tradelineParser");
+          const parsed = parseTradelinesFromText(pdfResult.text, user.id);
+          console.log("Parsed tradelines (fallback):", parsed);
+          
+          if (parsed.length === 0) {
+            toast({
+              title: "No tradelines found",
+              description: "Could not identify any tradelines in this document. Try manual entry or a different document.",
+              variant: "destructive"
+            });
+          }
+          
+          onUploadComplete(parsed);
+        } catch (parseError) {
+          console.error("Tradeline parsing failed:", parseError);
           toast({
-            title: "No tradelines found",
-            description: "Could not identify any tradelines in this document. Try manual entry or a different document.",
+            title: "Parsing Error",
+            description: "Failed to parse tradelines from document. Try manual entry.",
             variant: "destructive"
           });
+          onUploadComplete([]);
         }
         
-        onUploadComplete(parsed);
-      } catch (parseError) {
-        console.error("Tradeline parsing failed:", parseError);
+        setUploadProgress(100);
+        
         toast({
-          title: "Parsing Error",
-          description: "Failed to parse tradelines from document. Try manual entry.",
-          variant: "destructive"
+          title: "Upload complete",
+          description: `Document processed with fallback method. Found ${pdfResult.pages} pages.`
         });
-        onUploadComplete([]);
       }
-      
-      setUploadProgress(100);
-      
-      toast({
-        title: "Upload complete",
-        description: `Document processed successfully. Found ${pdfResult.pages} pages.`
-      });
     } catch (error) {
       console.error("PDF processing error:", error instanceof Error ? error.message : String(error));
       const errorMessage = error instanceof Error ? error.message : "Failed to process PDF. Please try again.";
