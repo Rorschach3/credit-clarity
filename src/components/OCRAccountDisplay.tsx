@@ -1,5 +1,5 @@
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
-import { parsePdfDocument } from "@/utils/pdf-parser";
+import { processPdfFile } from "@/utils/pdf-processor";
 import { ParsedAccount, parseAccountNumbers } from "@/utils/ocr-parser";
 
 interface OCRAccountDisplayProps {
@@ -7,31 +7,33 @@ interface OCRAccountDisplayProps {
   filePath?: string;
 }
 
-interface UpstageAccount {
+interface ProcessedAccount {
   account_name?: string;
   account_number?: string;
 }
 
-type Account = ParsedAccount | UpstageAccount;
+type Account = ParsedAccount | ProcessedAccount;
 
 export const OCRAccountDisplay = async ({ rawOcrText, filePath }: OCRAccountDisplayProps) => {
   let accounts: Account[] = [];
   let errorMessage: string | null = null;
 
   if (filePath) {
-    const apiKey = process.env.NEXT_PUBLIC_UPSTAGE_API_KEY;
-    if (!apiKey) {
-      errorMessage = "Upstage API key not found in environment variables.";
-    } else {
-      try {
-        const parsedData = await parsePdfDocument(filePath, apiKey);
-        if (parsedData) {
-          accounts = [parsedData];
-        }
-      } catch (error: unknown) {
-        console.error("PDF parsing error:", (error as Error).message);
-        errorMessage = `Error parsing PDF document: ${(error as Error).message}`;
+    try {
+      // Convert file path to File object for processing
+      const response = await fetch(filePath);
+      const blob = await response.blob();
+      const file = new File([blob], 'credit-report.pdf', { type: 'application/pdf' });
+      
+      const result = await processPdfFile(file);
+      if (result.text.length > 0) {
+        // Parse the extracted text to find accounts
+        const parsedAccounts = parseAccountNumbers(result.text);
+        accounts = parsedAccounts;
       }
+    } catch (error: unknown) {
+      console.error("PDF processing error:", (error as Error).message);
+      errorMessage = `Error processing PDF document: ${(error as Error).message}`;
     }
   } else if (rawOcrText) {
     const cleanedText = rawOcrText
@@ -48,9 +50,9 @@ export const OCRAccountDisplay = async ({ rawOcrText, filePath }: OCRAccountDisp
         {accounts.map((account, index) => (
           <Card key={index}>
             <CardContent>
-              <CardTitle>{(account as UpstageAccount).account_name || (account as ParsedAccount).raw || "Unknown Account"}</CardTitle>
+              <CardTitle>{(account as ProcessedAccount).account_name || (account as ParsedAccount).raw || "Unknown Account"}</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Account Number: {(account as UpstageAccount).account_number || (account as ParsedAccount).normalized || "N/A"}
+                Account Number: {(account as ProcessedAccount).account_number || (account as ParsedAccount).normalized || "N/A"}
               </p>
             </CardContent>
           </Card>

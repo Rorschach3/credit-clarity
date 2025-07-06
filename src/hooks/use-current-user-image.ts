@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
 import { useEffect, useState } from 'react'
 
 export const useCurrentUserImage = () => {
@@ -6,7 +6,7 @@ export const useCurrentUserImage = () => {
 
   useEffect(() => {
     const fetchUserImage = async () => {
-      const { data, error } = await createClient().auth.getSession()
+      const { data, error } = await supabase.auth.getSession()
       if (error) {
         console.error(error)
       }

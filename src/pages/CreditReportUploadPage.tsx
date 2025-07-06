@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useMemo, useRef } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/components/ui/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -13,7 +13,7 @@ import { useCreditReportProcessing } from "@/hooks/useCreditReportProcessing";
 import { useCreditUploadState } from "@/hooks/useCreditUploadState";
 import { useFileUploadHandler } from "@/components/credit-upload/FileUploadHandler";
 import { CreditNavbar } from "@/components/navbar/CreditNavbar";
-import { Database } from "../../types/supabase";
+import { ParsedTradeline } from "@/utils/tradelineParser";
 
 // Constants for better maintainability
 const CONSTANTS = {
@@ -35,10 +35,8 @@ const CONSTANTS = {
 } as const;
 
 // Enhanced type definitions
-type TradelineInsert = Database["public"]["Tables"]["tradelines"]["Insert"];
-
 // Input type for manual tradeline creation (without raw_text)
-type ManualTradelineInput = Omit<TradelineInsert, 'id' | 'user_id' | 'created_at' | 'raw_text'>;
+type ManualTradelineInput = Omit<ParsedTradeline, 'id' | 'user_id' | 'created_at'>;
 
 // Validation result type
 interface ValidationResult {
@@ -46,12 +44,12 @@ interface ValidationResult {
   errors: string[];
 }
 
-// Enhanced error type
-interface ComponentError {
-  type: 'validation' | 'network' | 'auth' | 'unknown';
-  message: string;
-  details?: Record<string, unknown>;
-}
+// Enhanced error type - removed unused
+// interface ValidationError {
+//   type: 'validation' | 'network' | 'auth' | 'unknown';
+//   message: string;
+//   details?: Record<string, unknown>;
+// }
 
 // Validation utilities
 const validateTradelineInput = (tradeline: ManualTradelineInput): ValidationResult => {
@@ -242,7 +240,7 @@ const CreditReportUploadPage = () => {
       }
 
       // Create complete tradeline object
-      const tradelineWithDefaults: TradelineInsert = {
+      const tradelineWithDefaults: ParsedTradeline = {
         ...sanitizedTradeline,
         id: `manual-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         user_id: user?.id || "",
@@ -257,7 +255,7 @@ const CreditReportUploadPage = () => {
         dispute_count: sanitizedTradeline.dispute_count ?? CONSTANTS.DEFAULT_VALUES.DISPUTE_COUNT,
         creditor_name: sanitizedTradeline.creditor_name || '',
         account_number: sanitizedTradeline.account_number || '',
-        credit_bureau: sanitizedTradeline.credit_bureau || null,
+        credit_bureau: sanitizedTradeline.credit_bureau || "",
       };
       
       await handleAddManual(tradelineWithDefaults, user?.id || "");
