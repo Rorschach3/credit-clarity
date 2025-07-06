@@ -159,8 +159,8 @@ export const useFileUploadHandler = ({
         } catch (parseError) {
           console.error("Tradeline parsing failed:", parseError);
           toast({
-            title: "Parsing Error",
-            description: "Failed to parse tradelines from document. Try manual entry.",
+            title: "Extraction Failed",
+            description: "We couldn't extract data. Please upload a clearer PDF with text or scanned OCR-supported format.",
             variant: "destructive"
           });
           onUploadComplete([]);

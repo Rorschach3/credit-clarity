@@ -84,30 +84,55 @@ export async function processDocumentWithAI(file: File): Promise<DocumentAIResul
       new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
     );
     
-    // Call FastAPI backend with Document AI
-    const response = await fetch('http://localhost:8000/document-ai', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ base64: base64Data }),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Document AI processing failed: ${response.status} ${response.statusText}`);
+    // Try Document AI endpoint (may not be available in all environments)
+    try {
+      const response = await fetch('/api/document-ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ base64: base64Data }),
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log("✅ Document AI processing complete");
+        
+        return {
+          text: result.document?.text || '',
+          pages: result.document?.pages?.length || 1,
+          metadata: result
+        };
+      }
+    } catch (apiError) {
+      console.warn("Document AI API not available, falling back to basic processing");
     }
     
-    const result = await response.json();
-    console.log("✅ Document AI processing complete");
+    // Fallback: Try to use Supabase Edge Function if available
+    try {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data, error } = await supabase.functions.invoke('docai-ocr', {
+        body: { base64: base64Data }
+      });
+      
+      if (!error && data?.text) {
+        console.log("✅ Supabase Document AI processing complete");
+        return {
+          text: data.text,
+          pages: data.pages || 1,
+          metadata: data
+        };
+      }
+    } catch (supabaseError) {
+      console.warn("Supabase Document AI not available");
+    }
     
-    return {
-      text: result.document?.text || '',
-      pages: result.document?.pages?.length || 1,
-      metadata: result
-    };
+    // If no Document AI available, throw error to trigger basic PDF fallback
+    throw new Error("Document AI service not available - will fallback to basic PDF processing");
+    
   } catch (error) {
     console.error('❌ Document AI processing error:', error);
-    throw new Error(`Failed to process document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(`Document AI failed: ${error instanceof Error ? error.message : 'Service unavailable'}`);
   }
 }
 
@@ -280,7 +305,8 @@ export async function processAndSaveTradelines(
     const documentResult = await processDocumentWithAI(file);
     
     if (!documentResult.text || documentResult.text.length < 100) {
-      throw new Error("Insufficient text extracted from document. Please ensure the PDF contains readable text.");
+      console.warn(`⚠️ Document AI returned insufficient text: ${documentResult.text?.length || 0} characters`);
+      throw new Error("Document AI returned insufficient data - less than 100 characters of usable text");
     }
     
     // Step 2: Parse tradelines from extracted text
