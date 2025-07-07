@@ -1,6 +1,6 @@
 
 import { ChangeEvent } from 'react';
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { ParsedTradeline } from "@/utils/tradelineParser";
 import { processPdfFile } from "@/utils/pdf-processor";
 import { processAndSaveTradelines } from "@/utils/document-ai-parser";
@@ -64,16 +64,12 @@ export const useFileUploadHandler = ({
       try {
         validateFile(file);
       } catch (validationError) {
-        toast({ 
-          title: "Invalid file", 
-          description: validationError instanceof Error ? validationError.message : "Invalid file format",
-          variant: "destructive"
-        });
+        toast.error(validationError instanceof Error ? validationError.message : "Invalid file format");
         return;
       }
 
       if (!user || !user.id) {
-        toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
+        toast.error("You must be logged in.");
         return;
       }
 
@@ -117,10 +113,7 @@ export const useFileUploadHandler = ({
         
         setUploadProgress(100);
         
-        toast({
-          title: "Upload complete",
-          description: `Document processed successfully with Google Document AI. Found ${parsedTradelines.length} tradelines.`
-        });
+        toast.success(`Document processed successfully with Google Document AI. Found ${parsedTradelines.length} tradelines.`);
         
       } catch (documentAIError) {
         console.warn("Document AI processing failed, falling back to basic PDF processing:", documentAIError);
@@ -148,40 +141,25 @@ export const useFileUploadHandler = ({
           console.log("Parsed tradelines (fallback):", parsed);
           
           if (parsed.length === 0) {
-            toast({
-              title: "No tradelines found",
-              description: "Could not identify any tradelines in this document. Try manual entry or a different document.",
-              variant: "destructive"
-            });
+            toast.error("Could not identify any tradelines in this document. Try manual entry or a different document.");
           }
           
           onUploadComplete(parsed);
         } catch (parseError) {
           console.error("Tradeline parsing failed:", parseError);
-          toast({
-            title: "Extraction Failed",
-            description: "We couldn't extract data. Please upload a clearer PDF with text or scanned OCR-supported format.",
-            variant: "destructive"
-          });
+          toast.error("We couldn't extract data. Please upload a clearer PDF with text or scanned OCR-supported format.");
           onUploadComplete([]);
         }
         
         setUploadProgress(100);
         
-        toast({
-          title: "Upload complete",
-          description: `Document processed with fallback method. Found ${pdfResult.pages} pages.`
-        });
+        toast.success(`Document processed with fallback method. Found ${pdfResult.pages} pages.`);
       }
     } catch (error) {
       console.error("PDF processing error:", error instanceof Error ? error.message : String(error));
       const errorMessage = error instanceof Error ? error.message : "Failed to process PDF. Please try again.";
       onUploadError(errorMessage);
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive"
-      });
+      toast.error(errorMessage);
     }
   };
 

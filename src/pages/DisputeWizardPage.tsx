@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { DocumentUploadSection } from "@/components/disputes/DocumentUploadSection";
 import { MailingInstructions } from "@/components/disputes/MailingInstructions";
 import { CreditNavbar } from "@/components/navbar/CreditNavbar";
@@ -13,7 +13,7 @@ const DisputePacketPage = () => {
 
   const handleGeneratePacket = () => {
     // Logic to combine uploaded documents and generate the dispute packet
-    toast({ title: "Packet Generated", description: "Dispute packet generated successfully!" });
+    toast.success("Dispute packet generated successfully!");
   };
 
   return (

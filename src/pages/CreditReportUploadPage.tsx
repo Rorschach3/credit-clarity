@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { saveTradelinesToDatabase } from "@/utils/tradelineParser";
 import { ManualTradelineModal } from "@/components/disputes/ManualTradelineModal";
@@ -154,18 +154,11 @@ const CreditReportUploadPage = () => {
       console.log('Saving tradelines to database:', tradelines);
       await saveTradelinesToDatabase(tradelines, user.id);
       console.log(`Saved ${tradelines.length} tradelines to database`);
-      toast({
-        title: "Success",
-        description: `Successfully saved ${tradelines.length} tradeline(s) to database.`,
-      });
+      toast.success(`Successfully saved ${tradelines.length} tradeline(s) to database.`);
     } catch (saveError) {
       console.error('Failed to save tradelines:', saveError);
       const errorMessage = saveError instanceof Error ? saveError.message : 'Unknown error occurred';
-      toast({
-        title: "Save Failed",
-        description: `Failed to save tradelines: ${errorMessage}`,
-        variant: "destructive"
-      });
+      toast.error(`Failed to save tradelines: ${errorMessage}`);
     }
   }, [user?.id, tradelines]);
 
@@ -186,11 +179,7 @@ const CreditReportUploadPage = () => {
       console.error('File upload error:', error);
       setIsUploading(false);
       setUploadProgress(0);
-      toast({
-        title: "Upload Failed",
-        description: "Failed to process the uploaded file. Please try again.",
-        variant: "destructive"
-      });
+      toast.error("Failed to process the uploaded file. Please try again.");
     },
     setUploadProgress,
     setExtractedKeywords,
@@ -231,11 +220,7 @@ const CreditReportUploadPage = () => {
       // Validate input
       const validation = validateTradelineInput(sanitizedTradeline);
       if (!validation.isValid) {
-        toast({
-          title: "Validation Error",
-          description: validation.errors.join(', '),
-          variant: "destructive"
-        });
+        toast.error(validation.errors.join(', '));
         return;
       }
 
@@ -259,18 +244,11 @@ const CreditReportUploadPage = () => {
       };
       
       await handleAddManual(tradelineWithDefaults, user?.id || "");
-      toast({
-        title: "Success",
-        description: "Manual tradeline added successfully."
-      });
+      toast.success("Manual tradeline added successfully.");
     } catch (error) {
       console.error('Failed to add manual tradeline:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to add tradeline';
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive"
-      });
+      toast.error(errorMessage);
     }
   }, [user?.id, handleAddManual]);
 

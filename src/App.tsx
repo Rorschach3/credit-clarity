@@ -1,10 +1,10 @@
 
-//  src/App.tsx
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { useTheme } from './hooks/use-theme';
 import { Navbar } from './components/layout/Navbar';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import HomePage from "@/pages/HomePage";
 import Dashboard from "@/pages/DashboardPage";
 import AboutPage from "@/pages/AboutPage";
@@ -29,11 +29,13 @@ import BlogPage from './pages/BlogPage';
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <AppContent />
-      </Router>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Router>
+          <AppContent />
+        </Router>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
