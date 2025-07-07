@@ -100,25 +100,28 @@ export default function ProfilePage() {
       return;
     }
 
-    setIsLoading(true);
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          first_name: profile.first_name,
-          last_name: profile.last_name,
-          address1: profile.address1 || null,
-          address2: profile.address2 || null,
-          city: profile.city || null,
-          state: profile.state || null,
-          zip_code: profile.zip_code || null,
-          phone_number: profile.phone_number || null,
-          last_four_of_ssn: profile.last_four_of_ssn || null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', user.id);
+  setIsLoading(true);
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .upsert({
+        user_id: user.id,
+        first_name: profile.first_name,
+        last_name: profile.last_name,
+        address1: profile.address1 || null,
+        address2: profile.address2 || null,
+        city: profile.city || null,
+        state: profile.state || null,
+        zip_code: profile.zip_code || null,
+        phone_number: profile.phone_number || null,
+        last_four_of_ssn: profile.last_four_of_ssn || null,
+        dob: profile.dob || null,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id'
+      });
 
-      if (error) throw error;
+    if (error) throw error;
 
       toast.success('Profile updated successfully!');
     } catch (error) {
