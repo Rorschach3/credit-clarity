@@ -1,7 +1,6 @@
 import { useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { useAuth } from "@/hooks/use-auth";
 import { saveTradelinesToDatabase } from "@/utils/tradelineParser";
 import { ManualTradelineModal } from "@/components/disputes/ManualTradelineModal";
 import { ProcessingMethodSelector } from "@/components/credit-upload/ProcessingMethodSelector";
@@ -12,6 +11,8 @@ import { UploadActions } from "@/components/credit-upload/UploadActions";
 import { useCreditReportProcessing } from "@/hooks/useCreditReportProcessing";
 import { useCreditUploadState } from "@/hooks/useCreditUploadState";
 import { useFileUploadHandler } from "@/components/credit-upload/FileUploadHandler";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { useMemoryCleanup } from "@/hooks/useMemoryCleanup";
 import { CreditNavbar } from "@/components/navbar/CreditNavbar";
 import { ParsedTradeline } from "@/utils/tradelineParser";
 
@@ -100,7 +101,8 @@ const sanitizeTradelineInput = (tradeline: ManualTradelineInput): ManualTradelin
 };
 
 const CreditReportUploadPage = () => {
-  const { user } = useAuth();
+  const { user } = useAuthGuard();
+  const { addCleanup } = useMemoryCleanup();
   const saveTimeoutRef = useRef<NodeJS.Timeout>();
 
   const {
@@ -130,40 +132,13 @@ const CreditReportUploadPage = () => {
     setExtractedKeywords,
     setAiInsights,
     setExtractedText,
-    cleanup,
+    cleanup: processingCleanup,
     extractKeywordsFromText,
     generateAIInsights
   } = useCreditReportProcessing(user?.id || "");
 
-  // Cleanup effect with proper timeout management
-  useEffect(() => {
-    return () => {
-      cleanup();
-      const timeoutId = saveTimeoutRef.current;
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    };
-  }, [cleanup]);
-
-  // Enhanced saveTradelines with better error handling
-  const saveTradelines = useCallback(async () => {
-    if (!user?.id || tradelines.length === 0) return;
-
-    try {
-      console.log('Saving tradelines to database:', tradelines);
-      await saveTradelinesToDatabase(tradelines, user.id);
-      console.log(`Saved ${tradelines.length} tradelines to database`);
-      toast.success(`Successfully saved ${tradelines.length} tradeline(s) to database.`);
-    } catch (saveError) {
-      console.error('Failed to save tradelines:', saveError);
-      const errorMessage = saveError instanceof Error ? saveError.message : 'Unknown error occurred';
-      toast.error(`Failed to save tradelines: ${errorMessage}`);
-    }
-  }, [user?.id, tradelines]);
-
   // Enhanced file upload handling with better error management
-  const { handleFileUpload } = useFileUploadHandler({
+  const { handleFileUpload, cleanup: uploadCleanup } = useFileUploadHandler({
     user,
     processingMethod,
     onUploadStart: () => {
@@ -189,6 +164,36 @@ const CreditReportUploadPage = () => {
     extractKeywordsFromText,
     generateAIInsights
   });
+
+  // Cleanup effect with proper timeout management - after uploadCleanup is defined
+  useEffect(() => {
+    return () => {
+      processingCleanup();
+      uploadCleanup();
+      addCleanup(() => {
+        const timeoutId = saveTimeoutRef.current;
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      });
+    };
+  }, [processingCleanup, uploadCleanup, addCleanup]);
+
+  // Enhanced saveTradelines with better error handling
+  const saveTradelines = useCallback(async () => {
+    if (!user?.id || tradelines.length === 0) return;
+
+    try {
+      console.log('Saving tradelines to database:', tradelines);
+      await saveTradelinesToDatabase(tradelines, user.id);
+      console.log(`Saved ${tradelines.length} tradelines to database`);
+      toast.success(`Successfully saved ${tradelines.length} tradeline(s) to database.`);
+    } catch (saveError) {
+      console.error('Failed to save tradelines:', saveError);
+      const errorMessage = saveError instanceof Error ? saveError.message : 'Unknown error occurred';
+      toast.error(`Failed to save tradelines: ${errorMessage}`);
+    }
+  }, [user?.id, tradelines]);
 
   // Enhanced auto-save with timeout management
   useEffect(() => {

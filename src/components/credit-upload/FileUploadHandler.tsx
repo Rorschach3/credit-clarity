@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { ParsedTradeline } from "@/utils/tradelineParser";
 import { processPdfFile } from "@/utils/pdf-processor";
 import { processAndSaveTradelines } from "@/utils/document-ai-parser";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { useMemoryCleanup } from "@/hooks/useMemoryCleanup";
 
 interface FileUploadHandlerProps {
   user: { id: string; email?: string } | null;
@@ -51,9 +53,15 @@ export const useFileUploadHandler = ({
   extractKeywordsFromText,
   generateAIInsights
 }: FileUploadHandlerProps) => {
+  const { requireAuth } = useAuthGuard();
+  const { addCleanup, cleanup } = useMemoryCleanup();
   
   const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     console.log("handleFileUpload triggered");
+    
+    // Clean up any previous operations
+    cleanup();
+    
     try {
       const file = event.target.files?.[0];
       if (!file) {
@@ -65,6 +73,11 @@ export const useFileUploadHandler = ({
         validateFile(file);
       } catch (validationError) {
         toast.error(validationError instanceof Error ? validationError.message : "Invalid file format");
+        return;
+      }
+
+      // Auth guard
+      if (!requireAuth("upload and process files")) {
         return;
       }
 
@@ -118,50 +131,65 @@ export const useFileUploadHandler = ({
       } catch (documentAIError) {
         console.warn("Document AI processing failed, falling back to basic PDF processing:", documentAIError);
         
-        // Fallback to basic PDF processing
-        const pdfResult = await processPdfFile(file);
-        console.log(`PDF processed: ${pdfResult.pages} pages, ${pdfResult.text.length} characters`);
-        
-        setUploadProgress(50);
-        setExtractedText(pdfResult.text);
-
-        // Extract keywords and generate insights
-        const keywords = extractKeywordsFromText(pdfResult.text);
-        setExtractedKeywords(keywords);
-        
-        const insights = generateAIInsights(pdfResult.text, keywords);
-        setAiInsights(insights);
-        
-        setUploadProgress(70);
-
-        // Parse tradelines from extracted text using fallback method
         try {
-          const { parseTradelinesFromText } = await import("@/utils/tradelineParser");
-          const parsed = parseTradelinesFromText(pdfResult.text, user.id);
-          console.log("Parsed tradelines (fallback):", parsed);
+          // Fallback to basic PDF processing with proper error boundaries
+          const pdfResult = await processPdfFile(file);
+          console.log(`PDF processed: ${pdfResult.pages} pages, ${pdfResult.text.length} characters`);
           
-          if (parsed.length === 0) {
-            toast.error("Could not identify any tradelines in this document. Try manual entry or a different document.");
+          setUploadProgress(50);
+          setExtractedText(pdfResult.text);
+
+          // Extract keywords and generate insights
+          const keywords = extractKeywordsFromText(pdfResult.text);
+          setExtractedKeywords(keywords);
+          
+          const insights = generateAIInsights(pdfResult.text, keywords);
+          setAiInsights(insights);
+          
+          setUploadProgress(70);
+
+          // Parse tradelines from extracted text using fallback method
+          try {
+            const { parseTradelinesFromText } = await import("@/utils/tradelineParser");
+            const parsed = parseTradelinesFromText(pdfResult.text, user.id);
+            console.log("Parsed tradelines (fallback):", parsed);
+            
+            if (parsed.length === 0) {
+              toast.error("Could not identify any tradelines in this document. Try manual entry or a different document.");
+            }
+            
+            onUploadComplete(parsed);
+          } catch (parseError) {
+            console.error("Tradeline parsing failed:", parseError);
+            toast.error("We couldn't extract data. Please upload a clearer PDF with text or scanned OCR-supported format.");
+            onUploadComplete([]);
           }
           
-          onUploadComplete(parsed);
-        } catch (parseError) {
-          console.error("Tradeline parsing failed:", parseError);
-          toast.error("We couldn't extract data. Please upload a clearer PDF with text or scanned OCR-supported format.");
-          onUploadComplete([]);
+          setUploadProgress(100);
+          
+          toast.success(`Document processed with fallback method. Found ${pdfResult.pages} pages.`);
+        } catch (fallbackError) {
+          console.error("Both Document AI and PDF fallback failed:", fallbackError);
+          const errorMessage = "Failed to process document with both AI and fallback methods. Please try a different file or contact support.";
+          onUploadError(errorMessage);
+          toast.error(errorMessage);
         }
-        
-        setUploadProgress(100);
-        
-        toast.success(`Document processed with fallback method. Found ${pdfResult.pages} pages.`);
       }
     } catch (error) {
       console.error("PDF processing error:", error instanceof Error ? error.message : String(error));
       const errorMessage = error instanceof Error ? error.message : "Failed to process PDF. Please try again.";
       onUploadError(errorMessage);
       toast.error(errorMessage);
+    } finally {
+      // Clean up resources after processing
+      addCleanup(() => {
+        setUploadProgress(0);
+        setExtractedKeywords([]);
+        setAiInsights('');
+        setExtractedText('');
+      });
     }
   };
 
-  return { handleFileUpload };
+  return { handleFileUpload, cleanup };
 };

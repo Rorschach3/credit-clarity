@@ -7,19 +7,7 @@ export interface DocumentAIResult {
   metadata?: Record<string, unknown>;
 }
 
-export interface TradelineMatch {
-  creditor_name: string;
-  account_number: string;
-  account_balance: string;
-  credit_limit: string;
-  monthly_payment: string;
-  date_opened: string;
-  account_type: string;
-  account_status: string;
-  credit_bureau: string;
-  is_negative: boolean;
-  dispute_count: number;
-}
+// Remove TradelineMatch interface - use ParsedTradeline from types file instead
 
 // Enhanced patterns for credit report parsing
 const CREDITOR_PATTERNS = [
@@ -136,11 +124,11 @@ export async function processDocumentWithAI(file: File): Promise<DocumentAIResul
   }
 }
 
-export function parseTradelinesFromDocumentAI(documentText: string, creditBureau?: string): TradelineMatch[] {
+export function parseTradelinesFromDocumentAI(documentText: string, creditBureau?: string): ParsedTradeline[] {
   console.log("🔍 Parsing tradelines from Document AI text...");
   console.log("📄 Text length:", documentText.length);
   
-  const tradelines: TradelineMatch[] = [];
+  const tradelines: ParsedTradeline[] = [];
   const lines = documentText.split('\n');
   
   // Process text line by line to find account information
@@ -161,18 +149,21 @@ export function parseTradelinesFromDocumentAI(documentText: string, creditBureau
           // Look for additional account details in surrounding lines
           const contextLines = lines.slice(Math.max(0, i - 2), Math.min(lines.length, i + 5)).join(' ');
           
-          const tradeline: TradelineMatch = {
+          const tradeline: ParsedTradeline = {
+            id: crypto.randomUUID(),
+            user_id: '', // Will be set by caller
             creditor_name: creditorName,
             account_number: accountNumber,
             account_balance: extractBalance(contextLines),
             credit_limit: extractCreditLimit(contextLines),
             monthly_payment: extractMonthlyPayment(contextLines),
             date_opened: extractDateOpened(contextLines),
-            account_type: determineAccountType(contextLines),
-            account_status: determineAccountStatus(contextLines),
-            credit_bureau: creditBureau || determineCreditBureau(contextLines),
+            account_type: determineAccountType(contextLines) as any,
+            account_status: determineAccountStatus(contextLines) as any,
+            credit_bureau: (creditBureau || determineCreditBureau(contextLines)) as any,
             is_negative: isNegativeAccount(contextLines),
-            dispute_count: extractDisputeCount(contextLines)
+            dispute_count: extractDisputeCount(contextLines),
+            created_at: new Date().toISOString()
           };
           
           // Only add if we have minimum required data
@@ -316,22 +307,10 @@ export async function processAndSaveTradelines(
       throw new Error("No tradelines found in the document. Please verify this is a credit report.");
     }
     
-    // Step 3: Convert to ParsedTradeline format with database schema
+    // Step 3: Set user_id on all tradelines
     const parsedTradelines: ParsedTradeline[] = extractedTradelines.map(tl => ({
-      id: crypto.randomUUID(),
-      user_id: userId,
-      creditor_name: tl.creditor_name,
-      account_number: tl.account_number,
-      account_balance: tl.account_balance,
-      credit_limit: tl.credit_limit,
-      monthly_payment: tl.monthly_payment,
-      date_opened: tl.date_opened,
-      account_type: tl.account_type as any,
-      account_status: tl.account_status as any,
-      credit_bureau: tl.credit_bureau as any,
-      is_negative: tl.is_negative,
-      dispute_count: tl.dispute_count,
-      created_at: new Date().toISOString()
+      ...tl,
+      user_id: userId
     }));
     
     // Step 4: Save to database with upsert logic
