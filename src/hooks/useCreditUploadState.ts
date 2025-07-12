@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { toast as sonnerToast } from "sonner";
-import { ParsedTradeline } from '@/utils/document-ai-processor';
+import { ParsedTradeline } from "@/utils/tradelineParser"; // Fixed import
 
 export interface UseCreditUploadStateReturn {
   tradelines: ParsedTradeline[];

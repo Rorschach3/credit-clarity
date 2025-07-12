@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { parseTradelinesFromText, ParsedTradeline } from "@/utils/tradelineParser";
+import {  ParsedTradeline } from "@/utils/tradelineParser";
 
 export const useCreditReportProcessing = (userId: string) => {
   const [isUploading, setIsUploading] = useState(false);
@@ -44,12 +44,8 @@ export const useCreditReportProcessing = (userId: string) => {
             setAiInsights(insights);
             setExtractedText(textContent);
             setUploadProgress(80);
-            
-            // Parse tradelines
-            const tradelines = await parseTradelinesFromText(textContent, userId);
-            setUploadProgress(100);
-            
-            resolve({ tradelines });
+
+            resolve({ tradelines: [] });
           } catch (error) {
             reject(error);
           }

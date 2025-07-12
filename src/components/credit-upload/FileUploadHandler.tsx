@@ -1,29 +1,6 @@
 import { ChangeEvent, useCallback } from 'react';
 import { toast as sonnerToast } from "sonner";
-import { z } from "zod";
-import { v4 as uuidv4 } from 'uuid';
-
-
-
-// FIXED: Match your actual Supabase schema exactly with required created_at
-export const ParsedTradelineSchema = z.object({
-  id: z.string().uuid().optional(),
-  user_id: z.string().uuid().optional(),
-  creditor_name: z.string().default('NULL'),
-  account_balance: z.string().default(''),
-  created_at: z.string(), // Made required to match the expected type
-  dispute_count: z.number().int().default(0),
-  credit_limit: z.string().default(''),
-  monthly_payment: z.string().default(''),
-  account_number: z.string().default(''),
-  date_opened: z.string().default('xxxx/xx/xx'),
-  is_negative: z.boolean().default(false),
-  account_type: z.string().default(''),
-  account_status: z.string().default(''),
-  credit_bureau: z.string().default(''),
-});
-
-export type ParsedTradeline = z.infer<typeof ParsedTradelineSchema>;
+import { ParsedTradeline, ParsedTradelineSchema } from "@/utils/tradelineParser";
 
 interface FileUploadHandlerProps {
   user: { id: string; email?: string } | null;
@@ -243,11 +220,11 @@ const processCreditReportWithAPI = async (file: File, userId: string): Promise<P
 
     // Convert API response to ParsedTradeline format with required fields
     const tradelines: ParsedTradeline[] = (result.tradelines || []).map(t => ({
-      id: uuidv4(),
+      id: `api-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       user_id: userId,
       creditor_name: t.creditor_name || 'NULL',
       account_balance: t.account_balance || '',
-      created_at: new Date().toISOString(),
+      created_at: new Date().toISOString(), // Ensure created_at is always present
       dispute_count: t.dispute_count || 0,
       credit_limit: t.credit_limit || '',
       monthly_payment: t.monthly_payment || '',
@@ -359,8 +336,6 @@ export const useFileUploadHandler = ({
   extractKeywordsFromText,
   generateAIInsights
 }: FileUploadHandlerProps) => {
-  const { requireAuth } = useAuthGuard();
-  const { addCleanup, cleanup } = useMemoryCleanup();
   
   // Reset UI state
   const resetUploadState = useCallback(() => {

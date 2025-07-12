@@ -4,14 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast as sonnerToast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
-import { saveTradelinesToDatabase } from "@/utils/tradelineParser";
+import { saveTradelinesToDatabase, ParsedTradeline } from "@/utils/tradelineParser";
 import { ManualTradelineModal } from "@/components/disputes/ManualTradelineModal";
 import { FileUploadSection } from "@/components/credit-upload/FileUploadSection";
 import { TradelinesList } from "@/components/credit-upload/TradelinesList";
 import { UploadActions } from "@/components/credit-upload/UploadActions";
 import { useCreditReportProcessing } from "@/hooks/useCreditReportProcessing";
 import { useCreditUploadState } from "@/hooks/useCreditUploadState";
-import { useFileUploadHandler, ParsedTradeline } from "@/components/credit-upload/FileUploadHandler";
+import { useFileUploadHandler } from "@/components/credit-upload/FileUploadHandler";
 import { CreditNavbar } from "@/components/navbar/CreditNavbar";
 import { z } from "zod";
 
@@ -98,33 +98,58 @@ const sanitizeTradelineInput = (tradeline: ManualTradelineInput): ManualTradelin
 
 // Test API connectivity function
 const testApiHealth = async (): Promise<HealthCheckResult> => {
-  const urls = [
-    import.meta.env.VITE_API_URL || 'http://localhost:8000',
-    'http://localhost:8000',
-    'https://gywohmbqohytziwsjrps.supabase.co/functions/v1'
+  const testConfigs = [
+    {
+      baseUrl: 'http://localhost:8000',
+      endpoint: '/health',
+      needsAuth: false
+    },
+    {
+      baseUrl: 'https://gywohmbqohytziwsjrps.supabase.co/functions/v1',
+      endpoint: '/process-credit-report', // Supabase edge function endpoint
+      needsAuth: true
+    }
   ];
 
-  for (const baseUrl of urls) {
+  for (const config of testConfigs) {
     try {
-      const healthUrl = `${baseUrl}/health`;
+      const healthUrl = `${config.baseUrl}${config.endpoint}`;
       console.log(`🔍 Testing health endpoint: ${healthUrl}`);
+      
+      const headers: Record<string, string> = {
+        'Accept': 'application/json',
+      };
+      
+      // Add auth headers for Supabase endpoints
+      if (config.needsAuth) {
+        const authToken = localStorage.getItem('supabase.auth.token') || 
+                         sessionStorage.getItem('supabase.auth.token') ||
+                         import.meta.env.VITE_SUPABASE_ANON_KEY;
+                         
+        if (authToken) {
+          headers['Authorization'] = `Bearer ${authToken}`;
+        }
+        
+        const apiKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        if (apiKey) {
+          headers['apikey'] = apiKey;
+        }
+      }
       
       const response = await fetch(healthUrl, {
         method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
+        headers: headers,
       });
 
       if (response.ok) {
         const data = await response.json();
-        console.log(`✅ Health check passed for ${baseUrl}:`, data);
-        return { isHealthy: true, url: baseUrl, details: data };
+        console.log(`✅ Health check passed for ${config.baseUrl}:`, data);
+        return { isHealthy: true, url: config.baseUrl, details: data };
       } else {
-        console.log(`❌ Health check failed for ${baseUrl}: ${response.status}`);
+        console.log(`❌ Health check failed for ${config.baseUrl}: ${response.status}`);
       }
     } catch (error) {
-      console.log(`❌ Health check error for ${baseUrl}:`, error);
+      console.log(`❌ Health check error for ${config.baseUrl}:`, error);
     }
   }
 
@@ -132,8 +157,7 @@ const testApiHealth = async (): Promise<HealthCheckResult> => {
 };
 
 const CreditReportUploadPage = () => {
-  const { user } = useAuthGuard();
-  const { addCleanup } = useMemoryCleanup();
+  const { user } = useAuth();
   const saveTimeoutRef = useRef<NodeJS.Timeout>();
   const [processingStep, setProcessingStep] = useState<string>("Waiting for upload...");
   const [showDebugInfo, setShowDebugInfo] = useState<boolean>(false);
@@ -174,10 +198,13 @@ const CreditReportUploadPage = () => {
     setExtractedKeywords,
     setAiInsights,
     setExtractedText,
-    cleanup: processingCleanup,
+    cleanup,
     extractKeywordsFromText,
     generateAIInsights
   } = useCreditReportProcessing(user?.id || "");
+
+  // // Manage showAiResults locally since it's not in the hook
+  // const [showAiResults, setShowAiResults] = useState<boolean>(false);
 
   // Enhanced upload handler with debug tracking
   const { handleFileUpload } = useFileUploadHandler({
@@ -248,6 +275,7 @@ const CreditReportUploadPage = () => {
     setExtractedKeywords,
     setAiInsights,
     setExtractedText,
+    // setShowAiResults, // Now pass the local state setter
     extractKeywordsFromText,
     generateAIInsights
   });
@@ -497,8 +525,8 @@ const CreditReportUploadPage = () => {
           <TradelinesList
             tradelines={tradelines}
             selectedTradelineIds={selectedTradelineIds}
-            onUpdate={updateTradeline}
-            onDelete={deleteTradeline}
+            onUpdate={updateTradeline} // ✅ Use ID-based update
+            onDelete={deleteTradeline} // ✅ Use ID-based delete
             onSelect={handleSelectTradeline}
             onAddManual={() => setManualModalOpen(true)}
           />

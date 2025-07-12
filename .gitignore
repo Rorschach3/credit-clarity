@@ -41,3 +41,4 @@ __pycache__/llm_parser.cpython-312.pyc
 .github/instructions/Workfile.instructions.md
 my-fullstack-agent/uv.lock
 __pycache__/llm_parser.cpython-313.pyc
+backend/service_account.json

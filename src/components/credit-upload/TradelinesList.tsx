@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -8,9 +7,9 @@ import { ParsedTradeline } from "@/utils/tradelineParser";
 interface TradelinesListProps {
   tradelines: ParsedTradeline[];
   selectedTradelineIds: Set<string>;
-  onUpdate: (index: number, updated: Partial<ParsedTradeline>) => void;
-  onDelete: (index: number) => void;
-  onSelect: (id: string, selected: boolean) => void;
+  onUpdate: (id: string, updated: Partial<ParsedTradeline>) => void; // ✅ Changed from index to id
+  onDelete: (id: string) => void; // ✅ Changed from index to id
+  onSelect: (id: string) => void; // ✅ Simplified - removed selected boolean
   onAddManual: () => void;
 }
 
@@ -37,11 +36,26 @@ export const TradelinesList: React.FC<TradelinesListProps> = ({
           <TradelineEditor
             key={tradeline.id || index}
             tradeline={tradeline}
-            index={index}
+            index={index} // Keep index for TradelineEditor if it needs it
             isSelected={selectedTradelineIds.has(tradeline.id || '')}
-            onUpdate={onUpdate}
-            onDelete={onDelete}
-            onSelect={onSelect}
+            onUpdate={(updates: Partial<ParsedTradeline>) => {
+              // ✅ Convert index-based call to ID-based call
+              if (tradeline.id) {
+                onUpdate(tradeline.id, updates);
+              }
+            }}
+            onDelete={() => {
+              // ✅ Convert index-based call to ID-based call
+              if (tradeline.id) {
+                onDelete(tradeline.id);
+              }
+            }}
+            onSelect={(selected: boolean) => {
+              // ✅ Convert to simple ID-based call (hook handles toggle logic)
+              if (tradeline.id) {
+                onSelect(tradeline.id);
+              }
+            }}
           />
         ))
       )}
