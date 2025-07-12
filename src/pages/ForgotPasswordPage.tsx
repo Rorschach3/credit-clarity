@@ -1,5 +1,3 @@
-
-import MainLayout from "@/components/layout/MainLayout";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -27,7 +25,7 @@ export default function ForgotPasswordPage() {
       
       setIsSubmitted(true);
       toast.success("Password reset link sent! Check your email");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Reset password error:", error);
       toast.error("Failed to send reset link. Please try again.");
     } finally {
@@ -36,7 +34,6 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-   <MainLayout>
     <div className="flex min-h-screen items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
      <Card className="w-full max-w-md">
       <CardHeader className="space-y-1">
@@ -85,6 +82,5 @@ export default function ForgotPasswordPage() {
         </CardFooter>
       </Card>
     </div>
-   </MainLayout>
   );
 }

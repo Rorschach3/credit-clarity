@@ -168,6 +168,91 @@ graph TD
 For full FAQs, see [`faq.html`](app/templates/faq.html)
 
 ------------------------
+
+Tradeline data extraction workflow: 
+```mermaid
+flowchart TD
+    A[User]  --> B["Uploads PDF or document via Web App"]
+    B --> C["document-ai-parser.ts Frontend"]
+    C -- Converts file to base64 if needed --> D["Converts file to base64 if needed"]
+    D -- Sends base64 file to FastAPI backend endpoint --> E["main.py FastAPI Backend"]
+    E -- Tries direct Google Document AI Python client --> F["Google Document AI Cloud OCR"]
+    F -- Extracted Text --> G["Extracted Text"]
+    E -- If Python client fails or unavailable --> H["Fallback Proxy server document-ai.js on Node/Express"]
+    H -- Google Document AI via REST API --> I["Google Document AI via REST API"]
+    I -- Extracted Text --> J["Extracted Text"]
+    E -- If Node proxy unavailable --> K["Supabase Edge Function for OCR optional"]
+    K -- Extracted Text --> L["Extracted Text"]
+    E -- Text Extraction Success --> M["Text Extraction Success"]
+    M --> N["llm_parser.py Backend LLM Parsing"]
+    N -- Parsed Tradeline Data JSON --> O["Parsed Tradeline Data JSON"]
+    O -- Backend returns parsed data to Frontend --> P["Backend returns parsed data to Frontend"]
+    P -- Frontend displays results and saves to Supabase DB --> Q["Frontend displays results and saves to Supabase DB"]
+```
+
+```mermaid
+flowchart TD
+    A[User (Frontend)] --> B[Uploads PDF or document via Web App]
+    B --> C[document-ai-parser.ts (Frontend)]
+    C --> D[Converts file to base64 (if needed)]
+    D --> E[Sends base64 file to FastAPI backend endpoint]
+    E --> F[main.py (FastAPI Backend)]
+        v
+[ document-ai-parser.ts (Frontend) ]
+        |
+        |---> Converts file to base64 (if needed)
+        |
+        v
+[ Sends base64 file to FastAPI backend endpoint ]
+        |
+        v
+[ main.py (FastAPI Backend) ]
+        |
+        |---> Tries direct Google Document AI (Python client)
+        |         |
+        |         |--(If credentials available)
+        |         v
+        |     [ Google Document AI (Cloud OCR) ]
+        |         |
+        |         v
+        |     [ Extracted Text ]
+        |
+        |---> If Python client fails or unavailable:
+        |         |
+        |         v
+        |     [ Fallback: Proxy server (document-ai.js on Node/Express) ]
+        |         |
+        |         v
+        |     [ Google Document AI via REST API ]
+        |         |
+        |         v
+        |     [ Extracted Text ]
+        |
+        |---> If Node proxy unavailable:
+        |         |
+        |         v
+        |     [ Supabase Edge Function for OCR (optional) ]
+        |         |
+        |         v
+        |     [ Extracted Text ]
+        |
+        v
+[ Text Extraction Success ]
+        |
+        v
+[ llm_parser.py (Backend LLM Parsing) ]
+        |
+        v
+[ Parsed Tradeline Data (JSON) ]
+        |
+        v
+[ Backend returns parsed data to Frontend ]
+        |
+        v
+[ Frontend displays results and saves to Supabase DB ]
+```
+
+Example Tradeline json
 ```json
 {
   "creditor_name": "Bank or Credit Union",

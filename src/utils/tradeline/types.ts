@@ -24,4 +24,22 @@ export const ParsedTradelineSchema = z.object({
   dispute_count: z.number().int().min(0).default(0),
 });
 
-export type ParsedTradeline = z.infer<typeof ParsedTradelineSchema>;
+
+
+export const ProfilesSchema = z.object({
+  id: z.string().uuid(),
+  user_id: z.string().uuid(),
+  first_name: z.string().min(1, "First name is required"),
+  last_name: z.string().min(1, "Last name is required"),
+  address1: z.string().nullable().optional(),
+  address2: z.string().nullable().optional(),
+  city: z.string().nullable().optional(),
+  state: z.string().nullable().optional(),
+  zip_code: z.string().nullable().optional(),
+  phone_number: z.string().nullable().optional(),
+  last_four_of_ssn: z.string().nullable().optional(),
+  dob: z.string().nullable().optional(),
+  created_at: z.string().datetime().default(() => new Date().toISOString()),
+  updated_at: z.string().datetime().default(() => new Date().toISOString()),
+  });
+  

@@ -1,4 +1,3 @@
-import MainLayout from "@/components/layout/MainLayout";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -17,8 +16,7 @@ const posts = [
 
 export function BlogPage() {
   return (
-   <MainLayout>
-    <div className="container py-10">
+        <div className="container py-10">
      <Card>
       <CardHeader>
           <CardTitle>Blog</CardTitle>
@@ -36,7 +34,6 @@ export function BlogPage() {
         </CardContent>
       </Card>
     </div>
-   </MainLayout>
   );
 }
 

@@ -1,5 +1,3 @@
-
-import MainLayout from "@/components/layout/MainLayout";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -70,7 +68,6 @@ const NegativeTradelinesPage = () => {
   };
 
   return (
-   <MainLayout>
     <div className="container mx-auto px-4 py-8">
      <h1 className="text-2xl font-bold mb-4">Negative Tradelines</h1>
       {error && <p className="text-red-500 mb-2">Error: {error}</p>}
@@ -162,8 +159,7 @@ const NegativeTradelinesPage = () => {
         />
       )}
     </div>
-   </MainLayout>
-  );
+    );
 };
 
 export default NegativeTradelinesPage;

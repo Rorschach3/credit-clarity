@@ -1,0 +1,351 @@
+# Document Processing System Architecture
+
+## System Flow Overview
+
+```
+PDF Upload → Frontend → Backend Proxy → Document AI → LLM Parser → Normalized Data Display
+```
+
+## Core Technologies Required
+
+### Cloud Services
+- **Google Cloud Document AI**: OCR and initial document parsing
+- **OpenAI API** (or Claude API): LLM-based data normalization and extraction
+- **Google Cloud Storage** (optional): For storing uploaded documents
+
+### Backend Technologies
+- **FastAPI**: Python web framework for API endpoints
+- **Python Libraries**:
+  - `google-cloud-documentai`: Document AI client
+  - `openai`: OpenAI API client
+  - `fastapi`: Web framework
+  - `uvicorn`: ASGI server
+  - `pydantic`: Data validation
+  - `aiofiles`: Async file handling
+  - `httpx`: HTTP client for service communication
+
+### Frontend Technologies
+- **React/Vue/Angular**: Frontend framework
+- **Axios/Fetch**: HTTP client for API calls
+- **File Upload Component**: For PDF handling
+- **UI Framework**: Material-UI, Tailwind, etc.
+
+## File Structure
+
+```
+document-processing-system/
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── FileUpload.jsx
+│   │   │   ├── DocumentViewer.jsx
+│   │   │   └── ResultsDisplay.jsx
+│   │   ├── services/
+│   │   │   └── api.js
+│   │   └── App.jsx
+│   └── package.json
+├── backend/
+│   ├── services/
+│   │   ├── document_ai_service.py
+│   │   ├── llm_parser_service.py
+│   │   └── storage_service.py
+│   ├── models/
+│   │   ├── document_models.py
+│   │   └── tradeline_models.py
+│   ├── routers/
+│   │   ├── upload_router.py
+│   │   ├── document_router.py
+│   │   └── parse_router.py
+│   ├── utils/
+│   │   ├── validation.py
+│   │   └── helpers.py
+│   ├── main.py
+│   └── requirements.txt
+├── config/
+│   ├── settings.py
+│   └── .env
+└── docker-compose.yml
+```
+
+## Detailed File Breakdown
+
+### 1. Frontend Files
+
+#### `frontend/src/components/FileUpload.jsx`
+**Purpose**: Handle PDF file uploads and initiate processing
+**Key Functions**:
+- `handleFileSelect()`: Validate and prepare file for upload
+- `uploadDocument()`: Send file to backend proxy
+- `trackProcessingStatus()`: Monitor processing progress
+
+#### `frontend/src/components/DocumentViewer.jsx`
+**Purpose**: Display original document and processing status
+**Key Functions**:
+- `renderPDFPreview()`: Show PDF preview
+- `displayProcessingSteps()`: Show current processing stage
+- `handleRetry()`: Retry failed processing
+
+#### `frontend/src/components/ResultsDisplay.jsx`
+**Purpose**: Display normalized and parsed data
+**Key Functions**:
+- `renderTradelines()`: Display parsed tradeline data
+- `exportResults()`: Export data to CSV/JSON
+- `editResults()`: Allow manual corrections
+
+#### `frontend/src/services/api.js`
+**Purpose**: API client for backend communication
+**Key Functions**:
+- `uploadDocument(file)`: Upload PDF to backend
+- `getProcessingStatus(jobId)`: Check processing status
+- `getResults(jobId)`: Retrieve parsed results
+
+### 2. Backend Proxy Files
+
+#### `backend/main.py`
+**Purpose**: Main FastAPI application entry point
+**Key Functions**:
+- `create_app()`: Initialize FastAPI app
+- `setup_cors()`: Configure CORS settings
+- `setup_routes()`: Register all routers
+
+#### `backend/routers/upload_router.py`
+**Purpose**: Handle file uploads and initiate processing pipeline
+**Key Functions**:
+- `upload_document()`: Accept PDF uploads
+- `validate_file()`: Validate file type and size
+- `create_processing_job()`: Initialize processing workflow
+
+#### `backend/routers/document_router.py`
+**Purpose**: Document AI processing endpoints
+**Key Functions**:
+- `process_with_document_ai()`: Send document to Google Document AI
+- `extract_tables()`: Extract table data from OCR results
+- `get_processing_status()`: Return current processing status
+
+#### `backend/routers/parse_router.py`
+**Purpose**: LLM parsing and normalization endpoints
+**Key Functions**:
+- `normalize_with_llm()`: Send extracted data to LLM parser
+- `validate_results()`: Validate normalized data
+- `get_final_results()`: Return processed results
+
+### 3. Service Layer Files
+
+#### `backend/services/document_ai_service.py`
+**Purpose**: Google Document AI integration
+**Key Functions**:
+```python
+class DocumentAIService:
+    def __init__(self, project_id, location, processor_id)
+    def process_document(self, document_content, mime_type)
+    def extract_tables(self, document_result)
+    def extract_form_fields(self, document_result)
+    def get_text_segments(self, document_result)
+```
+
+#### `backend/services/llm_parser_service.py`
+**Purpose**: LLM-based data normalization and extraction
+**Key Functions**:
+```python
+class LLMParserService:
+    def __init__(self, api_key, model_name)
+    def normalize_tradeline_data(self, raw_text)
+    def extract_structured_data(self, table_data)
+    def validate_and_correct(self, parsed_data)
+    def generate_confidence_scores(self, results)
+```
+
+#### `backend/services/storage_service.py`
+**Purpose**: File and data storage management
+**Key Functions**:
+```python
+class StorageService:
+    def store_uploaded_file(self, file_content, filename)
+    def store_processing_results(self, job_id, results)
+    def retrieve_results(self, job_id)
+    def cleanup_old_files(self, retention_days)
+```
+
+### 4. Data Models
+
+#### `backend/models/document_models.py`
+**Purpose**: Document-related data structures
+**Key Classes**:
+```python
+class DocumentUpload(BaseModel):
+    filename: str
+    content_type: str
+    file_size: int
+    upload_timestamp: datetime
+
+class ProcessingJob(BaseModel):
+    completed_at: Optional[datetime]
+    error_message: Optional[str]
+    job_id: str
+    status: ProcessingStatus
+    created_at: datetime
+
+class DocumentAIResult(BaseModel):
+    text_content: str
+    tables: List[TableData]
+    form_fields: Dict[str, str]
+    confidence_scores: Dict[str, float]
+```
+
+#### `backend/models/tradeline_models.py`
+**Purpose**: Tradeline and credit report data structures
+**Key Classes**:
+```python
+class Tradeline(BaseModel):
+    balance: Optional[Decimal]
+    credit_limit: Optional[Decimal]
+    date_opened: Optional[date]
+    date_closed: Optional[date]
+    payment_history: List[str]
+    creditor_name: str
+    account_number: str
+    account_type: str
+    payment_status: str
+    confidence_score: float
+
+class CreditReport(BaseModel):
+    tradelines: List[Tradeline]
+    inquiries: List[CreditInquiry]
+    public_records: List[PublicRecord]
+    report_date: date
+    consumer_info: ConsumerInfo
+    summary: CreditSummary
+```
+
+## API Endpoints
+
+### Upload & Processing
+- `POST /api/upload` - Upload PDF document
+- `GET /api/jobs/{job_id}/status` - Get processing status
+- `GET /api/jobs/{job_id}/results` - Get final results
+
+### Document AI
+- `POST /api/document-ai/process` - Process with Document AI
+- `GET /api/document-ai/extract-tables` - Extract table data
+
+### LLM Parsing
+- `POST /api/llm/normalize` - Normalize data with LLM
+- `POST /api/llm/validate` - Validate parsed results
+
+## Processing Workflow
+
+### 1. Document Upload Phase
+```python
+def upload_workflow():
+    # Frontend uploads PDF
+    file_data = receive_upload()
+    
+    # Validate file
+    validate_pdf(file_data)
+    
+    # Create processing job
+    job_id = create_processing_job()
+    
+    # Store file temporarily
+    store_file(file_data, job_id)
+    
+    # Start async processing
+    start_processing_pipeline(job_id)
+```
+
+### 2. Document AI Processing Phase
+```python
+def document_ai_workflow(job_id):
+    # Retrieve uploaded file
+    file_content = get_stored_file(job_id)
+    
+    # Process with Document AI
+    ai_result = document_ai_service.process_document(file_content)
+    
+    # Extract structured data
+    tables = extract_tables(ai_result)
+    text_content = extract_text(ai_result)
+    
+    # Store intermediate results
+    store_ai_results(job_id, tables, text_content)
+    
+    # Trigger LLM processing
+    trigger_llm_processing(job_id)
+```
+
+### 3. LLM Normalization Phase
+```python
+def llm_parsing_workflow(job_id):
+    # Get Document AI results
+    ai_results = get_ai_results(job_id)
+    
+    # Normalize with LLM
+    normalized_data = llm_parser_service.normalize_tradeline_data(ai_results)
+    
+    # Validate results
+    validation_results = validate_parsed_data(normalized_data)
+    
+    # Store final results
+    store_final_results(job_id, normalized_data, validation_results)
+    
+    # Update job status
+    update_job_status(job_id, "completed")
+```
+
+## Configuration Requirements
+
+### Environment Variables
+```env
+# Google Cloud
+GOOGLE_CLOUD_PROJECT_ID=your-project-id
+GOOGLE_CLOUD_LOCATION=us
+DOCUMENT_AI_PROCESSOR_ID=your-processor-id
+GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
+
+# OpenAI
+OPENAI_API_KEY=your-openai-key
+OPENAI_MODEL=gpt-4
+
+# Application
+DATABASE_URL=postgresql://user:pass@localhost/db
+REDIS_URL=redis://localhost:6379
+STORAGE_BUCKET=your-storage-bucket
+```
+
+### Dependencies (requirements.txt)
+```txt
+fastapi==0.104.1
+uvicorn==0.24.0
+google-cloud-documentai==2.21.0
+openai==1.3.0
+pydantic==2.5.0
+aiofiles==23.2.1
+httpx==0.25.2
+python-multipart==0.0.6
+redis==5.0.1
+sqlalchemy==2.0.23
+alembic==1.12.1
+```
+
+## Deployment Considerations
+
+### Docker Configuration
+- Frontend: Node.js container
+- Backend: Python container with Google Cloud SDK
+- Database: PostgreSQL container
+- Cache: Redis container
+
+### Security
+- JWT authentication for API access
+- File upload size limits
+- Input validation and sanitization
+- Rate limiting on API endpoints
+- Secure storage of API keys
+
+### Monitoring
+- Processing job status tracking
+- API endpoint monitoring
+- Error logging and alerting
+- Performance metrics collection
+
+This architecture provides a scalable, maintainable solution for document processing with clear separation of concerns and robust error handling.

@@ -9,7 +9,6 @@ import { DisputeManagement } from "@/components/admin/DisputeManagement"
 import UserManagement from "@/components/admin/UserManagement"
 import PostageManagement from "@/components/admin/PostageManagement"
 import AuditLog from "@/components/admin/AuditLog"
-import MainLayout from "@/components/layout/MainLayout";
 import AdminRoute from "@/components/auth/AdminRoute";
 
 interface Dispute {
@@ -71,7 +70,6 @@ export default function AdminPage() {
   }
 
   return (
-    <MainLayout>
       <AdminRoute>
         <div className="container mx-auto py-10">
           <div className="flex items-center gap-4 mb-6">
@@ -118,6 +116,5 @@ export default function AdminPage() {
           </Tabs>
         </div>
       </AdminRoute>
-    </MainLayout>
   );
 }

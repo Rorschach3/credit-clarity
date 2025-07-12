@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from 'sonner';
 import { Camera } from 'lucide-react';
 import { CurrentUserAvatar } from '@/components/current-user-avatar';
+import { z } from 'zod';
 
 import type { Database } from '../integrations/supabase/types';
 
@@ -15,6 +16,19 @@ type Profile = Database['public']['Tables']['profiles']['Row'];
 
 export default function ProfilePage() {
   const { user } = useAuth();
+  const profileSchema = z.object({
+    first_name: z.string().min(1, "First name is required"),
+    last_name: z.string().min(1, "Last name is required"),
+    address1: z.string().nullable().optional(),
+    address2: z.string().nullable().optional(),
+    city: z.string().nullable().optional(),
+    state: z.string().nullable().optional(),
+    zip_code: z.string().nullable().optional(),
+    phone_number: z.string().nullable().optional(),
+    last_four_of_ssn: z.string().nullable().optional(),
+    dob: z.string().nullable().optional(),
+  });
+
   const [profile, setProfile] = useState<Partial<Profile>>({
     first_name: '',
     last_name: '',
@@ -80,6 +94,12 @@ export default function ProfilePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const result = profileSchema.safeParse(profile);
+    if (!result.success) {
+      toast("Validation failed", { description: result.error.errors[0].message});
+      return;
+    }
+    // Proceed with saving profile to Supabase or your backend
     if (!user) return;
 
     // Validate required fields
@@ -255,113 +275,113 @@ export default function ProfilePage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="firstName">First Name *</Label>
-                  <Input
-                    id="firstName"
-                    value={profile.first_name || ''}
-                    onChange={(e) => handleInputChange('first_name', e.target.value)}
-                    placeholder="Enter your first name"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="lastName">Last Name *</Label>
-                  <Input
-                    id="lastName"
-                    value={profile.last_name || ''}
-                    onChange={(e) => handleInputChange('last_name', e.target.value)}
-                    placeholder="Enter your last name"
-                    required
-                  />
-                </div>
+              <div>
+                <Label htmlFor="firstName">First Name *</Label>
+                <Input
+                id="firstName"
+                value={profile.first_name || ''}
+                onChange={(e) => handleInputChange('first_name', e.target.value)}
+                placeholder="Enter your first name"
+                required
+                />
+              </div>
+              <div>
+                <Label htmlFor="lastName">Last Name *</Label>
+                <Input
+                id="lastName"
+                value={profile.last_name || ''}
+                onChange={(e) => handleInputChange('last_name', e.target.value)}
+                placeholder="Enter your last name"
+                required
+                />
+              </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="dob">Date of Birth</Label>
-                  <Input
-                    id="dob"
-                    type="date"
-                    value={profile.dob || ''}
-                    onChange={(e) => handleInputChange('dob', e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="lastFourSSN">Last 4 digits of SSN</Label>
-                  <Input
-                    id="lastFourSSN"
-                    value={profile.last_four_of_ssn || ''}
-                    onChange={(e) => handleInputChange('last_four_of_ssn', e.target.value.replace(/\D/g, '').slice(0, 4))}
-                    placeholder="1234"
-                    maxLength={4}
-                  />
-                </div>
+              <div>
+                <Label htmlFor="dob">Date of Birth</Label>
+                <Input
+                id="dob"
+                type="date"
+                value={profile.dob || ''}
+                onChange={(e) => handleInputChange('dob', e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="lastFourSSN">Last 4 digits of SSN</Label>
+                <Input
+                id="lastFourSSN"
+                value={profile.last_four_of_ssn || ''}
+                onChange={(e) => handleInputChange('last_four_of_ssn', e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="1234"
+                maxLength={4}
+                />
+              </div>
               </div>
 
               <div>
-                <Label htmlFor="address1">Address Line 1</Label>
-                <Input
-                  id="address1"
-                  value={profile.address1 || ''}
-                  onChange={(e) => handleInputChange('address1', e.target.value)}
-                  placeholder="123 Main Street"
-                />
+              <Label htmlFor="address1">Address Line 1</Label>
+              <Input
+                id="address1"
+                value={profile.address1 || ''}
+                onChange={(e) => handleInputChange('address1', e.target.value)}
+                placeholder="123 Main Street"
+              />
               </div>
 
               <div>
-                <Label htmlFor="address2">Address Line 2</Label>
-                <Input
-                  id="address2"
-                  value={profile.address2 || ''}
-                  onChange={(e) => handleInputChange('address2', e.target.value)}
-                  placeholder="Apt 4B, Suite 100, etc."
-                />
+              <Label htmlFor="address2">Address Line 2</Label>
+              <Input
+                id="address2"
+                value={profile.address2 || ''}
+                onChange={(e) => handleInputChange('address2', e.target.value)}
+                placeholder="Apt 4B, Suite 100, etc."
+              />
               </div>
 
               <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="city">City</Label>
-                  <Input
-                    id="city"
-                    value={profile.city || ''}
-                    onChange={(e) => handleInputChange('city', e.target.value)}
-                    placeholder="New York"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="state">State</Label>
-                  <Input
-                    id="state"
-                    value={profile.state || ''}
-                    onChange={(e) => handleInputChange('state', e.target.value.toUpperCase().slice(0, 2))}
-                    placeholder="NY"
-                    maxLength={2}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="zip">Zip Code</Label>
-                  <Input
-                    id="zip"
-                    value={profile.zip_code || ''}
-                    onChange={(e) => handleInputChange('zip_code', e.target.value)}
-                    placeholder="10001"
-                  />
-                </div>
+              <div>
+                <Label htmlFor="city">City</Label>
+                <Input
+                id="city"
+                value={profile.city || ''}
+                onChange={(e) => handleInputChange('city', e.target.value)}
+                placeholder="New York"
+                />
+              </div>
+              <div>
+                <Label htmlFor="state">State</Label>
+                <Input
+                id="state"
+                value={profile.state || ''}
+                onChange={(e) => handleInputChange('state', e.target.value.toUpperCase().slice(0, 2))}
+                placeholder="NY"
+                maxLength={2}
+                />
+              </div>
+              <div>
+                <Label htmlFor="zip">Zip Code</Label>
+                <Input
+                id="zip"
+                value={profile.zip_code || ''}
+                onChange={(e) => handleInputChange('zip_code', e.target.value)}
+                placeholder="10001"
+                />
+              </div>
               </div>
 
               <div>
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input
-                  id="phone"
-                  value={profile.phone_number || ''}
-                  onChange={(e) => handleInputChange('phone_number', e.target.value)}
-                  placeholder="(555) 123-4567"
-                />
+              <Label htmlFor="phone">Phone Number</Label>
+              <Input
+                id="phone"
+                value={profile.phone_number || ''}
+                onChange={(e) => handleInputChange('phone_number', e.target.value)}
+                placeholder="(555) 123-4567"
+              />
               </div>
 
               <Button type="submit" disabled={isLoading} className="w-full">
-                {isLoading ? 'Updating...' : 'Update Profile'}
+              {isLoading ? 'Updating...' : 'Update Profile'}
               </Button>
             </form>
           </CardContent>

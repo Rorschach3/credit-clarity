@@ -1,11 +1,10 @@
 import React from 'react';
-import MainLayout from "@/components/layout/MainLayout";
 import { Helmet } from "react-helmet";
 
 const HomePage = React.memo(function HomePage() {
 
   return (
-    <MainLayout>
+    <>
       <Helmet>
         <title>Credit Clarity AI Assist - Improve Your Credit Score</title>
         <meta name="description" content="AI-powered platform to analyze, dispute, and improve your credit score with Credit Clarity." />
@@ -32,7 +31,7 @@ const HomePage = React.memo(function HomePage() {
           <p className="text-lg md:text-xl mb-4 max-w-3xl mx-auto">
             AI-powered platform to analyze, dispute, and improve your credit score with ease and confidence.
           </p>
-                    <a
+          <a
             href="/signup"
             className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-3 rounded-lg m-4 text-lg transition"
             aria-label="Sign up now"
@@ -76,7 +75,7 @@ const HomePage = React.memo(function HomePage() {
           </div>
         </section>
       </main>
-    </MainLayout>
+    </>
   );
 });
 

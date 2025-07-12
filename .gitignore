@@ -37,3 +37,7 @@ influxdata-archive_compat.key
 service-account.json
 __pycache__/main.cpython-312.pyc
 __pycache__/llm_parser.cpython-312.pyc
+.github/chatmodes/Brainstorm.chatmode.md
+.github/instructions/Workfile.instructions.md
+my-fullstack-agent/uv.lock
+__pycache__/llm_parser.cpython-313.pyc

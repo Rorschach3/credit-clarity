@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from 'sonner';
 import { Eye, EyeOff } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -24,38 +26,35 @@ export default function SignupPage() {
     setFormData({ ...formData, [name]: value });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setIsLoading(true);
 
-    try {
-      // For now we'll just show a success toast since Supabase isn't connected yet
-      toast.success("Account created! Please connect Supabase to enable authentication.");
-      // In a real implementation with Supabase:
-      // const { error } = await supabase.auth.signUp({
-      //   email: formData.email,
-      //   password: formData.password,
-      //   options: {
-      //     data: {
-      //       first_name: formData.firstName,
-      //       last_name: formData.lastName,
-      //     }
-      //   }
-      // });
-      // if (error) throw error;
-      
-      // Navigate to dashboard after signup/login is integrated
-      // For now, let's just show a success message
-      setTimeout(() => {
-        setIsLoading(false);
-        navigate('/login');
-      }, 2000);
-    } catch (error) {
-      setIsLoading(false);
-      toast.error("Failed to create account. Please try again.");
-      console.error("Signup error:", error);
+  try {
+    const { error } = await supabase.auth.signUp({
+      email: formData.email,
+      password: formData.password,
+      options: {
+        data: {
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+        }
+      }
+    });
+
+    if (error) {
+      throw error;
     }
-  };
+
+    toast.success("Account created! Please check your email to confirm your account.");
+    navigate('/login');
+  } catch (error: unknown) {
+    toast.error((error as Error).message || "Failed to create account.");
+    console.error("Signup error:", error);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <div className="flex min-h-screen items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
@@ -111,6 +110,7 @@ export default function SignupPage() {
                   id="password" 
                   name="password"
                   type={showPassword ? "text" : "password"} 
+                  autoComplete="new-password"
                   placeholder="••••••••" 
                   value={formData.password}
                   onChange={handleChange}

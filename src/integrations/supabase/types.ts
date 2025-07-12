@@ -377,11 +377,11 @@ export type Database = {
       profiles: {
         Row: {
           id: string
-          address1: string | null
-          city: string | null
-          address2: string | null
           first_name: string | null
           last_name: string | null
+          address1: string | null
+          address2: string | null
+          city: string | null
           phone_number: string | null
           last_four_of_ssn: string | null
           state: string | null
@@ -391,12 +391,12 @@ export type Database = {
           dob: string | null
         }
         Insert: {
+          id: string
+          first_name?: string | null
+          last_name?: string | null
           address1?: string | null
           address2?: string | null
           city?: string | null
-          first_name?: string | null
-          id?: never
-          last_name?: string | null
           phone_number?: string | null
           last_four_of_ssn?: string | null
           state?: string | null
@@ -406,12 +406,12 @@ export type Database = {
           dob?: string | null
         }
         Update: {
+          id: string
+          first_name?: string | null
+          last_name?: string | null
           address1?: string | null
           address2?: string | null
           city?: string | null
-          first_name?: string | null
-          id?: never
-          last_name?: string | null
           phone_number?: string | null
           last_four_of_ssn?: string | null
           state?: string | null
@@ -758,7 +758,7 @@ export type Database = {
     Enums: {
       app_permission: "channels.delete" | "messages.delete"
       app_role: "admin" | "moderator" | "user"
-      bureau: "equifax" | "transunion" | "experian" | "'" | "null"
+      bureau: "equifax" | "transunion" | "experian" | "null"
       tradeline_status:
         | "open"
         | "closed"

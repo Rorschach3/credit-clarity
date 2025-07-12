@@ -1,34 +1,37 @@
+// src/utils/pdf-processor.ts
 export interface PDFProcessingResult {
-  text: string;
-  pages: number;
-  metadata?: Record<string, unknown>;
+  tradelines: any[];
+  success: boolean;
+  message?: string;
 }
 
-// Client-side PDF processing using pdf-parse
-export async function processPdfFile(file: File): Promise<PDFProcessingResult> {
+export async function processPdfFile(file: File, userId: string): Promise<PDFProcessingResult> {
   try {
-    console.log('Processing PDF file with client-side parser...');
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('user_id', userId);
     
-    // Dynamic import with proper typing
-    const pdfParse = await import('pdf-parse');
+    // Vite environment variable
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
     
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const response = await fetch(`${apiUrl}/process-credit-report`, {
+      method: 'POST',
+      body: formData,
+    });
     
-    const data = await pdfParse.default(buffer);
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}: ${response.statusText}`);
+    }
     
-    console.log(`PDF parsed successfully: ${data.numpages} pages, ${data.text.length} characters`);
+    const result = await response.json();
     
     return {
-      text: data.text || '',
-      pages: data.numpages || 1,
-      metadata: {
-        info: data.info,
-        version: data.version
-      }
+      tradelines: result.tradelines || [],
+      success: result.success || false,
+      message: `Processed ${result.tradelines_saved || 0} tradelines`
     };
   } catch (error) {
-    console.error('Client-side PDF processing error:', error);
-    throw new Error('Failed to process PDF file. Please ensure the file is a valid, text-based PDF.');
+    console.error('PDF processing error:', error);
+    throw new Error('Failed to process PDF file');
   }
 }
