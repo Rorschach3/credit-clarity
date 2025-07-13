@@ -187,7 +187,8 @@ const CreditReportUploadPage = () => {
     handleSelectTradeline,
     updateTradeline,
     deleteTradeline,
-    handleAddManual
+    handleAddManual,
+    ...rest
   } = useCreditUploadState();
 
   const {
@@ -275,7 +276,6 @@ const CreditReportUploadPage = () => {
     setExtractedKeywords,
     setAiInsights,
     setExtractedText,
-    // setShowAiResults, // Now pass the local state setter
     extractKeywordsFromText,
     generateAIInsights
   });

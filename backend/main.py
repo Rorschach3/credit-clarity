@@ -4,6 +4,7 @@ Extracts tradelines and saves to Supabase
 Enhanced with comprehensive debugging and error handling
 """
 import os
+import PyPDF2 # type: ignore
 import tempfile
 import logging
 import re
@@ -24,6 +25,7 @@ from google.oauth2 import service_account # type: ignore
 
 # Supabase
 from supabase import create_client, Client
+from datetime import datetime
 
 from dotenv import load_dotenv # type: ignore
 load_dotenv()
@@ -40,8 +42,8 @@ PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT_ID")
 LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us")
 PROCESSOR_ID = os.getenv("DOCUMENT_AI_PROCESSOR_ID")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY")
+SUPABASE_URL = "https://gywohmbqohytziwsjrps.supabase.co"
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 
 # Debug environment variables
 logger.info(f"🔧 Environment Check:")
@@ -50,12 +52,12 @@ logger.info(f"  LOCATION: {LOCATION}")
 logger.info(f"  PROCESSOR_ID: {'✅ Set' if PROCESSOR_ID else '❌ Missing'}")
 logger.info(f"  GEMINI_API_KEY: {'✅ Set' if GEMINI_API_KEY else '❌ Missing'}")
 logger.info(f"  SUPABASE_URL: {'✅ Set' if SUPABASE_URL else '❌ Missing'}")
-logger.info(f"  SUPABASE_KEY: {'✅ Set' if SUPABASE_KEY else '❌ Missing'}")
+logger.info(f"  SUPABASE_ANON_KEY: {'✅ Set' if SUPABASE_ANON_KEY else '❌ Missing'}")
 
 # Initialize services with error handling
 try:
-    if SUPABASE_URL and SUPABASE_KEY:
-        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    if SUPABASE_URL and SUPABASE_ANON_KEY:
+        supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
         logger.info("✅ Supabase client initialized")
     else:
         logger.error("❌ Supabase configuration missing")
@@ -115,6 +117,50 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"]
 )
+
+class SupabaseService:
+    def __init__(self):
+        self.client = supabase
+    
+    # Insert data
+    def insert_user_profile(self, user_data):
+        """Insert a new user profile"""
+        try:
+            result = self.client.table("user_profiles").insert(user_data).execute()
+            return result.data
+        except Exception as e:
+            print(f"Error inserting user profile: {e}")
+            return None
+    
+    # Select data
+    def get_user_profile(self, user_id):
+        """Get user profile by ID"""
+        try:
+            result = self.client.table("user_profiles").select("*").eq("id", user_id).execute()
+            return result.data[0] if result.data else None
+        except Exception as e:
+            print(f"Error getting user profile: {e}")
+            return None
+    
+    # Update data
+    def update_user_profile(self, user_id, updates):
+        """Update user profile"""
+        try:
+            result = self.client.table("user_profiles").update(updates).eq("id", user_id).execute()
+            return result.data
+        except Exception as e:
+            print(f"Error updating user profile: {e}")
+            return None
+    
+    # Delete data
+    def delete_user_profile(self, user_id):
+        """Delete user profile"""
+        try:
+            result = self.client.table("user_profiles").delete().eq("id", user_id).execute()
+            return result.data
+        except Exception as e:
+            print(f"Error deleting user profile: {e}")
+            return None
 
 class DocumentAIProcessor:
     def __init__(self):
@@ -331,13 +377,94 @@ async def save_tradeline_to_supabase(tradeline: Dict[str, Any], user_id: str) ->
         logger.error(f"❌ Database error while saving tradeline: {e}")
         logger.error(f"📍 Traceback: {traceback.format_exc()}")
         return False
+    
 
+    # Add this endpoint to your main.py file (after the existing endpoints)
+
+@app.post("/save-tradelines")
+async def save_tradelines_endpoint(request: dict):
+    """
+    Endpoint to save tradelines to database
+    """
+    try:
+        user_id = request.get('userId')
+        tradelines = request.get('tradelines', [])
+        supabase.table('tradelines').select('*').execute()
+
+        if not user_id:
+            raise HTTPException(status_code=400, detail="User ID is required")
+        
+        if not tradelines:
+            raise HTTPException(status_code=400, detail="No tradelines provided")
+        
+        logger.info(f"💾 Saving {len(tradelines)} tradelines for user {user_id}")
+        
+        saved_count = 0
+        failed_count = 0
+        
+        if supabase:
+            # Save each tradeline to Supabase
+            for tradeline in tradelines:
+                try:
+                    success = await save_tradeline_to_supabase(tradeline, user_id)
+                    if success:
+                        saved_count += 1
+                    else:
+                        failed_count += 1
+                except Exception as e:
+                    logger.error(f"❌ Failed to save tradeline: {e}")
+                    failed_count += 1
+        else:
+            logger.warning("⚠️ Supabase not available, cannot save tradelines")
+            raise HTTPException(status_code=503, detail="Database not available")
+        
+        return {
+            "success": True,
+            "message": f"Saved {saved_count} tradelines successfully",
+            "saved_count": saved_count,
+            "failed_count": failed_count,
+            "total_tradelines": len(tradelines)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Save endpoint failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save tradelines: {str(e)}")
+
+# Also add this function to check/fix Supabase connection
+def check_supabase_connection():
+    """Check if Supabase is properly configured"""
+    global supabase
+    
+    logger.info("🔍 Checking Supabase configuration...")
+    
+    if not SUPABASE_URL:
+        logger.error("❌ SUPABASE_URL environment variable not set")
+        return False
+        
+    if not SUPABASE_ANON_KEY:
+        logger.error("❌ SUPABASE_ANON_KEY environment variable not set")
+        return False
+    
+    try:
+        # Test the connection
+        result = supabase.table('tradelines').select('id').limit(1).execute()
+        logger.info("✅ Supabase connection test successful")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Supabase connection test failed: {e}")
+        return False
+
+# Update the health endpoint to include Supabase status
 @app.get("/health")
 async def health_check():
     """Enhanced health check endpoint"""
+    supabase_available = check_supabase_connection() if supabase else False
+    
     health_status = {
         "status": "healthy",
-        "timestamp": "2024-01-01T00:00:00Z",  # Will be updated
+        "timestamp": datetime.utcnow().isoformat() + "Z", # type: ignore
         "services": {
             "document_ai": {
                 "configured": bool(PROJECT_ID and PROCESSOR_ID and client),
@@ -350,8 +477,9 @@ async def health_check():
                 "model": "gemini-1.5-flash" if gemini_model else None
             },
             "supabase": {
-                "configured": bool(SUPABASE_URL and SUPABASE_KEY and supabase),
-                "url": SUPABASE_URL
+                "configured": bool(SUPABASE_URL and SUPABASE_ANON_KEY),
+                "available": supabase_available,  # ✅ Added availability check
+                "url": SUPABASE_URL[:30] + "..." if SUPABASE_URL else None
             }
         },
         "environment": {
@@ -359,10 +487,6 @@ async def health_check():
             "fastapi_version": "0.x",
         }
     }
-    
-    # Update timestamp
-    from datetime import datetime
-    health_status["timestamp"] = datetime.utcnow().isoformat() + "Z"
     
     logger.info("🔍 Health check requested")
     return health_status
@@ -374,22 +498,27 @@ async def process_credit_report(
 ):
     """
     Main endpoint: Process uploaded credit report PDF
-    Enhanced with comprehensive debugging
+    FIXED: Properly handle file upload without filename attribute errors
     """
     temp_file_path = None
     
     try:
         logger.info("🚀 ===== NEW CREDIT REPORT PROCESSING REQUEST =====")
-        logger.info(f"📄 File: {file.filename}")
-        logger.info(f"📦 Content type: {file.content_type}")
+        
+        # ✅ FIXED: Store filename early before file operations
+        original_filename = file.filename or "unknown.pdf"
+        file_content_type = file.content_type
+        
+        logger.info(f"📄 File: {original_filename}")
+        logger.info(f"📦 Content type: {file_content_type}")
         logger.info(f"👤 User ID: {user_id}")
         
-        # Validate file type
-        if not file.filename or not file.filename.lower().endswith('.pdf'):
+        # Validate file type using stored filename
+        if not original_filename.lower().endswith('.pdf'):
             logger.error("❌ Invalid file type")
             raise HTTPException(status_code=400, detail="Only PDF files allowed")
         
-        # Read file content
+        # Read file content ONCE
         logger.info("📖 Reading file content...")
         content = await file.read()
         logger.info(f"📦 File size: {len(content)} bytes ({len(content)/1024/1024:.2f} MB)")
@@ -398,9 +527,9 @@ async def process_credit_report(
             logger.error("❌ Empty file")
             raise HTTPException(status_code=400, detail="File is empty")
         
-        # Save uploaded file temporarily
+        # ✅ FIXED: Save uploaded file using content, not re-reading file
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
-            temp_file.write(content)
+            temp_file.write(content)  # Use already-read content
             temp_file_path = temp_file.name
         
         logger.info(f"💾 Temporary file saved: {temp_file_path}")
@@ -448,7 +577,6 @@ async def process_credit_report(
                 logger.info("🔄 Trying PyPDF2 + Gemini fallback...")
                 processing_method = "pypdf2_fallback"
                 
-                import PyPDF2 # type: ignore
                 with open(temp_file_path, 'rb') as file:
                     reader = PyPDF2.PdfReader(file)
                     text = ""
@@ -507,7 +635,7 @@ async def process_credit_report(
             "tradelines": tradelines,
             "debug_info": {
                 "file_size_bytes": len(content),
-                "file_name": file.filename,
+                "file_name": original_filename,  # ✅ Use stored filename
                 "user_id": user_id,
                 "supabase_available": supabase is not None,
                 "document_ai_available": client is not None,
@@ -540,8 +668,3 @@ async def process_credit_report(
             status_code=500, 
             detail=f"Processing failed: {str(e)}"
         )
-
-if __name__ == "__main__":
-    import uvicorn # type: ignore
-    logger.info("🚀 Starting Credit Report Processor API...")
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="debug")

@@ -229,7 +229,7 @@ const processCreditReportWithAPI = async (file: File, userId: string): Promise<P
       credit_limit: t.credit_limit || '',
       monthly_payment: t.monthly_payment || '',
       account_number: t.account_number || '',
-      date_opened: t.date_opened || 'xxxx/xx/xx',
+      date_opened: t.date_opened || 'xx/xx/xxxx',
       is_negative: t.is_negative || false,
       account_type: t.account_type || '',
       account_status: t.account_status || '',

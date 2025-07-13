@@ -166,7 +166,7 @@ export type Database = {
           monthly_payment?: string | '$0';
           account_number: string | '';
           credit_bureau?: string | '';
-          date_opened?: string | 'xxxx/xx/xx';
+          date_opened?: string | 'xx/xx/xxxx';
           is_negative: boolean | false;
           raw_text: string;
         };
