@@ -17,7 +17,6 @@ export const APITradelineSchema = z.object({
 });
 
 export const ParsedTradelineSchema = z.object({
-  id: z.string().uuid("Invalid UUID format"),
   user_id: z.string().uuid("Invalid user ID format"),
   creditor_name: z.string().min(1, "Creditor name is required"),
   account_number: z.string().min(1, "Account number is required"),
@@ -28,8 +27,9 @@ export const ParsedTradelineSchema = z.object({
   is_negative: z.boolean().default(false),
   credit_bureau: z.string().min(1, "Credit bureau is required"),
   dispute_count: z.number().int().min(0).default(0),
-  extracted_from: z.string().optional(),
-  created_at: z.string().datetime("Invalid datetime format")
+  created_at: z.string().datetime("Invalid datetime format"),
+  credit_limit: z.string().default("$0"),
+  monthly_payment: z.string().default("$0"),
 });
 
 // TypeScript interfaces inferred from Zod schemas
@@ -40,7 +40,8 @@ export type ParsedTradeline = z.infer<typeof ParsedTradelineSchema>;
 const NEGATIVE_INDICATORS = [
   'charged off', 'charge off', 'collection', 'collections',
   'late', 'delinquent', 'past due', 'default', 'bankruptcy',
-  'foreclosure', 'repossession', 'settlement', 'closed'
+  'foreclosure', 'repossession', 'settlement', 'closed', 
+  '30-day late', '60-day late', '90-day late', '120-day late'
 ];
 
 // Generate proper UUID
@@ -52,7 +53,7 @@ export const generateUUID = (): string => {
 export const getUserProfileId = async (authUserId: string): Promise<string | null> => {
   try {
     const { data: profile, error } = await supabase
-      .from('user_profiles')
+      .from('profiles')
       .select('id')
       .eq('user_id', authUserId)
       .single();
@@ -73,7 +74,6 @@ export const getUserProfileId = async (authUserId: string): Promise<string | nul
 export const convertAPITradelineToDatabase = (
   apiTradeline: APITradeline, 
   userProfileId: string,
-  extractedFrom?: string
 ): ParsedTradeline => {
   // Determine if tradeline is negative
   const isNegative = apiTradeline.is_negative || 
@@ -93,7 +93,6 @@ export const convertAPITradelineToDatabase = (
     is_negative: isNegative,
     credit_bureau: apiTradeline.credit_bureau || 'Unknown',
     dispute_count: apiTradeline.dispute_count || 0,
-    extracted_from: extractedFrom,
     created_at: new Date().toISOString()
   };
 };
@@ -106,7 +105,7 @@ export const saveTradelinesToDatabase = async (
 ): Promise<{ success: boolean; savedCount: number; error?: string }> => {
   try {
     console.log(`[DEBUG] 💾 Saving ${apiTradelines.length} tradelines to Supabase for user ${authUserId}`);
-    
+
     // First, get the user's profile ID
     const userProfileId = await getUserProfileId(authUserId);
     if (!userProfileId) {
@@ -117,7 +116,7 @@ export const saveTradelinesToDatabase = async (
 
     // Convert API tradelines to database format
     const dbTradelines = apiTradelines.map(apiTradeline => 
-      convertAPITradelineToDatabase(apiTradeline, userProfileId, extractedFrom)
+      convertAPITradelineToDatabase(apiTradeline, userProfileId)
     );
 
     // Delete existing tradelines for this user to avoid duplicates
@@ -137,7 +136,6 @@ export const saveTradelinesToDatabase = async (
     const { data, error } = await supabase
       .from('tradelines')
       .insert(dbTradelines.map(t => ({
-        id: t.id,
         user_id: t.user_id,
         creditor_name: t.creditor_name,
         account_number: t.account_number,
@@ -148,7 +146,6 @@ export const saveTradelinesToDatabase = async (
         credit_bureau: t.credit_bureau,
         is_negative: t.is_negative,
         dispute_count: t.dispute_count,
-        extracted_from: t.extracted_from
       })))
       .select();
 
@@ -219,13 +216,15 @@ export const getNegativeTradelines = (tradelines: ParsedTradeline[]): ParsedTrad
 };
 
 // Validate tradeline data
-export const validateTradeline = (tradeline: any): boolean => {
-  const required = ['creditor_name', 'account_number', 'account_status'];
-  return required.every(field => tradeline[field] && tradeline[field].trim().length > 0);
+export const validateTradeline = (tradeline: APITradeline): boolean => {
+  const required = ['creditor_name', 'account_number', 'account_status'] as const;
+  return required.every(field => tradeline[field]?.trim?.().length > 0);
 };
 
 // Validate API tradeline with Zod schema
-export const validateAPITradeline = (tradeline: any): { success: boolean; data?: APITradeline; error?: string } => {
+export const validateAPITradeline = (
+  tradeline: unknown // strict input
+): { success: boolean; data?: APITradeline; error?: string } => {
   try {
     const validated = APITradelineSchema.parse(tradeline);
     return { success: true, data: validated };
@@ -238,8 +237,10 @@ export const validateAPITradeline = (tradeline: any): { success: boolean; data?:
   }
 };
 
-// Validate parsed tradeline with Zod schema
-export const validateParsedTradeline = (tradeline: any): { success: boolean; data?: ParsedTradeline; error?: string } => {
+// validate parsed tradeline with Zod schema
+export const validateParsedTradeline = (
+  tradeline: unknown
+): { success: boolean; data?: ParsedTradeline; error?: string } => {
   try {
     const validated = ParsedTradelineSchema.parse(tradeline);
     return { success: true, data: validated };

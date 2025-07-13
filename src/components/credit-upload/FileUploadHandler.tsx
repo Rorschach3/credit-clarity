@@ -2,6 +2,23 @@ import { ChangeEvent, useCallback } from 'react';
 import { toast as sonnerToast } from "sonner";
 import { ParsedTradeline, ParsedTradelineSchema } from "@/utils/tradelineParser";
 
+
+// Sanitize tradelines before validation
+function sanitizeTradelines(tradelines: ParsedTradeline[]): ParsedTradeline[] {
+  return tradelines.map((t) => {
+
+    // Ensure credit_bureau is a non-empty string
+    const credit_bureau = typeof t.credit_bureau === 'string' && t.credit_bureau.trim().length > 0
+      ? t.credit_bureau.trim()
+      : ''; // You can change this default if desired
+
+    return {
+      ...t,
+      credit_bureau,
+    };
+  });
+}
+
 interface FileUploadHandlerProps {
   user: { id: string; email?: string } | null;
   processingMethod: 'ocr' | 'ai';
@@ -407,7 +424,8 @@ export const useFileUploadHandler = ({
       sonnerToast("Uploading to Document AI...", { description: "Processing" });
 
       const startTime = Date.now();
-      const tradelines = await processCreditReportWithAPI(file, user.id);
+      const tradelinesRaw = await processCreditReportWithAPI(file, user.id);
+      const tradelines = sanitizeTradelines(tradelinesRaw);
       const processingTime = Date.now() - startTime;
       
       console.log(`⏱️ Total processing time: ${processingTime}ms`);
