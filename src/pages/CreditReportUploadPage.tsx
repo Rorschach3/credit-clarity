@@ -115,36 +115,41 @@ const testApiHealth = async (): Promise<HealthCheckResult> => {
     try {
       const healthUrl = `${config.baseUrl}${config.endpoint}`;
       console.log(`🔍 Testing health endpoint: ${healthUrl}`);
-      
+
       const headers: Record<string, string> = {
         'Accept': 'application/json',
       };
-      
+
       // Add auth headers for Supabase endpoints
       if (config.needsAuth) {
         const authToken = localStorage.getItem('supabase.auth.token') || 
-                         sessionStorage.getItem('supabase.auth.token') ||
-                         import.meta.env.VITE_SUPABASE_ANON_KEY;
-                         
+                         sessionStorage.getItem('supabase.auth.token');
+
         if (authToken) {
           headers['Authorization'] = `Bearer ${authToken}`;
         }
-        
+
         const apiKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
         if (apiKey) {
           headers['apikey'] = apiKey;
         }
       }
-      
+
       const response = await fetch(healthUrl, {
         method: 'GET',
         headers: headers,
       });
 
       if (response.ok) {
-        const data = await response.json();
-        console.log(`✅ Health check passed for ${config.baseUrl}:`, data);
-        return { isHealthy: true, url: config.baseUrl, details: data };
+        let data: Record<string, unknown> = {};
+        try {
+          data = await response.json();
+          console.log(`✅ Health check passed for ${config.baseUrl}:`, data);
+          return { isHealthy: true, url: config.baseUrl, details: data };
+        } catch (jsonError) {
+          console.log(`❌ Invalid JSON response from ${config.baseUrl}:`, jsonError);
+          continue;
+        }
       } else {
         console.log(`❌ Health check failed for ${config.baseUrl}: ${response.status}`);
       }
@@ -158,7 +163,7 @@ const testApiHealth = async (): Promise<HealthCheckResult> => {
 
 const CreditReportUploadPage = () => {
   const { user } = useAuth();
-  const saveTimeoutRef = useRef<NodeJS.Timeout>();
+  const saveTimeoutRef = useRef<number>();
   const [processingStep, setProcessingStep] = useState<string>("Waiting for upload...");
   const [showDebugInfo, setShowDebugInfo] = useState<boolean>(false);
   const [debugInfo, setDebugInfo] = useState<DebugInfo>({
@@ -187,8 +192,7 @@ const CreditReportUploadPage = () => {
     handleSelectTradeline,
     updateTradeline,
     deleteTradeline,
-    handleAddManual,
-    ...rest
+    handleAddManual
   } = useCreditUploadState();
 
   const {
@@ -204,7 +208,7 @@ const CreditReportUploadPage = () => {
     generateAIInsights
   } = useCreditReportProcessing(user?.id || "");
 
-  // // Manage showAiResults locally since it's not in the hook
+  // Manage showAiResults locally since it's not in the hook
   // const [showAiResults, setShowAiResults] = useState<boolean>(false);
 
   // Enhanced upload handler with debug tracking
@@ -224,10 +228,12 @@ const CreditReportUploadPage = () => {
       }));
     },
     onUploadComplete: (newTradelines: ParsedTradeline[]) => {
+      console.log('[DEBUG] onUploadComplete - user.id:', user?.id);
+      console.log('[DEBUG] onUploadComplete - tradelines user_ids:', newTradelines.map(t => t.user_id));
       // Ensure all required fields are present and properly typed
       const filledTradelines: ParsedTradeline[] = newTradelines.map(t => ({
-        id: t.id ?? `auto-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        user_id: t.user_id ?? user?.id ?? "",
+        id: t.id ?? `auto-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+        user_id: user?.id ?? "",
         creditor_name: t.creditor_name ?? "",
         account_number: t.account_number ?? "",
         account_balance: t.account_balance ?? CONSTANTS.DEFAULT_VALUES.ACCOUNT_BALANCE,
@@ -241,12 +247,13 @@ const CreditReportUploadPage = () => {
         dispute_count: t.dispute_count ?? CONSTANTS.DEFAULT_VALUES.DISPUTE_COUNT,
         credit_bureau: t.credit_bureau ?? "",
       }));
-      
+
+      console.log('🔍 [DEBUG] After forcing - user_ids:', filledTradelines.map(t => t.user_id));
       setTradelines(filledTradelines);
       setIsUploading(false);
       setUploadProgress(0);
       setProcessingStep("Upload completed successfully!");
-      
+
       setDebugInfo(prev => ({
         ...prev,
         processingStats: {
@@ -262,7 +269,7 @@ const CreditReportUploadPage = () => {
       setUploadProgress(0);
       setProcessingStep("Upload failed");
       sonnerToast("Upload Failed: Failed to process the uploaded file. Please try again.", { description: "Upload Error" });
-      
+
       setDebugInfo(prev => ({
         ...prev,
         processingStats: {
@@ -299,13 +306,13 @@ const CreditReportUploadPage = () => {
   };
 
   const displayDebugInfo = () => {
-    console.log('🔍 Debug Information:', debugInfo);
+    console.log('Debug Information:', debugInfo);
     setShowDebugInfo(!showDebugInfo);
   };
 
   const runApiTest = async () => {
     sonnerToast("Testing API connectivity...", { description: "Running Tests" });
-    
+
     const healthResult = await testApiHealth();
     setDebugInfo(prev => ({
       ...prev,
@@ -333,13 +340,24 @@ const CreditReportUploadPage = () => {
   const saveTradelines = useCallback(async () => {
     if (!user?.id || tradelines.length === 0) return;
     try {
-      await saveTradelinesToDatabase(tradelines, user.id);
+      console.log('[DEBUG] saveTradelines - user:', user);
+      console.log('[DEBUG] saveTradelines - user.id:', user.id, typeof user.id);
+      console.log('[DEBUG] Current user object:', user);
+      console.log('[DEBUG] Current user.id:', user?.id);
+
+      // Ensure we have a valid user ID string
+      const userId = typeof user.id === 'string' ? user.id : String(user.id);
+      console.log('[DEBUG] saveTradelines - processed userId:', userId);
+      console.log('[DEBUG] Calling saveTradelinesToDatabase with:', userId, typeof userId);
+
+      await saveTradelinesToDatabase(tradelines, userId);
+
       sonnerToast(`Successfully saved ${tradelines.length} tradeline(s) to database.`, { description: "Success" });
     } catch (saveError) {
       const errorMessage = saveError instanceof Error ? saveError.message : 'Unknown error occurred';
       sonnerToast(`Failed to save tradelines: ${errorMessage}`, { description: "Save Failed" });
     }
-  }, [user?.id, tradelines]);
+  }, [user, tradelines]);
 
   useEffect(() => {
     if (tradelines.length > 0 && user?.id) {
@@ -348,7 +366,7 @@ const CreditReportUploadPage = () => {
       }
       saveTimeoutRef.current = setTimeout(() => {
         saveTradelines();
-      }, CONSTANTS.SAVE_DELAY_MS);
+      }, CONSTANTS.SAVE_DELAY_MS) as unknown as number;
     }
     return () => {
       if (saveTimeoutRef.current) {
@@ -367,7 +385,7 @@ const CreditReportUploadPage = () => {
       }
       const tradelineWithDefaults: ParsedTradeline = {
         ...sanitizedTradeline,
-        id: `manual-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
         user_id: user?.id || "",
         created_at: new Date().toISOString(),
         account_balance: sanitizedTradeline.account_balance || CONSTANTS.DEFAULT_VALUES.ACCOUNT_BALANCE,
@@ -411,27 +429,27 @@ const CreditReportUploadPage = () => {
         <CardHeader>
           <CardTitle className="text-2xl flex items-center justify-between">
             Step 1: Upload or Add Tradelines
-            
+
             {/* Debug Controls */}
             <div className="flex gap-2">
-              <Badge 
+              <Badge
                 variant={debugInfo.apiConnectivity ? "default" : "destructive"}
                 className="text-xs"
               >
                 API: {debugInfo.apiConnectivity ? "✅ Connected" : "❌ Disconnected"}
               </Badge>
-              
-              <Button 
-                variant="outline" 
+
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={runApiTest}
                 className="text-xs"
               >
                 🔍 Test API
               </Button>
-              
-              <Button 
-                variant="outline" 
+
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={displayDebugInfo}
                 className="text-xs"
@@ -440,7 +458,7 @@ const CreditReportUploadPage = () => {
               </Button>
             </div>
           </CardTitle>
-          
+
           {/* Debug Information Panel */}
           {showDebugInfo && (
             <div className="mt-4 p-4 bg-muted rounded-lg text-sm">
@@ -463,16 +481,16 @@ const CreditReportUploadPage = () => {
                   </ul>
                 </div>
               </div>
-              
+
               {debugInfo.lastApiUrl && (
                 <div className="mt-2">
                   <strong>Last API URL:</strong> {debugInfo.lastApiUrl}
                 </div>
               )}
-              
+
               {debugInfo.lastError && (
                 <div className="mt-2">
-                  <strong>Last Error:</strong> 
+                  <strong>Last Error:</strong>
                   <div className="bg-red-100 text-red-800 p-2 rounded mt-1 text-xs">
                     {debugInfo.lastError}
                   </div>
@@ -481,7 +499,7 @@ const CreditReportUploadPage = () => {
             </div>
           )}
         </CardHeader>
-        
+
         <CardContent className="space-y-6">
           <div className="flex gap-4 text-sm">
             <button onClick={displayProcessingSteps} className="underline text-blue-600">
@@ -494,7 +512,7 @@ const CreditReportUploadPage = () => {
               Open Health Check
             </button>
           </div>
-          
+
           {/* File upload section */}
           <FileUploadSection
             onFileUpload={handleFileUpload}
@@ -502,7 +520,7 @@ const CreditReportUploadPage = () => {
             uploadProgress={uploadProgress}
             processingMethod={processingMethod}
           />
-          
+
           {/* Processing status */}
           {isUploading && (
             <Card className="bg-blue-50 border-blue-200">
@@ -512,15 +530,15 @@ const CreditReportUploadPage = () => {
                   <span className="text-xs text-muted-foreground">{uploadProgress}%</span>
                 </div>
                 <div className="w-full bg-blue-200 rounded-full h-2 mt-2">
-                  <div 
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                  <div
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                     style={{ width: `${uploadProgress}%` }}
                   ></div>
                 </div>
               </CardContent>
             </Card>
           )}
-          
+
           {/* Tradelines list */}
           <TradelinesList
             tradelines={tradelines}
@@ -530,13 +548,13 @@ const CreditReportUploadPage = () => {
             onSelect={handleSelectTradeline}
             onAddManual={() => setManualModalOpen(true)}
           />
-          
+
           {/* Upload actions */}
           <UploadActions
             selectedTradelineIds={selectedTradelineIds}
             tradelines={tradelines}
           />
-          
+
           {manualModalOpen && (
             <ManualTradelineModal
               onClose={() => setManualModalOpen(false)}

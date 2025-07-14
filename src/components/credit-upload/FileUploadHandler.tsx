@@ -1,6 +1,7 @@
 import { ChangeEvent, useCallback } from 'react';
 import { toast as sonnerToast } from "sonner";
 import { ParsedTradeline, ParsedTradelineSchema } from "@/utils/tradelineParser";
+import { v4 as uuidv4 } from 'uuid';
 
 
 // Sanitize tradelines before validation
@@ -66,6 +67,7 @@ interface ApiResponse {
   success: boolean;
   message?: string;
   tradelines: Array<{
+    user_id?: string;
     creditor_name?: string;
     account_balance?: string;
     credit_limit?: string;
@@ -234,14 +236,18 @@ const processCreditReportWithAPI = async (file: File, userId: string): Promise<P
     if (!result.success) {
       throw new Error(result.message || 'Processing failed');
     }
-
+    // In processCreditReportWithAPI function, after getting the result:
+    console.log('🔍 [DEBUG] API returned tradelines with user_ids:', 
+      result.tradelines.map(t => t.user_id || 'undefined'));
+    console.log('🔍 [DEBUG] Expected user_id should be:', userId);
+    
     // Convert API response to ParsedTradeline format with required fields
     const tradelines: ParsedTradeline[] = (result.tradelines || []).map(t => ({
-      id: `api-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: uuidv4(),
       user_id: userId,
       creditor_name: t.creditor_name || 'NULL',
       account_balance: t.account_balance || '',
-      created_at: new Date().toISOString(), // Ensure created_at is always present
+      created_at: new Date().toISOString(),
       dispute_count: t.dispute_count || 0,
       credit_limit: t.credit_limit || '',
       monthly_payment: t.monthly_payment || '',
@@ -271,6 +277,8 @@ const processCreditReportWithAPI = async (file: File, userId: string): Promise<P
     throw new Error(`Unknown error occurred: ${String(error)}`);
   }
 };
+
+
 
 // Test API connectivity
 const testApiConnectivity = async (): Promise<boolean> => {

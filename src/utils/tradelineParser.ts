@@ -17,6 +17,7 @@ export const APITradelineSchema = z.object({
 });
 
 export const ParsedTradelineSchema = z.object({
+  id: z.string().uuid("Invalid UUID format"),
   user_id: z.string().uuid("Invalid user ID format"),
   creditor_name: z.string().min(1, "Creditor name is required"),
   account_number: z.string().min(1, "Account number is required"),
@@ -52,6 +53,14 @@ export const generateUUID = (): string => {
 // Get user profile ID from auth user ID
 export const getUserProfileId = async (authUserId: string): Promise<string | null> => {
   try {
+    console.log('[DEBUG] getUserProfileId called with:', authUserId, typeof authUserId);
+    
+    // Ensure we have a valid string ID
+    if (!authUserId || typeof authUserId !== 'string') {
+      console.error('[ERROR] Invalid authUserId provided:', authUserId);
+      return null;
+    }
+    
     const { data: profile, error } = await supabase
       .from('profiles')
       .select('id')
@@ -98,76 +107,50 @@ export const convertAPITradelineToDatabase = (
 };
 
 // Save tradelines to Supabase database
-export const saveTradelinesToDatabase = async (
-  authUserId: string, 
-  apiTradelines: APITradeline[],
-  extractedFrom?: string
-): Promise<{ success: boolean; savedCount: number; error?: string }> => {
+export const saveTradelinesToDatabase = async (tradelines: ParsedTradeline[], authUserId: string) => {
   try {
-    console.log(`[DEBUG] 💾 Saving ${apiTradelines.length} tradelines to Supabase for user ${authUserId}`);
-
-    // First, get the user's profile ID
-    const userProfileId = await getUserProfileId(authUserId);
-    if (!userProfileId) {
-      throw new Error('User profile not found. Please complete your profile first.');
-    }
-
-    console.log(`[DEBUG] 👤 Using profile ID: ${userProfileId} for auth user: ${authUserId}`);
-
-    // Convert API tradelines to database format
-    const dbTradelines = apiTradelines.map(apiTradeline => 
-      convertAPITradelineToDatabase(apiTradeline, userProfileId)
-    );
-
-    // Delete existing tradelines for this user to avoid duplicates
-    console.log(`[DEBUG] 🗑️ Deleting existing tradelines for user profile: ${userProfileId}`);
+    console.log(`[DEBUG] 💾 Saving ${tradelines.length} tradelines to Supabase for user ${authUserId}`);
+    
+    // ✅ Use authUserId directly instead of getUserProfileId
+    const userId = authUserId; // Don't call getUserProfileId
+    
+    console.log(`[DEBUG] 👤 Using auth user ID directly: ${userId}`);
+    
+    // Delete existing tradelines
+    console.log(`[DEBUG] 🗑️ Deleting existing tradelines for user: ${userId}`);
     const { error: deleteError } = await supabase
       .from('tradelines')
       .delete()
-      .eq('user_id', userProfileId);
+      .eq('user_id', userId);
 
     if (deleteError) {
-      console.warn('[WARN] Failed to delete existing tradelines:', deleteError);
-      // Don't throw error here, continue with insert
+      console.error('[ERROR] Failed to delete existing tradelines:', deleteError);
+      throw deleteError;
     }
 
-    // Insert new tradelines
-    console.log(`[DEBUG] ➕ Inserting ${dbTradelines.length} new tradelines`);
-    const { data, error } = await supabase
+    // Insert new tradelines with authUserId
+    const tradelinesForDB = tradelines.map(t => ({
+      ...t,
+      user_id: userId, // Use auth user ID
+    }));
+
+    console.log(`[DEBUG] ➕ Inserting ${tradelinesForDB.length} new tradelines`);
+    const { data, error: insertError } = await supabase
       .from('tradelines')
-      .insert(dbTradelines.map(t => ({
-        user_id: t.user_id,
-        creditor_name: t.creditor_name,
-        account_number: t.account_number,
-        account_type: t.account_type,
-        account_status: t.account_status,
-        account_balance: t.account_balance,
-        date_opened: t.date_opened,
-        credit_bureau: t.credit_bureau,
-        is_negative: t.is_negative,
-        dispute_count: t.dispute_count,
-      })))
+      .insert(tradelinesForDB)
       .select();
 
-    if (error) {
-      console.error('[ERROR] ❌ Failed to save tradelines to Supabase:', error);
-      throw error;
+    if (insertError) {
+      console.error('[ERROR] ❌ Failed to save tradelines to Supabase:', insertError);
+      throw insertError;
     }
 
-    console.log(`[SUCCESS] ✅ Successfully saved ${data?.length || 0} tradelines to database`);
+    console.log(`[SUCCESS] ✅ Successfully saved ${data?.length || 0} tradelines`);
+    return data;
     
-    return {
-      success: true,
-      savedCount: data?.length || 0
-    };
-
   } catch (error) {
     console.error('[ERROR] ❌ Error in saveTradelinesToDatabase:', error);
-    return {
-      success: false,
-      savedCount: 0,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
-    };
+    throw error;
   }
 };
 
