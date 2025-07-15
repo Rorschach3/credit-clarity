@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
+import { usePersistentProfile } from "@/hooks/usePersistentProfile";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from 'sonner';
 import { Camera } from 'lucide-react';
@@ -16,6 +17,13 @@ type Profile = Database['public']['Tables']['profiles']['Row'];
 
 export default function ProfilePage() {
   const { user } = useAuth();
+  const { 
+    profile: persistentProfile, 
+    updateProfile, 
+    loading: profileLoading,
+    error: profileError 
+  } = usePersistentProfile();
+  
   const profileSchema = z.object({
     first_name: z.string().min(1, "First name is required"),
     last_name: z.string().min(1, "Last name is required"),
@@ -45,6 +53,25 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync persistent profile to local state
+  useEffect(() => {
+    if (persistentProfile) {
+      setProfile({
+        first_name: persistentProfile.first_name || '',
+        last_name: persistentProfile.last_name || '',
+        address1: persistentProfile.address1 || null,
+        address2: persistentProfile.address2 || null,
+        city: persistentProfile.city || null,
+        state: persistentProfile.state || null,
+        zip_code: persistentProfile.zip_code || null,
+        phone_number: persistentProfile.phone_number || null,
+        last_four_of_ssn: persistentProfile.last_four_of_ssn || null,
+        dob: persistentProfile.dob || null
+      });
+      setAvatarUrl(persistentProfile.avatar_url || null);
+    }
+  }, [persistentProfile]);
 
   // Memoize fetchProfile with useCallback
   const fetchProfile = useCallback(async () => {
@@ -120,12 +147,10 @@ export default function ProfilePage() {
       return;
     }
 
-  setIsLoading(true);
-  try {
-    const { error } = await supabase
-      .from('profiles')
-      .upsert({
-        user_id: user.id,
+    setIsLoading(true);
+    try {
+      // Use the persistent profile hook to update the profile
+      await updateProfile({
         first_name: profile.first_name,
         last_name: profile.last_name,
         address1: profile.address1 || null,
@@ -136,29 +161,13 @@ export default function ProfilePage() {
         phone_number: profile.phone_number || null,
         last_four_of_ssn: profile.last_four_of_ssn || null,
         dob: profile.dob || null,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'user_id'
+        avatar_url: avatarUrl || null
       });
 
-    if (error) throw error;
-
-      toast.success('Profile updated successfully!');
+      // Success toast is handled by the hook
     } catch (error) {
       console.error('Error updating profile:', error);
-      
-      // Type-safe error handling
-      if (error instanceof Error) {
-        console.error('API Error:', {
-          message: error.message,
-          name: error.name,
-          stack: error.stack
-        });
-      } else {
-        console.error('Unknown error type:', error);
-      }
-      
-      toast.error('Failed to update profile');
+      // Error toast is handled by the hook
     } finally {
       setIsLoading(false);
     }
@@ -380,8 +389,8 @@ export default function ProfilePage() {
               />
               </div>
 
-              <Button type="submit" disabled={isLoading} className="w-full">
-              {isLoading ? 'Updating...' : 'Update Profile'}
+              <Button type="submit" disabled={isLoading || profileLoading} className="w-full">
+              {isLoading || profileLoading ? 'Updating...' : 'Update Profile'}
               </Button>
             </form>
           </CardContent>

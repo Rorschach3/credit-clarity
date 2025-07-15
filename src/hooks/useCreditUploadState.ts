@@ -98,17 +98,17 @@ export const useCreditUploadState = (): UseCreditUploadStateReturn => {
   // Fixed: proper UUID generation and database saving
   const handleAddManual = useCallback(async (
     tradelineData: Partial<ParsedTradeline>, 
-    authUserId: string
+    UserId: string
   ) => {
     try {
       setIsLoading(true);
-      console.log('[DEBUG] 📝 Adding manual tradeline for user:', authUserId);
+      console.log('[DEBUG] 📝 Adding manual tradeline for user:', UserId);
 
 
       // Create complete tradeline with proper UUID
       const completeTradeline: ParsedTradeline = {
-        id: generateUUID(), // Use proper UUID generator
-        user_id: authUserId,
+        id: generateUUID(),
+        user_id: UserId,
         creditor_name: tradelineData.creditor_name || '',
         account_number: tradelineData.account_number || '',
         account_balance: tradelineData.account_balance || '$0',
@@ -116,11 +116,17 @@ export const useCreditUploadState = (): UseCreditUploadStateReturn => {
         account_type: tradelineData.account_type || '',
         date_opened: tradelineData.date_opened || '',
         is_negative: tradelineData.is_negative || false,
-        credit_bureau: tradelineData.credit_bureau || 'Unknown',
         dispute_count: tradelineData.dispute_count || 0,
+        credit_limit: tradelineData.credit_limit || '$0',
+        credit_bureau: tradelineData.credit_bureau || 'Unknown',
         created_at: new Date().toISOString(),
-        ...tradelineData // Override with any provided data
+        monthly_payment: tradelineData.monthly_payment || '',
+        ...tradelineData, // Override with any provided data, but ensure monthly_payment is always string
       };
+      // Ensure monthly_payment is always string (never undefined)
+      if (typeof completeTradeline.monthly_payment !== 'string') {
+        completeTradeline.monthly_payment = '';
+      }
 
       // Validate the tradelined
       const validation = validateParsedTradeline(completeTradeline);
@@ -131,7 +137,7 @@ export const useCreditUploadState = (): UseCreditUploadStateReturn => {
       // Save to database
       const { data, error } = await supabase
         .from('tradelines')
-        .insert({
+        .upsert({
           id: completeTradeline.id,
           user_id: completeTradeline.user_id,
           creditor_name: completeTradeline.creditor_name,
@@ -140,9 +146,11 @@ export const useCreditUploadState = (): UseCreditUploadStateReturn => {
           account_status: completeTradeline.account_status,
           account_balance: completeTradeline.account_balance,
           date_opened: completeTradeline.date_opened,
-          credit_bureau: completeTradeline.credit_bureau,
           is_negative: completeTradeline.is_negative,
           dispute_count: completeTradeline.dispute_count,
+          monthly_payment: tradelineData.monthly_payment || '',
+          created_at: completeTradeline.created_at,
+          credit_bureau: tradelineData.credit_bureau || 'Unknown',
         })
         .select()
         .single();

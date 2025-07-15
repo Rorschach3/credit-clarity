@@ -4,15 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast as sonnerToast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
-import { saveTradelinesToDatabase, ParsedTradeline } from "@/utils/tradelineParser";
+import { saveTradelinesToDatabase, ParsedTradeline, loadAllTradelinesFromDatabase } from "@/utils/tradelineParser";
 import { ManualTradelineModal } from "@/components/disputes/ManualTradelineModal";
 import { FileUploadSection } from "@/components/credit-upload/FileUploadSection";
 import { TradelinesList } from "@/components/credit-upload/TradelinesList";
 import { UploadActions } from "@/components/credit-upload/UploadActions";
+import PaginatedTradelinesList from "@/components/credit-upload/PaginatedTradelinesList";
 import { useCreditReportProcessing } from "@/hooks/useCreditReportProcessing";
 import { useCreditUploadState } from "@/hooks/useCreditUploadState";
 import { useFileUploadHandler } from "@/components/credit-upload/FileUploadHandler";
+import { usePersistentTradelines } from "@/hooks/usePersistentTradelines";
 import { CreditNavbar } from "@/components/navbar/CreditNavbar";
+import { TradelinesStatus } from "@/components/ui/tradelines-status";
 import { z } from "zod";
 
 type ManualTradelineInput = Omit<ParsedTradeline, 'id' | 'user_id' | 'created_at'>;
@@ -166,6 +169,7 @@ const CreditReportUploadPage = () => {
   const saveTimeoutRef = useRef<number>();
   const [processingStep, setProcessingStep] = useState<string>("Waiting for upload...");
   const [showDebugInfo, setShowDebugInfo] = useState<boolean>(false);
+  const [usePagination, setUsePagination] = useState<boolean>(false);
   const [debugInfo, setDebugInfo] = useState<DebugInfo>({
     apiConnectivity: false,
     lastApiUrl: '',
@@ -181,6 +185,17 @@ const CreditReportUploadPage = () => {
       failedUploads: 0,
     }
   });
+
+  // Use persistent tradelines hook
+  const {
+    tradelines: persistentTradelines,
+    loading: tradelinesLoading,
+    error: tradelinesError,
+    addTradelines,
+    updateTradeline: updatePersistentTradeline,
+    deleteTradeline: deletePersistentTradeline,
+    refreshTradelines
+  } = usePersistentTradelines();
 
   const {
     tradelines,
@@ -230,6 +245,7 @@ const CreditReportUploadPage = () => {
     onUploadComplete: (newTradelines: ParsedTradeline[]) => {
       console.log('[DEBUG] onUploadComplete - user.id:', user?.id);
       console.log('[DEBUG] onUploadComplete - tradelines user_ids:', newTradelines.map(t => t.user_id));
+      
       // Ensure all required fields are present and properly typed
       const filledTradelines: ParsedTradeline[] = newTradelines.map(t => ({
         id: t.id ?? `auto-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
@@ -248,8 +264,12 @@ const CreditReportUploadPage = () => {
         credit_bureau: t.credit_bureau ?? "",
       }));
 
-      console.log('🔍 [DEBUG] After forcing - user_ids:', filledTradelines.map(t => t.user_id));
-      setTradelines(filledTradelines);
+      console.log('🔍 [DEBUG] After processing - user_ids:', filledTradelines.map(t => t.user_id));
+      
+      // Add new tradelines to persistent storage
+      addTradelines(filledTradelines);
+      console.log('[DEBUG] Added new tradelines to persistent storage:', filledTradelines.length);
+      
       setIsUploading(false);
       setUploadProgress(0);
       setProcessingStep("Upload completed successfully!");
@@ -286,6 +306,32 @@ const CreditReportUploadPage = () => {
     extractKeywordsFromText,
     generateAIInsights
   });
+
+  // Sync persistent tradelines with local state
+  useEffect(() => {
+    if (persistentTradelines.length > 0) {
+      setTradelines(persistentTradelines);
+      console.log('[DEBUG] Synced persistent tradelines to local state:', persistentTradelines.length);
+    }
+  }, [persistentTradelines, setTradelines]);
+
+  // Show loading notification
+  useEffect(() => {
+    if (tradelinesLoading) {
+      sonnerToast('Loading existing tradelines...', {
+        description: 'Fetching from database'
+      });
+    }
+  }, [tradelinesLoading]);
+
+  // Show error notification
+  useEffect(() => {
+    if (tradelinesError) {
+      sonnerToast('Failed to load existing tradelines', {
+        description: tradelinesError
+      });
+    }
+  }, [tradelinesError]);
 
   // Test API connectivity on component mount
   useEffect(() => {
@@ -342,8 +388,13 @@ const CreditReportUploadPage = () => {
     try {
       console.log('[DEBUG] saveTradelines - user:', user);
       console.log('[DEBUG] saveTradelines - user.id:', user.id, typeof user.id);
-      console.log('[DEBUG] Current user object:', user);
-      console.log('[DEBUG] Current user.id:', user?.id);
+      console.log('[DEBUG] tradelines.length:', tradelines.length);
+      console.log('[DEBUG] tradelines array:', tradelines.map((t, i) => ({
+        index: i,
+        creditor: t.creditor_name,
+        account: t.account_number,
+        user_id: t.user_id
+      })));
 
       // Ensure we have a valid user ID string
       const userId = typeof user.id === 'string' ? user.id : String(user.id);
@@ -456,6 +507,16 @@ const CreditReportUploadPage = () => {
               >
                 🐛 Debug Info
               </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={refreshTradelines}
+                disabled={tradelinesLoading}
+                className="text-xs"
+              >
+                {tradelinesLoading ? '🔄' : '📊'} Sync DB
+              </Button>
             </div>
           </CardTitle>
 
@@ -501,6 +562,14 @@ const CreditReportUploadPage = () => {
         </CardHeader>
 
         <CardContent className="space-y-6">
+          {/* Tradelines Status Component */}
+          <TradelinesStatus
+            loading={tradelinesLoading}
+            error={tradelinesError}
+            tradelinesCount={persistentTradelines.length}
+            onRefresh={refreshTradelines}
+          />
+
           <div className="flex gap-4 text-sm">
             <button onClick={displayProcessingSteps} className="underline text-blue-600">
               Show Status
@@ -539,15 +608,50 @@ const CreditReportUploadPage = () => {
             </Card>
           )}
 
+          {/* View Toggle */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Button
+                variant={!usePagination ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUsePagination(false)}
+              >
+                Simple View
+              </Button>
+              <Button
+                variant={usePagination ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUsePagination(true)}
+              >
+                Paginated View
+              </Button>
+            </div>
+            {!usePagination && (
+              <span className="text-sm text-muted-foreground">
+                {tradelines.length} tradeline(s)
+              </span>
+            )}
+          </div>
+
           {/* Tradelines list */}
-          <TradelinesList
-            tradelines={tradelines}
-            selectedTradelineIds={selectedTradelineIds}
-            onUpdate={updateTradeline} // ✅ Use ID-based update
-            onDelete={deleteTradeline} // ✅ Use ID-based delete
-            onSelect={handleSelectTradeline}
-            onAddManual={() => setManualModalOpen(true)}
-          />
+          {usePagination ? (
+            <PaginatedTradelinesList
+              userId={user?.id || ""}
+              onSelect={handleSelectTradeline}
+              onUpdate={updateTradeline}
+              onDelete={deleteTradeline}
+              selectedIds={selectedTradelineIds}
+            />
+          ) : (
+            <TradelinesList
+              tradelines={tradelines}
+              selectedTradelineIds={selectedTradelineIds}
+              onUpdate={updateTradeline}
+              onDelete={deleteTradeline}
+              onSelect={handleSelectTradeline}
+              onAddManual={() => setManualModalOpen(true)}
+            />
+          )}
 
           {/* Upload actions */}
           <UploadActions

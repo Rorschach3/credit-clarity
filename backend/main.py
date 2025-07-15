@@ -211,61 +211,106 @@ class DocumentAIProcessor:
 
 class GeminiProcessor:
     def extract_tradelines(self, text: str) -> List[Dict[str, Any]]:
-        """Extract tradelines using Gemini AI"""
+        """Extract tradelines using Gemini AI with chunking support"""
         try:
             logger.info(f"🧠 Starting Gemini tradeline extraction from {len(text)} characters")
             
             if not gemini_model:
                 raise Exception("Gemini model not initialized")
             
-            prompt = f"""
-            Extract credit tradeline information from this credit report text. 
-            Return ONLY a JSON array of objects with these exact fields:
-            - creditor_name (string)
-            - account_balance (string, include $ if present)
-            - credit_limit (string, include $ if present) 
-            - monthly_payment (string, include $ if present)
-            - account_number (string)
-            - date_opened (string, format: MM/DD/YYYY)
-            - account_type (string: Credit Card, Mortgage, Auto Loan, etc.)
-            - account_status (string: Open, Closed, Current, etc.)
-            - credit_bureau (string: Experian, Equifax, TransUnion)
-            - is_negative (boolean: true if account has negative marks)
-
-            Text to analyze:
-            {text[:8000]}  # Limit text for token constraints
-
-            Return only valid JSON array, no explanations:
-            """
-            
-            logger.info("🚀 Sending request to Gemini...")
-            response = gemini_model.generate_content(prompt)
-            logger.info(f"✅ Gemini response received: {len(response.text)} characters")
-            
-            # Clean up response to extract JSON
-            response_text = response.text.strip()
-            logger.debug(f"📝 Raw Gemini response: {response_text[:500]}...")
-            
-            # Remove markdown code blocks if present
-            if response_text.startswith("```"):
-                response_text = re.sub(r'^```json\s*', '', response_text)
-                response_text = re.sub(r'\s*```$', '', response_text)
-            
-            # Find JSON array
-            json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
-            if json_match:
-                import json
-                tradelines = json.loads(json_match.group())
-                logger.info(f"✅ Gemini extracted {len(tradelines)} tradelines")
-                return tradelines
+            # If text is too long, process in chunks
+            if len(text) > 15000:
+                return self._extract_tradelines_chunked(text)
             else:
-                logger.warning("⚠️ No JSON array found in Gemini response")
-                return []
+                return self._extract_tradelines_single(text)
                 
         except Exception as e:
             logger.error(f"❌ Gemini processing failed: {str(e)}")
             logger.error(f"📍 Traceback: {traceback.format_exc()}")
             return []
+    
+    def _extract_tradelines_single(self, text: str) -> List[Dict[str, Any]]:
+        """Extract tradelines from a single text chunk"""
+        prompt = f"""
+        Extract credit tradeline information from this credit report text. 
+        Return ONLY a JSON array of objects with these exact fields:
+        - creditor_name (string)
+        - account_balance (string, include $ if present)
+        - credit_limit (string, include $ if present) 
+        - monthly_payment (string, include $ if present)
+        - account_number (string)
+        - date_opened (string, format: MM/DD/YYYY)
+        - account_type (string: Credit Card, Mortgage, Auto Loan, etc.)
+        - account_status (string: Open, Closed, Current, etc.)
+        - credit_bureau (string: Experian, Equifax, TransUnion)
+        - is_negative (boolean: true if account has negative marks)
+
+        Text to analyze:
+        {text[:15000]}
+
+        Return only valid JSON array, no explanations:
+        """
+        
+        logger.info("🚀 Sending request to Gemini...")
+        response = gemini_model.generate_content(prompt)
+        logger.info(f"✅ Gemini response received: {len(response.text)} characters")
+        
+        # Clean up response to extract JSON
+        response_text = response.text.strip()
+        logger.debug(f"📝 Raw Gemini response: {response_text[:500]}...")
+        
+        # Remove markdown code blocks if present
+        if response_text.startswith("```"):
+            response_text = re.sub(r'^```json\s*', '', response_text)
+            response_text = re.sub(r'\s*```$', '', response_text)
+        
+        # Find JSON array
+        json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
+        if json_match:
+            import json
+            tradelines = json.loads(json_match.group())
+            logger.info(f"✅ Gemini extracted {len(tradelines)} tradelines")
+            return tradelines
+        else:
+            logger.warning("⚠️ No JSON array found in Gemini response")
+            return []
+    
+    def _extract_tradelines_chunked(self, text: str) -> List[Dict[str, Any]]:
+        """Extract tradelines from text by processing in chunks"""
+        logger.info(f"📖 Processing large text in chunks: {len(text)} characters")
+        
+        chunk_size = 15000
+        overlap = 500  # Overlap to avoid cutting tradelines
+        chunks = []
+        
+        # Split text into overlapping chunks
+        for i in range(0, len(text), chunk_size - overlap):
+            chunk = text[i:i + chunk_size]
+            chunks.append(chunk)
+        
+        logger.info(f"🔄 Split into {len(chunks)} chunks")
+        
+        all_tradelines = []
+        seen_tradelines = set()  # To avoid duplicates
+        
+        for i, chunk in enumerate(chunks):
+            try:
+                logger.info(f"🔍 Processing chunk {i+1}/{len(chunks)}")
+                chunk_tradelines = self._extract_tradelines_single(chunk)
+                
+                # Deduplicate tradelines based on creditor name + account number
+                for tradeline in chunk_tradelines:
+                    identifier = f"{tradeline.get('creditor_name', '')}_{tradeline.get('account_number', '')}"
+                    if identifier not in seen_tradelines:
+                        seen_tradelines.add(identifier)
+                        all_tradelines.append(tradeline)
+                        
+            except Exception as e:
+                logger.error(f"❌ Failed to process chunk {i+1}: {str(e)}")
+                continue
+        
+        logger.info(f"✅ Total tradelines extracted from all chunks: {len(all_tradelines)}")
+        return all_tradelines
 
 def parse_tradelines_basic(text: str) -> List[Dict[str, Any]]:
     """Basic tradeline parsing as backup"""
@@ -274,17 +319,91 @@ def parse_tradelines_basic(text: str) -> List[Dict[str, Any]]:
         tradelines = []
         lines = text.split('\n')
         
-        # Common creditor patterns
+        # Comprehensive creditor patterns
         creditor_patterns = [
-            r'(CHASE|Chase|chase)',
-            r'(CAPITAL ONE|Capital One|capital one)',
-            r'(CITIBANK|Citibank|citibank|CITI|Citi)',
-            r'(BANK OF AMERICA|Bank of America|BOA)',
-            r'(WELLS FARGO|Wells Fargo)',
-            r'(DISCOVER|Discover)',
-            r'(AMERICAN EXPRESS|American Express|AMEX)',
-            r'(SYNCHRONY|Synchrony)',
-            r'(CREDIT ONE|Credit One)'
+            # Major Banks
+            r'(CHASE|Chase|chase|JP MORGAN|JPMorgan|JPMORGAN)',
+            r'(CAPITAL ONE|Capital One|capital one|CAP ONE|CAPONE)',
+            r'(CITIBANK|Citibank|citibank|CITI|Citi|citi)',
+            r'(BANK OF AMERICA|Bank of America|BOA|B OF A)',
+            r'(WELLS FARGO|Wells Fargo|WELLS|Wells)',
+            r'(DISCOVER|Discover|discover)',
+            r'(AMERICAN EXPRESS|American Express|AMEX|AmEx|amex)',
+            r'(SYNCHRONY|Synchrony|synchrony)',
+            r'(CREDIT ONE|Credit One|credit one)',
+            r'(US BANK|US Bank|U\.S\. Bank|USBANK)',
+            r'(PNC|PNC Bank|pnc)',
+            r'(TD BANK|TD Bank|td bank)',
+            r'(REGIONS|Regions|regions)',
+            r'(ALLY|Ally|ally)',
+            r'(MARCUS|Marcus|marcus)',
+            r'(BARCLAYS|Barclays|barclays)',
+            r'(HSBC|hsbc)',
+            
+            # Credit Cards
+            r'(MASTERCARD|MasterCard|mastercard)',
+            r'(VISA|Visa|visa)',
+            r'(STORE CARD|Store Card|store card)',
+            
+            # Store Cards
+            r'(AMAZON|Amazon|amazon)',
+            r'(TARGET|Target|target)',
+            r'(HOME DEPOT|Home Depot|HOMEDEPOT)',
+            r'(LOWES|Lowe\'s|LOWE\'S|lowes)',
+            r'(WALMART|Walmart|walmart)',
+            r'(COSTCO|Costco|costco)',
+            r'(NORDSTROM|Nordstrom|nordstrom)',
+            r'(MACY\'S|Macy\'s|macys)',
+            r'(KOHL\'S|Kohl\'s|kohls)',
+            r'(BEST BUY|Best Buy|bestbuy)',
+            r'(APPLE|Apple|apple)',
+            
+            # Auto Loans
+            r'(FORD CREDIT|Ford Credit|ford credit)',
+            r'(HONDA FINANCIAL|Honda Financial|honda financial)',
+            r'(TOYOTA FINANCIAL|Toyota Financial|toyota financial)',
+            r'(NISSAN MOTOR|Nissan Motor|nissan motor)',
+            r'(GM FINANCIAL|GM Financial|gm financial)',
+            r'(CHRYSLER CAPITAL|Chrysler Capital|chrysler capital)',
+            r'(ALLY AUTO|Ally Auto|ally auto)',
+            r'(SANTANDER|Santander|santander)',
+            
+            # Student Loans
+            r'(NAVIENT|Navient|navient)',
+            r'(GREAT LAKES|Great Lakes|great lakes)',
+            r'(NELNET|Nelnet|nelnet)',
+            r'(FEDLOAN|FedLoan|fedloan)',
+            r'(MOHELA|MOHELA|mohela)',
+            r'(DEPT OF EDUCATION|Department of Education|dept of education)',
+            r'(STUDENT LOAN|Student Loan|student loan)',
+            
+            # Mortgage
+            r'(QUICKEN LOANS|Quicken Loans|quicken loans)',
+            r'(ROCKET MORTGAGE|Rocket Mortgage|rocket mortgage)',
+            r'(FREEDOM MORTGAGE|Freedom Mortgage|freedom mortgage)',
+            r'(PENNYMAC|PennyMac|pennymac)',
+            r'(CALIBER HOME|Caliber Home|caliber home)',
+            r'(MORTGAGE|Mortgage|mortgage)',
+            
+            # Credit Unions
+            r'(NAVY FEDERAL|Navy Federal|navy federal)',
+            r'(USAA|usaa)',
+            r'(PENTAGON FCU|Pentagon FCU|pentagon fcu)',
+            r'(CREDIT UNION|Credit Union|credit union)',
+            
+            # Other Financial
+            r'(PAYPAL|PayPal|paypal)',
+            r'(AFFIRM|Affirm|affirm)',
+            r'(KLARNA|Klarna|klarna)',
+            r'(AFTERPAY|Afterpay|afterpay)',
+            r'(UPLIFT|Uplift|uplift)',
+            r'(LENDING CLUB|Lending Club|lending club)',
+            r'(PROSPER|Prosper|prosper)',
+            r'(SOFI|SoFi|sofi)',
+            r'(AVANT|Avant|avant)',
+            r'(ONEMAIN|OneMain|onemain)',
+            r'(SPRINGLEAF|Springleaf|springleaf)',
+            r'(PERSONAL LOAN|Personal Loan|personal loan)'
         ]
         
         current_tradeline = {}
@@ -297,38 +416,126 @@ def parse_tradelines_basic(text: str) -> List[Dict[str, Any]]:
             # Look for creditor names
             for pattern in creditor_patterns:
                 if re.search(pattern, line, re.IGNORECASE):
-                    if current_tradeline:
+                    # Save previous tradeline if it exists
+                    if current_tradeline and current_tradeline.get("creditor_name"):
                         tradelines.append(current_tradeline)
+                    
+                    # Extract creditor name
+                    creditor_match = re.search(pattern, line, re.IGNORECASE)
+                    creditor_name = creditor_match.group(0) if creditor_match else "Unknown"
+                    
+                    # Determine account type based on creditor
+                    account_type = "Credit Card"  # default
+                    if any(loan_type in creditor_name.upper() for loan_type in ["AUTO", "FORD", "HONDA", "TOYOTA", "NISSAN", "GM", "CHRYSLER", "ALLY AUTO", "SANTANDER"]):
+                        account_type = "Auto Loan"
+                    elif any(loan_type in creditor_name.upper() for loan_type in ["STUDENT", "NAVIENT", "GREAT LAKES", "NELNET", "FEDLOAN", "MOHELA", "DEPT OF EDUCATION"]):
+                        account_type = "Student Loan"
+                    elif any(loan_type in creditor_name.upper() for loan_type in ["MORTGAGE", "QUICKEN", "ROCKET", "FREEDOM", "PENNYMAC", "CALIBER"]):
+                        account_type = "Mortgage"
+                    elif any(loan_type in creditor_name.upper() for loan_type in ["PERSONAL", "LENDING", "PROSPER", "SOFI", "AVANT", "ONEMAIN", "SPRINGLEAF"]):
+                        account_type = "Personal Loan"
+                    
                     current_tradeline = {
-                        "creditor_name": re.search(pattern, line, re.IGNORECASE).group(0),
-                        "account_type": "Credit Card",
-                        "account_status": "Open", 
-                        "credit_bureau": "Unknown",
+                        "creditor_name": creditor_name,
+                        "account_type": account_type,
+                        "account_status": "Open",
+                        "credit_bureau": "Unknown", 
                         "is_negative": False,
                         "account_balance": "",
                         "credit_limit": "",
                         "monthly_payment": "",
                         "account_number": "",
-                        "date_opened": "xx/xx/xxxxx",
+                        "date_opened": "",
                         "dispute_count": 0
                     }
                     break
             
-            # Look for account numbers
+            # Enhance data extraction for current tradeline
             if current_tradeline:
-                account_match = re.search(r'\*{4,}\d{4}', line)
-                if account_match:
-                    current_tradeline["account_number"] = account_match.group(0)
+                # Look for account numbers (various formats)
+                account_patterns = [
+                    r'\*{4,}\d{4}',  # ****1234
+                    r'x{4,}\d{4}',   # xxxx1234
+                    r'\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}',  # Full card numbers
+                    r'Account\s*#?\s*:?\s*(\d+)',  # Account #: 123456
+                    r'Acct\s*#?\s*:?\s*(\d+)'     # Acct #: 123456
+                ]
                 
-                # Look for dollar amounts
+                for pattern in account_patterns:
+                    account_match = re.search(pattern, line, re.IGNORECASE)
+                    if account_match:
+                        current_tradeline["account_number"] = account_match.group(0)
+                        break
+                
+                # Look for dollar amounts with better context
                 dollar_matches = re.findall(r'\$[\d,]+\.?\d*', line)
+                balance_keywords = ['balance', 'amount', 'owed', 'debt']
+                limit_keywords = ['limit', 'credit limit', 'maximum']
+                payment_keywords = ['payment', 'monthly', 'minimum']
+                
                 for amount in dollar_matches:
-                    if not current_tradeline["account_balance"]:
+                    line_lower = line.lower()
+                    
+                    # Check context for balance
+                    if any(kw in line_lower for kw in balance_keywords) and not current_tradeline["account_balance"]:
+                        current_tradeline["account_balance"] = amount
+                    # Check context for credit limit
+                    elif any(kw in line_lower for kw in limit_keywords) and not current_tradeline["credit_limit"]:
+                        current_tradeline["credit_limit"] = amount
+                    # Check context for payment
+                    elif any(kw in line_lower for kw in payment_keywords) and not current_tradeline["monthly_payment"]:
+                        current_tradeline["monthly_payment"] = amount
+                    # Default assignment if no context
+                    elif not current_tradeline["account_balance"]:
                         current_tradeline["account_balance"] = amount
                     elif not current_tradeline["credit_limit"]:
                         current_tradeline["credit_limit"] = amount
+                
+                # Look for dates
+                date_patterns = [
+                    r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}',  # MM/DD/YYYY or MM-DD-YYYY
+                    r'\d{2,4}[/-]\d{1,2}[/-]\d{1,2}',  # YYYY/MM/DD or YYYY-MM-DD
+                    r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4}',  # Month DD, YYYY
+                    r'\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}'  # DD Month YYYY
+                ]
+                
+                for pattern in date_patterns:
+                    date_match = re.search(pattern, line, re.IGNORECASE)
+                    if date_match and not current_tradeline["date_opened"]:
+                        current_tradeline["date_opened"] = date_match.group(0)
+                        break
+                
+                # Look for status indicators
+                status_patterns = {
+                    'Current': r'current|open|active|good standing',
+                    'Closed': r'closed|terminated|paid off|satisfied',
+                    'Late': r'late|delinquent|past due|30 days|60 days|90 days',
+                    'Charged Off': r'charged off|charge off|written off',
+                    'Collection': r'collection|collections|assigned'
+                }
+                
+                for status, pattern in status_patterns.items():
+                    if re.search(pattern, line, re.IGNORECASE):
+                        current_tradeline["account_status"] = status
+                        # Mark as negative if it's a bad status
+                        if status in ['Late', 'Charged Off', 'Collection']:
+                            current_tradeline["is_negative"] = True
+                        break
+                
+                # Look for credit bureau mentions
+                bureau_patterns = {
+                    'Experian': r'experian|exp\b',
+                    'Equifax': r'equifax|eqf\b',
+                    'TransUnion': r'transunion|trans union|tru\b'
+                }
+                
+                for bureau, pattern in bureau_patterns.items():
+                    if re.search(pattern, line, re.IGNORECASE):
+                        current_tradeline["credit_bureau"] = bureau
+                        break
         
-        if current_tradeline:
+        # Add the last tradeline if it exists
+        if current_tradeline and current_tradeline.get("creditor_name"):
             tradelines.append(current_tradeline)
         
         logger.info(f"✅ Basic parsing extracted {len(tradelines)} tradelines")
@@ -490,6 +697,79 @@ async def health_check():
     
     logger.info("🔍 Health check requested")
     return health_status
+
+@app.post("/debug-parsing")
+async def debug_parsing(
+    file: UploadFile = File(...),
+    method: str = Form(default="all")  # "all", "gemini", "basic"
+):
+    """Debug endpoint to test different parsing methods"""
+    try:
+        logger.info(f"🐛 Debug parsing request: method={method}")
+        
+        # Read file content
+        content = await file.read()
+        logger.info(f"📦 File size: {len(content)} bytes")
+        
+        # Extract text using PyPDF2
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+            temp_file.write(content)
+            temp_file_path = temp_file.name
+        
+        try:
+            with open(temp_file_path, 'rb') as f:
+                reader = PyPDF2.PdfReader(f)
+                text = ""
+                for page in reader.pages:
+                    text += page.extract_text()
+            
+            logger.info(f"📖 Extracted {len(text)} characters from PDF")
+            
+            results = {
+                "text_length": len(text),
+                "first_500_chars": text[:500],
+                "methods": {}
+            }
+            
+            # Test different methods
+            if method in ["all", "gemini"]:
+                try:
+                    gemini_processor = GeminiProcessor()
+                    gemini_tradelines = gemini_processor.extract_tradelines(text)
+                    results["methods"]["gemini"] = {
+                        "tradelines": gemini_tradelines,
+                        "count": len(gemini_tradelines)
+                    }
+                except Exception as e:
+                    results["methods"]["gemini"] = {
+                        "error": str(e),
+                        "count": 0
+                    }
+            
+            if method in ["all", "basic"]:
+                try:
+                    basic_tradelines = parse_tradelines_basic(text)
+                    results["methods"]["basic"] = {
+                        "tradelines": basic_tradelines,
+                        "count": len(basic_tradelines)
+                    }
+                except Exception as e:
+                    results["methods"]["basic"] = {
+                        "error": str(e),
+                        "count": 0
+                    }
+            
+            return results
+            
+        finally:
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
+                
+    except Exception as e:
+        logger.error(f"❌ Debug parsing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Debug parsing failed: {str(e)}")
 
 @app.post("/process-credit-report")
 async def process_credit_report(

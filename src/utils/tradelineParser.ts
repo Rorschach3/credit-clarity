@@ -12,7 +12,6 @@ export const APITradelineSchema = z.object({
   account_type: z.string().min(1, "Account type is required"),
   date_opened: z.string().default(""),
   is_negative: z.boolean().default(false),
-  credit_bureau: z.string().min(1, "Credit bureau is required"),
   dispute_count: z.number().int().min(0).default(0)
 });
 
@@ -26,10 +25,10 @@ export const ParsedTradelineSchema = z.object({
   account_type: z.string().min(1, "Account type is required"),
   date_opened: z.string().default(""),
   is_negative: z.boolean().default(false),
-  credit_bureau: z.string().min(1, "Credit bureau is required"),
   dispute_count: z.number().int().min(0).default(0),
   created_at: z.string().datetime("Invalid datetime format"),
   credit_limit: z.string().default("$0"),
+  credit_bureau: z.string().default("Unknown"),
   monthly_payment: z.string().default("$0"),
 });
 
@@ -82,7 +81,7 @@ export const getUserProfileId = async (authUserId: string): Promise<string | nul
 // Convert API tradeline to database format
 export const convertAPITradelineToDatabase = (
   apiTradeline: APITradeline, 
-  userProfileId: string,
+  authUserId: string,
 ): ParsedTradeline => {
   // Determine if tradeline is negative
   const isNegative = apiTradeline.is_negative || 
@@ -91,19 +90,21 @@ export const convertAPITradelineToDatabase = (
     );
 
   return {
-    id: generateUUID(), // Generate proper UUID
-    user_id: userProfileId, // Use profile ID, not auth user ID
-    creditor_name: apiTradeline.creditor_name || 'Unknown Creditor',
-    account_number: apiTradeline.account_number || 'Unknown',
-    account_balance: apiTradeline.account_balance || '$0',
-    account_status: apiTradeline.account_status || 'Unknown',
-    account_type: apiTradeline.account_type || 'Unknown',
-    date_opened: apiTradeline.date_opened || '',
-    is_negative: isNegative,
-    credit_bureau: apiTradeline.credit_bureau || 'Unknown',
-    dispute_count: apiTradeline.dispute_count || 0,
-    created_at: new Date().toISOString()
-  };
+  id: generateUUID(), // Generate proper UUID
+  user_id: authUserId, // Use auth user ID
+  creditor_name: apiTradeline.creditor_name || 'Unknown Creditor',
+  account_number: apiTradeline.account_number || 'Unknown',
+  account_balance: apiTradeline.account_balance || '$0',
+  account_status: apiTradeline.account_status || 'Unknown',
+  account_type: apiTradeline.account_type || 'Unknown',
+  date_opened: apiTradeline.date_opened || '',
+  is_negative: isNegative,
+  dispute_count: apiTradeline.dispute_count || 0,
+  created_at: new Date().toISOString(),
+  credit_bureau: '',
+  credit_limit: '',
+  monthly_payment: ''
+};
 };
 
 // Save tradelines to Supabase database
@@ -116,28 +117,26 @@ export const saveTradelinesToDatabase = async (tradelines: ParsedTradeline[], au
     
     console.log(`[DEBUG] 👤 Using auth user ID directly: ${userId}`);
     
-    // Delete existing tradelines
-    console.log(`[DEBUG] 🗑️ Deleting existing tradelines for user: ${userId}`);
-    const { error: deleteError } = await supabase
-      .from('tradelines')
-      .delete()
-      .eq('user_id', userId);
-
-    if (deleteError) {
-      console.error('[ERROR] Failed to delete existing tradelines:', deleteError);
-      throw deleteError;
-    }
-
-    // Insert new tradelines with authUserId
+    // No deletion - just upsert new tradelines (will update existing duplicates)
     const tradelinesForDB = tradelines.map(t => ({
       ...t,
       user_id: userId, // Use auth user ID
     }));
 
-    console.log(`[DEBUG] ➕ Inserting ${tradelinesForDB.length} new tradelines`);
+    // Log each tradeline being saved for debugging
+    console.log(`[DEBUG] ➕ Upserting ${tradelinesForDB.length} tradelines (will overwrite duplicates)`);
+    console.log(`[DEBUG] Tradelines to save:`, tradelinesForDB.map(t => ({
+      creditor: t.creditor_name,
+      account: t.account_number,
+      user_id: t.user_id
+    })));
+    
     const { data, error: insertError } = await supabase
       .from('tradelines')
-      .insert(tradelinesForDB)
+      .upsert(tradelinesForDB, { 
+        onConflict: 'user_id,account_number,creditor_name',
+        ignoreDuplicates: false 
+      })
       .select();
 
     if (insertError) {
@@ -154,38 +153,137 @@ export const saveTradelinesToDatabase = async (tradelines: ParsedTradeline[], au
   }
 };
 
-// Load tradelines from database
-export const loadTradelinesFromDatabase = async (authUserId: string): Promise<ParsedTradeline[]> => {
+// Pagination options interface
+export interface PaginationOptions {
+  page?: number;
+  pageSize?: number;
+  sortBy?: 'created_at' | 'creditor_name' | 'account_balance';
+  sortOrder?: 'asc' | 'desc';
+}
+
+// Paginated response interface
+export interface PaginatedTradelinesResponse {
+  data: ParsedTradeline[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalCount: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrevious: boolean;
+  };
+}
+
+// Load tradelines with pagination
+export const loadTradelinesFromDatabase = async (
+  authUserId: string,
+  options: PaginationOptions = {}
+): Promise<PaginatedTradelinesResponse> => {
   try {
-    // Get user profile ID
-    const userProfileId = await getUserProfileId(authUserId);
-    if (!userProfileId) {
-      console.warn('[WARN] No user profile found for auth user:', authUserId);
-      return [];
+    const userId = authUserId;
+    const { 
+      page = 1, 
+      pageSize = 20, 
+      sortBy = 'created_at', 
+      sortOrder = 'desc' 
+    } = options;
+
+    console.log(`[DEBUG] 📖 Loading tradelines for profile: ${userId} (page ${page}, size ${pageSize})`);
+    console.log(`[DEBUG] Options received:`, { page, pageSize, sortBy, sortOrder });
+
+    // Calculate offset for pagination
+    const offset = (page - 1) * pageSize;
+
+    // Get total count first
+    const { count, error: countError } = await supabase
+      .from('tradelines')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    if (countError) {
+      console.error('[ERROR] Failed to get tradelines count:', countError);
+      throw countError;
     }
 
-    console.log(`[DEBUG] 📖 Loading tradelines for profile: ${userProfileId}`);
+    const totalCount = count || 0;
+    const totalPages = Math.ceil(totalCount / pageSize);
 
-    // Load tradelines from database
+    // Load tradelines with pagination
     const { data: tradelines, error } = await supabase
       .from('tradelines')
       .select('*')
-      .eq('user_id', userProfileId)
-      .order('created_at', { ascending: false });
+      .eq('user_id', userId)
+      .order(sortBy, { ascending: sortOrder === 'asc' })
+      .range(offset, offset + pageSize - 1);
 
     if (error) {
       console.error('[ERROR] Failed to load tradelines:', error);
       throw error;
     }
 
-    console.log(`[SUCCESS] ✅ Loaded ${tradelines?.length || 0} tradelines from database`);
-    
-    return tradelines || [];
+    console.log(`[SUCCESS] ✅ Loaded ${tradelines?.length || 0}/${totalCount} tradelines from database`);
+    // [DEBUG] Log shape and values before returning
+    console.log('[DEBUG] Returning from loadTradelinesFromDatabase:', {
+      tradelinesType: Array.isArray(tradelines),
+      tradelinesLength: tradelines?.length,
+      page,
+      pageSize,
+      totalCount,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrevious: page > 1,
+      sampleTradeline: tradelines && tradelines.length > 0 ? tradelines[0] : null
+    });
+    // Sanitize all tradeline fields: map nulls to empty strings for strings, 0 for numbers, false for booleans
+    const sanitizedTradelines = (tradelines || []).map(t => ({
+      id: t.id ?? '',
+      user_id: t.user_id ?? '',
+      creditor_name: t.creditor_name ?? '',
+      account_number: t.account_number ?? '',
+      account_balance: t.account_balance ?? '',
+      account_status: t.account_status ?? '',
+      account_type: t.account_type ?? '',
+      date_opened: t.date_opened ?? '',
+      is_negative: t.is_negative ?? false,
+      dispute_count: t.dispute_count ?? 0,
+      created_at: t.created_at ?? '',
+      credit_limit: t.credit_limit ?? '',
+      credit_bureau: t.credit_bureau ?? '',
+      monthly_payment: t.monthly_payment ?? '',
+    }));
+
+    return {
+      data: sanitizedTradelines,
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrevious: page > 1,
+      }
+    };
 
   } catch (error) {
     console.error('[ERROR] Error loading tradelines:', error);
-    return [];
+    return {
+      data: [],
+      pagination: {
+        page: 1,
+        pageSize: 20,
+        totalCount: 0,
+        totalPages: 0,
+        hasNext: false,
+        hasPrevious: false,
+      }
+    };
   }
+};
+
+// Legacy function for backward compatibility
+export const loadAllTradelinesFromDatabase = async (authUserId: string): Promise<ParsedTradeline[]> => {
+  const response = await loadTradelinesFromDatabase(authUserId, { pageSize: 1000 });
+  return response.data;
 };
 
 // Get negative tradelines only

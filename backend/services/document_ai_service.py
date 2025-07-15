@@ -71,52 +71,151 @@ class DocumentAIService:
         }
         
         return type_mapping.get(extension, DocumentType.UNKNOWN)
+    
+    def _extract_tables_from_text(self, text: str) -> List[ExtractedTable]:
+        """Extract table-like structures from text"""
+        import re
+        
+        tables = []
+        lines = text.split('\n')
+        
+        # Look for tabular data patterns
+        current_table_rows = []
+        potential_headers = []
+        
+        for i, line in enumerate(lines):
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Check if line contains multiple tab-separated or space-separated values
+            # Common patterns for credit report tables
+            if re.search(r'(Account|Company|Balance|Status|Date|Creditor|Payment|Limit)', line, re.IGNORECASE):
+                # Potential header row
+                potential_headers = re.split(r'\s{2,}|\t', line)
+                if len(potential_headers) > 2:
+                    current_table_rows = [potential_headers]
+                continue
+            
+            # Look for data rows with multiple columns
+            if '\t' in line or re.search(r'\s{3,}', line):
+                columns = re.split(r'\s{2,}|\t', line)
+                if len(columns) > 2:
+                    current_table_rows.append(columns)
+                    
+            # If we have accumulated rows and hit a different pattern, finalize table
+            elif current_table_rows and len(current_table_rows) > 1:
+                headers = current_table_rows[0] if current_table_rows else ["Column 1", "Column 2", "Column 3"]
+                rows = current_table_rows[1:] if len(current_table_rows) > 1 else []
+                
+                if rows:  # Only add if we have data rows
+                    tables.append(ExtractedTable(
+                        table_id=f"table_{len(tables) + 1}",
+                        headers=headers,
+                        rows=rows,
+                        confidence=0.75,
+                        page_number=1,
+                        bounding_box={"x": 0, "y": 0, "width": 500, "height": 100}
+                    ))
+                
+                current_table_rows = []
+        
+        # Handle any remaining table
+        if current_table_rows and len(current_table_rows) > 1:
+            headers = current_table_rows[0]
+            rows = current_table_rows[1:]
+            if rows:
+                tables.append(ExtractedTable(
+                    table_id=f"table_{len(tables) + 1}",
+                    headers=headers,
+                    rows=rows,
+                    confidence=0.75,
+                    page_number=1,
+                    bounding_box={"x": 0, "y": 0, "width": 500, "height": 100}
+                ))
+        
+        return tables
 
     async def _process_pdf(self, content: bytes, file_name: str) -> DocumentAIResult:
-        """Process PDF document"""
-        # Simulate Google Document AI PDF processing
-        await asyncio.sleep(2)  # Simulate processing time
-        
-        # Mock extracted data for credit report
-        tables = [
-            ExtractedTable(
-                table_id="tradelines_table",
-                headers=["Account", "Company", "Balance", "Status", "Date Opened"],
-                rows=[
-                    ["Credit Card", "Bank of America", "$1,250", "Current", "01/2020"],
-                    ["Auto Loan", "Wells Fargo", "$15,000", "Current", "03/2021"],
-                    ["Student Loan", "Federal Loan", "$25,000", "Current", "08/2018"]
-                ],
-                confidence=0.95,
-                page_number=1,
-                bounding_box={"x": 100, "y": 200, "width": 500, "height": 200}
+        """Process PDF document - NOW ACTUALLY PROCESSES THE PDF"""
+        try:
+            import PyPDF2
+            import io
+            import tempfile
+            import os
+            
+            # Create temporary file from bytes
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+                temp_file.write(content)
+                temp_file_path = temp_file.name
+            
+            try:
+                # Extract text using PyPDF2
+                with open(temp_file_path, 'rb') as file:
+                    reader = PyPDF2.PdfReader(file)
+                    raw_text = ""
+                    text_blocks = []
+                    
+                    for page_num, page in enumerate(reader.pages, 1):
+                        page_text = page.extract_text()
+                        raw_text += page_text + "\n"
+                        
+                        # Create text block for each page
+                        if page_text.strip():
+                            text_blocks.append(ExtractedText(
+                                content=page_text,
+                                page_number=page_num,
+                                confidence=0.85,  # Lower confidence for PyPDF2 vs real Document AI
+                                bounding_box={"x": 0, "y": 0, "width": 612, "height": 792}
+                            ))
+                
+                # Extract structured data from text
+                tables = self._extract_tables_from_text(raw_text)
+                
+                logger.info(f"✅ PDF processing completed: {len(text_blocks)} pages, {len(tables)} tables")
+                
+                return DocumentAIResult(
+                    job_id="",  # Will be set by caller
+                    document_type=DocumentType.PDF,
+                    total_pages=len(reader.pages),
+                    tables=tables,
+                    text_blocks=text_blocks,
+                    raw_text=raw_text,
+                    metadata={
+                        "file_name": file_name,
+                        "file_size": len(content),
+                        "processing_method": "pypdf2_extraction"
+                    },
+                    processing_time=0.0,
+                    confidence_score=0.85
+                )
+                
+            finally:
+                # Clean up temporary file
+                try:
+                    os.unlink(temp_file_path)
+                except:
+                    pass
+                    
+        except Exception as e:
+            logger.error(f"❌ PDF processing failed: {str(e)}")
+            # Return empty result instead of mock data
+            return DocumentAIResult(
+                job_id="",
+                document_type=DocumentType.PDF,
+                total_pages=0,
+                tables=[],
+                text_blocks=[],
+                raw_text="",
+                metadata={
+                    "file_name": file_name,
+                    "file_size": len(content),
+                    "processing_method": "failed_extraction",
+                    "error": str(e)
+                },
+                processing_time=0.0,
+                confidence_score=0.0
             )
-        ]
-        
-        text_blocks = [
-            ExtractedText(
-                content="CREDIT REPORT\nConsumer: John Doe\nSSN: XXX-XX-1234\nDate: 2024-07-09",
-                page_number=1,
-                confidence=0.98,
-                bounding_box={"x": 50, "y": 50, "width": 500, "height": 100}
-            )
-        ]
-        
-        return DocumentAIResult(
-            job_id="",  # Will be set by caller
-            document_type=DocumentType.PDF,
-            total_pages=1,
-            tables=tables,
-            text_blocks=text_blocks,
-            raw_text="CREDIT REPORT\nConsumer: John Doe\nSSN: XXX-XX-1234\nDate: 2024-07-09\n\nAccount\tCompany\tBalance\tStatus\tDate Opened\nCredit Card\tBank of America\t$1,250\tCurrent\t01/2020\nAuto Loan\tWells Fargo\t$15,000\tCurrent\t03/2021\nStudent Loan\tFederal Loan\t$25,000\tCurrent\t08/2018",
-            metadata={
-                "file_name": file_name,
-                "file_size": len(content),
-                "processing_method": "document_ai_pdf"
-            },
-            processing_time=0.0,
-            confidence_score=0.96
-        )
 
     async def _process_image(self, content: bytes, file_name: str) -> DocumentAIResult:
         """Process image document"""
