@@ -231,7 +231,7 @@ const DisputeWizardPage = () => {
     // Enhanced header with complete profile information
     const headerContact = [
       profile.phoneNumber ? `Phone: ${profile.phoneNumber}` : '',
-      profile.email ? `Email: ${profile.email}` : '',
+      // profile.email ? `Email: ${profile.email}` : '',
       profile.dateOfBirth ? `Date of Birth: ${profile.dateOfBirth}` : '',
       profile.lastFourSSN ? `SSN: ****${profile.lastFourSSN}` : ''
     ].filter(Boolean).join('\n');
