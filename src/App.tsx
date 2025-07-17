@@ -1,40 +1,62 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { AnimatePresence } from 'framer-motion';
 import { useTheme } from './hooks/use-theme';
 import { Navbar } from './components/layout/Navbar';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { queryClient } from './lib/react-query';
+import { 
+  PageLoading, 
+  DisputeWizardLoading, 
+  CreditReportUploadLoading, 
+  TradelinesLoading, 
+  ProfileLoading,
+  DashboardLoading 
+} from './components/ui/loading';
+
+// Eager load lightweight pages
 import HomePage from "@/pages/HomePage";
-import Dashboard from "@/pages/DashboardPage";
 import AboutPage from "@/pages/AboutPage";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
-import ResetPasswordPage from '@/pages/ResetPasswordPage'; 
-import ProfilePage from '@/pages/ProfilePage';
-import Hero from './components/Hero/Hero';
-import { AuthProvider, useAuth } from './hooks/use-auth';
-import TradelinesPage from "@/pages/TradelinesPage";
-import ServicesGrid from './components/Services/ServicesGrid';
-import ProcessTimeline from './components/Process/ProcessTimeline';
-import CreditReportUploadPage from './pages/CreditReportUploadPage';
-import DisputeWizardPage from './pages/DisputeWizardPage';
+import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import DisputeLetterPage from './pages/DisputeLetterPage';
-import ContactForm from './components/Contact/ContactForm';
-import Footer from './components/Footer/Footer';
 import FaqPage from './pages/FaqPage';
 import PricingPage from './pages/PricingPage';
 import BlogPage from './pages/BlogPage';
 
+// Lazy load heavy pages for code splitting
+const ProfilePage = React.lazy(() => import('@/pages/ProfilePage'));
+const Dashboard = React.lazy(() => import('@/pages/DashboardPage'));
+const TradelinesPage = React.lazy(() => import('@/pages/TradelinesPage'));
+const CreditReportUploadPage = React.lazy(() => import('./pages/CreditReportUploadPage'));
+const DisputeWizardPage = React.lazy(() => import('./pages/DisputeWizardPage'));
+
+// Lazy load component chunks
+const Hero = React.lazy(() => import('./components/Hero/Hero'));
+const ServicesGrid = React.lazy(() => import('./components/Services/ServicesGrid'));
+const ProcessTimeline = React.lazy(() => import('./components/Process/ProcessTimeline'));
+const ContactForm = React.lazy(() => import('./components/Contact/ContactForm'));
+const Footer = React.lazy(() => import('./components/Footer/Footer'));
+
+import { AuthProvider, useAuth } from './hooks/use-auth';
+
 function App() {
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <Router>
-          <AppContent />
-        </Router>
-      </AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <Router>
+            <AppContent />
+          </Router>
+        </AuthProvider>
+        {/* React Query DevTools - only shows in development */}
+        <ReactQueryDevtools initialIsOpen={false} />
+      </QueryClientProvider>
     </ErrorBoundary>
   );
 }
@@ -66,33 +88,59 @@ function AppContent() {
         <AnimatePresence mode="wait">
           <Routes location={location} key={routeKey}>
             <Route path="/" element={
-              <>
+              <Suspense fallback={<PageLoading message="Loading homepage..." />}>
                 <Hero />
                 <ServicesGrid />
                 <ProcessTimeline />                 
                 <ContactForm />
-              </>
+              </Suspense>
             } />
             <Route path="/home" element={<HomePage />} />
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/profile" element={
+              <Suspense fallback={<ProfileLoading />}>
+                <ProfilePage />
+              </Suspense>
+            } />
             <Route path="/about" element={<AboutPage />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/credit-report-upload" element={<CreditReportUploadPage />} />
+            <Route path="/dashboard" element={
+              <Suspense fallback={<DashboardLoading />}>
+                <Dashboard />
+              </Suspense>
+            } />
+            <Route path="/credit-report-upload" element={
+              <Suspense fallback={<CreditReportUploadLoading />}>
+                <CreditReportUploadPage />
+              </Suspense>
+            } />
             <Route path="/dispute-letter" element={<DisputeLetterPage />} />
-            <Route path="/dispute-wizard" element={<DisputeWizardPage />} />
-            <Route path="/tradelines" element={<TradelinesPage />} />
-            <Route path="/contact" element={<ContactForm />} />
+            <Route path="/dispute-wizard" element={
+              <Suspense fallback={<DisputeWizardLoading />}>
+                <DisputeWizardPage />
+              </Suspense>
+            } />
+            <Route path="/tradelines" element={
+              <Suspense fallback={<TradelinesLoading />}>
+                <TradelinesPage />
+              </Suspense>
+            } />
+            <Route path="/contact" element={
+              <Suspense fallback={<PageLoading message="Loading contact form..." />}>
+                <ContactForm />
+              </Suspense>
+            } />
             <Route path="/faq" element={<FaqPage />} />
             <Route path="/pricing" element={<PricingPage />} />
             <Route path="/blog" element={<BlogPage />} />
           </Routes>
         </AnimatePresence>
       </main>
-      <Footer />
+      <Suspense fallback={<div />}>
+        <Footer />
+      </Suspense>
     </div>
   );
 }
