@@ -333,3 +333,64 @@ export const validateParsedTradeline = (
     return { success: false, error: 'Unknown validation error' };
   }
 };
+
+// Delete a tradeline from the database
+export const deleteTradelineFromDatabase = async (
+  tradelineId: string,
+  userId: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    console.log(`[INFO] Deleting tradeline ${tradelineId} for user ${userId}`);
+    
+    const { error } = await supabase
+      .from('tradelines')
+      .delete()
+      .eq('id', tradelineId)
+      .eq('user_id', userId); // Security: ensure user can only delete their own tradelines
+
+    if (error) {
+      console.error('[ERROR] Failed to delete tradeline:', error);
+      return { success: false, error: error.message };
+    }
+
+    console.log(`[SUCCESS] ✅ Tradeline ${tradelineId} deleted successfully`);
+    return { success: true };
+  } catch (error) {
+    console.error('[ERROR] Exception during tradeline deletion:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error during deletion' 
+    };
+  }
+};
+
+// Update a tradeline in the database
+export const updateTradelineInDatabase = async (
+  tradelineId: string,
+  updates: Partial<ParsedTradeline>,
+  userId: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    console.log(`[INFO] Updating tradeline ${tradelineId} for user ${userId}`);
+    
+    const { error } = await supabase
+      .from('tradelines')
+      .update(updates)
+      .eq('id', tradelineId)
+      .eq('user_id', userId); // Security: ensure user can only update their own tradelines
+
+    if (error) {
+      console.error('[ERROR] Failed to update tradeline:', error);
+      return { success: false, error: error.message };
+    }
+
+    console.log(`[SUCCESS] ✅ Tradeline ${tradelineId} updated successfully`);
+    return { success: true };
+  } catch (error) {
+    console.error('[ERROR] Exception during tradeline update:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error during update' 
+    };
+  }
+};

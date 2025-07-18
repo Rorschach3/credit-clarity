@@ -191,6 +191,48 @@ export type Database = {
           },
         ]
       }
+      dispute_packets: {
+        Row: {
+          bureau_count: number | null
+          created_at: string
+          document_urls: Json | null
+          dispute_letter_url: string | null
+          filename: string | null
+          id: string
+          letters_data: Json | null
+          packet_status: string | null
+          tradeline_count: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bureau_count?: number | null
+          created_at?: string
+          document_urls?: Json | null
+          dispute_letter_url?: string | null
+          filename?: string | null
+          id?: string
+          letters_data?: Json | null
+          packet_status?: string | null
+          tradeline_count?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bureau_count?: number | null
+          created_at?: string
+          document_urls?: Json | null
+          dispute_letter_url?: string | null
+          filename?: string | null
+          id?: string
+          letters_data?: Json | null
+          packet_status?: string | null
+          tradeline_count?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       dispute_log: {
         Row: {
           changed_at: string | null
@@ -389,6 +431,7 @@ export type Database = {
           user_id: string
           zip_code: string | null
           dob: string | null
+          avatar_url: string | null
         }
         Insert: {
           id: string
@@ -404,6 +447,7 @@ export type Database = {
           user_id: string
           zip_code?: string | null
           dob?: string | null
+          avatar_url?: string | null
         }
         Update: {
           id: string
@@ -419,6 +463,7 @@ export type Database = {
           user_id?: string
           zip_code?: string | null
           dob?: string | null
+          avatar_url?: string | null
         }
         Relationships: []
       }
@@ -511,6 +556,9 @@ export type Database = {
           created_at: string | null
           document_type: string | null
           file_path: string | null
+          file_name: string | null
+          content_type: string | null
+          verified: boolean | null
           id: number
           user_id: string
         }
@@ -518,6 +566,9 @@ export type Database = {
           created_at?: string | null
           document_type?: string | null
           file_path?: string | null
+          file_name?: string | null
+          content_type?: string | null
+          verified?: boolean | null
           id?: number
           user_id?: string
         }
@@ -525,6 +576,9 @@ export type Database = {
           created_at?: string | null
           document_type?: string | null
           file_path?: string | null
+          file_name?: string | null
+          content_type?: string | null
+          verified?: boolean | null
           id?: number
           user_id?: string
         }

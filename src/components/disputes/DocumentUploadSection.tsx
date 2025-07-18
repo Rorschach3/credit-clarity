@@ -4,9 +4,11 @@ import { UserDocumentsSection } from "@/components/disputes/UserDocumentsSection
 
 interface DocumentUploadSectionProps {
   onClose: () => void;
+  onComplete: () => void;
+  onSkip: () => void;
 }
 
-export const DocumentUploadSection: React.FC<DocumentUploadSectionProps> = ({ onClose }) => {
+export const DocumentUploadSection: React.FC<DocumentUploadSectionProps> = ({ onClose, onComplete, onSkip }) => {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -18,7 +20,7 @@ export const DocumentUploadSection: React.FC<DocumentUploadSectionProps> = ({ on
           onClick={() => {
             setCollapsed(true);
             setTimeout(() => {
-              onClose();
+              onSkip();
             }, 600); // match transition duration
           }}
         >
@@ -33,9 +35,9 @@ export const DocumentUploadSection: React.FC<DocumentUploadSectionProps> = ({ on
       {!collapsed && (
         <>
           <h3 className="text-lg font-semibold mb-2 text-center">Upload Supporting Documents (Optional)</h3>
-          <UserDocumentsSection />
+          <UserDocumentsSection onComplete={onComplete} />
           <div className="flex gap-2 mt-4">
-            <Button variant="default">Prepare Dispute Packet</Button>
+            <Button variant="default" onClick={onComplete}>Continue to Packet Generation</Button>
             <Button variant="outline" onClick={onClose}>Cancel</Button>
           </div>
         </>

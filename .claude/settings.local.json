@@ -13,7 +13,15 @@
       "Bash(npm cache clean:*)",
       "Bash(npx vite:*)",
       "Bash(node:*)",
-      "Bash(npm:*)"
+      "Bash(npm:*)",
+      "Bash(npx supabase:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(uvx:*)",
+      "Bash(uv:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(claude mcp:*)",
+      "Bash(run)"
     ],
     "deny": []
   }

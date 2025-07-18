@@ -2,11 +2,15 @@ import React, { useEffect, useCallback, useState, Suspense } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast as sonnerToast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
-import { saveTradelinesToDatabase, ParsedTradeline, loadAllTradelinesFromDatabase } from "@/utils/tradelineParser";
+import { saveTradelinesToDatabase, ParsedTradeline, loadAllTradelinesFromDatabase, deleteTradelineFromDatabase, updateTradelineInDatabase } from "@/utils/tradelineParser";
 import { usePersistentTradelines } from "@/hooks/usePersistentTradelines";
+import { useWorkflowState } from "@/hooks/useWorkflowState";
 import { CreditNavbar } from "@/components/navbar/CreditNavbar";
 import { TradelinesStatus } from "@/components/ui/tradelines-status";
 import { ComponentLoading } from "@/components/ui/loading";
+
+// Import workflow navigation
+import { WorkflowNavigation } from '@/components/workflow/WorkflowNavigation';
 
 // Import lightweight components
 import { CreditUploadHeader } from '@/components/credit-upload/CreditUploadHeader';
@@ -53,6 +57,9 @@ const CreditReportUploadPage = () => {
     refreshTradelines
   } = usePersistentTradelines();
 
+  // Use workflow state
+  const { workflowState, canProceedTo } = useWorkflowState();
+
   // Load existing tradelines on mount
   useEffect(() => {
     if (user?.id) {
@@ -72,7 +79,10 @@ const CreditReportUploadPage = () => {
   };
 
   // Handle file upload and processing
-  const handleFileUpload = useCallback(async (file: File) => {
+  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
     if (!user?.id) {
       sonnerToast.error("Please log in to upload files");
       return;
@@ -143,11 +153,57 @@ const CreditReportUploadPage = () => {
     }
   }, [user?.id, refreshTradelines]);
 
+  // Handle tradeline updates
+  const handleTradelineUpdate = useCallback(async (tradelineId: string, updates: Partial<ParsedTradeline>) => {
+    if (!user?.id) return;
+
+    try {
+      // Update local state
+      setExtractedTradelines(prev => 
+        prev.map(t => t.id === tradelineId ? { ...t, ...updates } : t)
+      );
+
+      // Update in database
+      const result = await updateTradelineInDatabase(tradelineId, updates, user.id);
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update tradeline');
+      }
+
+      // Refresh persistent tradelines
+      await refreshTradelines();
+    } catch (error) {
+      console.error('Error updating tradeline:', error);
+      sonnerToast.error("Failed to update tradeline");
+      // Revert local state on error
+      setExtractedTradelines(prev => prev);
+    }
+  }, [user?.id, refreshTradelines]);
+
   // Handle tradeline deletion
-  const handleTradelineDelete = useCallback((tradelineId: string) => {
-    setExtractedTradelines(prev => prev.filter(t => t.id !== tradelineId));
-    sonnerToast.success("Tradeline removed");
-  }, []);
+  const handleTradelineDelete = useCallback(async (tradelineId: string) => {
+    if (!user?.id) return;
+
+    try {
+      // Remove from local state
+      setExtractedTradelines(prev => prev.filter(t => t.id !== tradelineId));
+      
+      // Remove from database
+      const result = await deleteTradelineFromDatabase(tradelineId, user.id);
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to delete tradeline');
+      }
+
+      // Refresh persistent tradelines
+      await refreshTradelines();
+      
+      sonnerToast.success("Tradeline removed");
+    } catch (error) {
+      console.error('Error deleting tradeline:', error);
+      sonnerToast.error("Failed to delete tradeline");
+      // Revert local state on error
+      loadExistingTradelines();
+    }
+  }, [user?.id, refreshTradelines]);
 
   // Handle save all tradelines
   const handleSaveAll = useCallback(async () => {
@@ -165,8 +221,8 @@ const CreditReportUploadPage = () => {
 
   // Auto-enable pagination for large datasets
   useEffect(() => {
-    setUsePagination(extractedTradelines.length > 20);
-  }, [extractedTradelines.length]);
+    setUsePagination(persistentTradelines.length > 20);
+  }, [persistentTradelines.length]);
 
   return (
     <div className="min-h-screen bg-background text-foreground py-10 px-4 md:px-10">
@@ -174,9 +230,24 @@ const CreditReportUploadPage = () => {
       
       <div className="max-w-6xl mx-auto space-y-6">
         
+        {/* Workflow Navigation */}
+        <WorkflowNavigation
+          currentStep="upload"
+          canProceed={canProceedTo('tradelines')}
+          completionData={{
+            hasUploadedReports: workflowState.hasUploadedReports,
+            hasSelectedTradelines: workflowState.hasSelectedTradelines,
+            hasGeneratedLetter: workflowState.hasGeneratedLetter
+          }}
+          nextLabel={workflowState.hasUploadedReports ? "Review Tradelines" : "Continue to Tradelines"}
+        />
+        
         {/* Header */}
         <Card>
-          <CreditUploadHeader />
+          <CreditUploadHeader 
+            hasExistingTradelines={workflowState.hasUploadedReports}
+            tradelinesCount={workflowState.tradelinesCount}
+          />
         </Card>
 
         {/* Tradelines Status */}
@@ -212,14 +283,13 @@ const CreditReportUploadPage = () => {
         </Suspense>
 
         {/* Tradelines Display */}
-        {extractedTradelines.length > 0 && (
+        {(extractedTradelines.length > 0 || persistentTradelines.length > 0) && (
           <Suspense fallback={<ComponentLoading message="Loading tradelines..." />}>
             {usePagination ? (
               <PaginatedTradelinesList
-                tradelines={extractedTradelines}
+                userId={user.id}
                 onDelete={handleTradelineDelete}
-                onSaveAll={handleSaveAll}
-                onAddManual={() => setShowManualModal(true)}
+                onUpdate={handleTradelineUpdate}
               />
             ) : (
               <TradelinesList
@@ -227,6 +297,7 @@ const CreditReportUploadPage = () => {
                 onDelete={handleTradelineDelete}
                 onSaveAll={handleSaveAll}
                 onAddManual={() => setShowManualModal(true)}
+                onUpdate={handleTradelineUpdate}
               />
             )}
           </Suspense>
