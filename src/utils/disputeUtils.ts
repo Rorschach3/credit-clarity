@@ -78,16 +78,7 @@ export const getDisputeReasons = (tradeline: ParsedTradeline): string[] => {
 export const generateDisputeLetterContent = (
   tradelines: ParsedTradeline[], 
   creditBureau: string, 
-  profile: {
-    firstName: string;
-    lastName: string;
-    address: string;
-    city: string;
-    state: string;
-    zipCode: string;
-    dateOfBirth?: string;
-    ssn?: string;
-  }
+  profile: any
 ): string => {
   const currentDate = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -156,16 +147,7 @@ Enclosures: Copy of Driver's License, Copy of Social Security Card, Copy of Util
 export const generateDisputeLetters = async (
   selectedTradelines: string[],
   negativeTradelines: ParsedTradeline[],
-  profile: {
-    firstName: string;
-    lastName: string;
-    address: string;
-    city: string;
-    state: string;
-    zipCode: string;
-    dateOfBirth?: string;
-    ssn?: string;
-  },
+  profile: any,
   updateProgress: (progress: PacketProgress) => void
 ): Promise<GeneratedDisputeLetter[]> => {
   const letters: GeneratedDisputeLetter[] = [];

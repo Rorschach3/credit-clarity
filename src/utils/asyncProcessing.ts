@@ -1,24 +1,33 @@
 // Lazy-loaded processing utilities for CreditReportUploadPage
-// Uses Layer 2 pure functions instead of React hooks
-
 import { ParsedTradeline } from '@/utils/tradelineParser';
-import { 
-  processFileWithOCR as processOCR,
-  processFileWithAI as processAI,
-  type ProcessingProgress
-} from '@/utils/creditReportProcessing';
 
-// Re-export ProcessingProgress type for compatibility
-export type { ProcessingProgress };
+// Dynamic imports for heavy processing dependencies
+export const loadOCRProcessor = async () => {
+  // This would load OCR libraries only when needed
+  const { useCreditReportProcessing } = await import('@/hooks/useCreditReportProcessing');
+  return useCreditReportProcessing;
+};
 
-// Dynamic imports for heavy processing dependencies (if needed)
+export const loadAIProcessor = async () => {
+  // This would load AI/ML libraries only when needed
+  const { useCreditReportProcessing } = await import('@/hooks/useCreditReportProcessing');
+  return useCreditReportProcessing;
+};
+
 export const loadFileUploadHandler = async () => {
   // Lazy load the heavy file upload handler
   const { useFileUploadHandler } = await import('@/components/credit-upload/FileUploadHandler');
   return useFileUploadHandler;
 };
 
-// Async OCR processing using Layer 2 functions
+// Processing status interface
+export interface ProcessingProgress {
+  step: string;
+  progress: number;
+  message: string;
+}
+
+// Async OCR processing
 export const processFileWithOCR = async (
   file: File,
   userId: string,
@@ -26,47 +35,42 @@ export const processFileWithOCR = async (
 ): Promise<ParsedTradeline[]> => {
   updateProgress({
     step: 'Loading OCR Engine...',
-    progress: 5,
+    progress: 10,
     message: 'Initializing text extraction'
   });
 
-  try {
-    // Use Layer 2 OCR function directly (no React hooks needed)
-    const result = await processOCR(file, updateProgress);
+  // Dynamically import OCR processor
+  const useCreditReportProcessing = await loadOCRProcessor();
+  const processor = useCreditReportProcessing(userId);
 
-    if (!result.success) {
-      throw new Error(result.error || 'OCR processing failed');
-    }
+  updateProgress({
+    step: 'Extracting Text...',
+    progress: 30,
+    message: 'Reading document content'
+  });
 
-    updateProgress({
-      step: 'Parsing Tradelines...',
-      progress: 85,
-      message: 'Converting text to tradeline data'
-    });
+  const extractedText = await processor.processWithOCR(file);
 
-    // For now, return empty array since we're focusing on text extraction
-    // In production, this would parse the extracted text into tradelines
-    const tradelines: ParsedTradeline[] = [];
+  updateProgress({
+    step: 'Parsing Tradelines...',
+    progress: 70,
+    message: 'Identifying credit accounts'
+  });
 
-    updateProgress({
-      step: 'Complete!',
-      progress: 100,
-      message: 'OCR processing finished'
-    });
+  // Simulate tradeline parsing
+  await new Promise(resolve => setTimeout(resolve, 1000));
 
-    return tradelines;
-  } catch (error) {
-    updateProgress({
-      step: 'Error',
-      progress: 0,
-      message: error instanceof Error ? error.message : 'OCR processing failed'
-    });
-    
-    throw error;
-  }
+  updateProgress({
+    step: 'Finalizing...',
+    progress: 90,
+    message: 'Preparing results'
+  });
+
+  // Return empty array for now - this would contain actual parsed tradelines
+  return [];
 };
 
-// Async AI processing using Layer 2 functions
+// Async AI processing
 export const processFileWithAI = async (
   file: File,
   userId: string,
@@ -74,57 +78,36 @@ export const processFileWithAI = async (
 ): Promise<ParsedTradeline[]> => {
   updateProgress({
     step: 'Loading AI Models...',
-    progress: 5,
+    progress: 10,
     message: 'Initializing AI processing'
   });
 
-  try {
-    // Use Layer 2 AI function directly (no React hooks needed)
-    const result = await processAI(file, userId, updateProgress);
+  // Dynamically import AI processor
+  const useCreditReportProcessing = await loadAIProcessor();
+  const processor = useCreditReportProcessing(userId);
 
-    if (!result.success) {
-      throw new Error(result.error || 'AI processing failed');
-    }
+  updateProgress({
+    step: 'AI Analysis...',
+    progress: 40,
+    message: 'Analyzing credit report structure'
+  });
 
-    updateProgress({
-      step: 'Validating Results...',
-      progress: 95,
-      message: 'Verifying extracted tradeline data'
-    });
+  const result = await processor.processWithAI(file);
 
-    // Brief validation delay
-    await new Promise(resolve => setTimeout(resolve, 200));
+  updateProgress({
+    step: 'Validating Results...',
+    progress: 80,
+    message: 'Verifying extracted data'
+  });
 
-    updateProgress({
-      step: 'Complete!',
-      progress: 100,
-      message: 'AI processing finished'
-    });
+  // Simulate validation
+  await new Promise(resolve => setTimeout(resolve, 500));
 
-    return result.tradelines;
-  } catch (error) {
-    updateProgress({
-      step: 'Error',
-      progress: 0,
-      message: error instanceof Error ? error.message : 'AI processing failed'
-    });
-    
-    throw error;
-  }
-};
+  updateProgress({
+    step: 'Complete!',
+    progress: 100,
+    message: 'Processing finished'
+  });
 
-// Utility functions for external use
-export const extractTextFromFile = async (file: File): Promise<string> => {
-  const { extractTextFromFile } = await import('@/utils/creditReportProcessing');
-  return extractTextFromFile(file);
-};
-
-export const extractKeywords = async (text: string): Promise<string[]> => {
-  const { extractKeywordsFromText } = await import('@/utils/creditReportProcessing');
-  return extractKeywordsFromText(text);
-};
-
-export const generateInsights = async (text: string, keywords: string[]): Promise<string> => {
-  const { generateAIInsights } = await import('@/utils/creditReportProcessing');
-  return generateAIInsights(text, keywords);
+  return result.tradelines;
 };

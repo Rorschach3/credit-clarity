@@ -33,7 +33,6 @@ dist/
 influxdata-archive_compat.key
 .env
 .roo/mcp.json
-.mcp.json
 .roomodes
 service-account.json
 __pycache__/main.cpython-312.pyc

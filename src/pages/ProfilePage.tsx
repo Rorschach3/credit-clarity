@@ -9,7 +9,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from 'sonner';
 import { Camera } from 'lucide-react';
 import { CurrentUserAvatar } from '@/components/current-user-avatar';
-import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 
 import type { Database } from '../integrations/supabase/types';
@@ -21,7 +20,6 @@ export default function ProfilePage() {
   const { 
     profile: persistentProfile, 
     updateProfile, 
-    refreshProfile,
     loading: profileLoading,
     error: profileError 
   } = usePersistentProfile();
@@ -83,7 +81,7 @@ export default function ProfilePage() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('first_name, last_name, address1, address2, city, state, zip_code, phone_number, last_four_of_ssn, dob, avatar_url')
+        .select('first_name, last_name, address1, address2, city, state, zip_code, phone_number, last_four_of_ssn, dob')
         .eq('user_id', user.id)
         .single();
 
@@ -103,8 +101,7 @@ export default function ProfilePage() {
           zip_code: data.zip_code ?? null,
           phone_number: data.phone_number ?? null,
           last_four_of_ssn: data.last_four_of_ssn ?? null,
-          dob: data.dob ?? null,
-          avatar_url: data.avatar_url ?? null
+          dob: data.dob ?? null
         });
       }
     } catch (error) {
@@ -154,8 +151,6 @@ export default function ProfilePage() {
     try {
       // Use the persistent profile hook to update the profile
       await updateProfile({
-        id: uuidv4(),
-        user_id: user.id,
         first_name: profile.first_name,
         last_name: profile.last_name,
         address1: profile.address1 || null,
@@ -202,7 +197,7 @@ export default function ProfilePage() {
     try {
       // Upload to Supabase storage
       const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
       
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('avatars')
@@ -229,10 +224,6 @@ export default function ProfilePage() {
       if (updateError) throw updateError;
 
       setAvatarUrl(newAvatarUrl);
-      
-      // Refresh the persistent profile to update the cache
-      await refreshProfile();
-      
       toast.success('Avatar updated successfully!');
     } catch (error) {
       console.error('Avatar upload error:', error);
@@ -262,8 +253,7 @@ export default function ProfilePage() {
                       name: `${profile.first_name} ${profile.last_name}`.trim() || undefined,
                       email: user.email || undefined,
                       avatar: avatarUrl || undefined
-                    }}
-                    size="xl"
+                    }} 
                   />
                 )}
                 <Button

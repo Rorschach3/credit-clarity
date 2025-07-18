@@ -24,7 +24,7 @@ import {
 import { usePersistentTradelines } from '@/hooks/usePersistentTradelines';
 import { usePersistentProfile } from '@/hooks/usePersistentProfile';
 import { TradelinesStatus } from '@/components/ui/tradelines-status';
-import { ProfileStatus } from '@/components/profile-status';
+import { ProfileStatus } from '@/components/ui/profile-status';
 import { v4 as uuidv4 } from 'uuid';
 
 // Using DisputeProfile from usePersistentProfile hook

@@ -6,16 +6,16 @@ import { Progress } from "@/components/ui/progress";
 
 interface FileUploadSectionProps {
   onFileUpload: (event: ChangeEvent<HTMLInputElement>) => void;
-  isProcessing: boolean;
-  acceptedFileTypes?: string;
-  maxFileSize?: number;
+  isUploading: boolean;
+  uploadProgress: number;
+  processingMethod: 'ocr' | 'ai';
 }
 
 export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   onFileUpload,
-  isProcessing,
-  acceptedFileTypes = ".pdf",
-  maxFileSize = 10 * 1024 * 1024 // 10MB default
+  isUploading,
+  uploadProgress,
+  processingMethod
 }) => {
   return (
     <div>
@@ -23,14 +23,15 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
       <Input
         id="pdf-upload"
         type="file"
-        accept={acceptedFileTypes}
+        accept="application/pdf"
         onChange={onFileUpload}
-        disabled={isProcessing}
+        disabled={isUploading}
       />
-      {isProcessing && (
+      {isUploading && (
         <div className="mt-2">
+          <Progress value={uploadProgress} className="w-full" />
           <p className="text-sm text-muted-foreground mt-1">
-            Processing file...
+            Processing with {processingMethod.toUpperCase()}... {Math.round(uploadProgress)}%
           </p>
         </div>
       )}

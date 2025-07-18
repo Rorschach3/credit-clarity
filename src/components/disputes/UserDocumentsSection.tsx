@@ -25,13 +25,6 @@ export function UserDocumentsSection({ onComplete }: UserDocumentsSectionProps) 
       if (!user) return;
 
       try {
-        // First check if user is authenticated and has proper session
-        const { data: session } = await supabase.auth.getSession();
-        if (!session?.session) {
-          console.error("No active session for user documents query");
-          return;
-        }
-
         const { data, error } = await supabase
           .from('user_documents')
           .select('document_type')
@@ -70,51 +63,41 @@ export function UserDocumentsSection({ onComplete }: UserDocumentsSectionProps) 
   const allDocumentsUploaded = documentStatus.photoId && documentStatus.ssnCard && documentStatus.utilityBill;
   
   // Handler for when any document is uploaded
-  const handleDocumentUpload = async () => {
+  const handleDocumentUpload = () => {
     // Refresh document status
-    if (!user) return;
-
-    try {
-      // Check authentication first
-      const { data: session } = await supabase.auth.getSession();
-      if (!session?.session) {
-        console.error("No active session for document upload refresh");
-        return;
-      }
-
-      const { data, error } = await supabase
+    if (user) {
+      supabase
         .from('user_documents')
         .select('document_type')
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Error checking document status:", error);
+            return;
+          }
 
-      if (error) {
-        console.error("Error checking document status:", error);
-        return;
-      }
+          // Update document status based on what's available
+          const updatedStatus = {
+            photoId: false,
+            ssnCard: false,
+            utilityBill: false
+          };
 
-      // Update document status based on what's available
-      const updatedStatus = {
-        photoId: false,
-        ssnCard: false,
-        utilityBill: false
-      };
+          if (data) {
+            data.forEach(doc => {
+              if (doc.document_type === 'photo_id') updatedStatus.photoId = true;
+              if (doc.document_type === 'ssn_card') updatedStatus.ssnCard = true;
+              if (doc.document_type === 'utility_bill') updatedStatus.utilityBill = true;
+            });
+          }
 
-      if (data) {
-        data.forEach(doc => {
-          if (doc.document_type === 'photo_id') updatedStatus.photoId = true;
-          if (doc.document_type === 'ssn_card') updatedStatus.ssnCard = true;
-          if (doc.document_type === 'utility_bill') updatedStatus.utilityBill = true;
+          setDocumentStatus(updatedStatus);
+          
+          // If all documents are uploaded, call onComplete
+          if (updatedStatus.photoId && updatedStatus.ssnCard && updatedStatus.utilityBill && onComplete) {
+            onComplete();
+          }
         });
-      }
-
-      setDocumentStatus(updatedStatus);
-      
-      // If all documents are uploaded, call onComplete
-      if (updatedStatus.photoId && updatedStatus.ssnCard && updatedStatus.utilityBill && onComplete) {
-        onComplete();
-      }
-    } catch (error) {
-      console.error("Error in document upload handler:", error);
     }
   };
 

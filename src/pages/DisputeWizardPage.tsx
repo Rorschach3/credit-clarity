@@ -1,27 +1,25 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useLocation, useNavigate } from "react-router-dom";
+import { CreditNavbar } from "@/components/navbar/CreditNavbar";
 import { useAuth } from "@/hooks/use-auth";
-import { useWorkflowState } from "@/hooks/useWorkflowState";
+import { Loader2 } from "lucide-react";
 import { supabase } from '@/integrations/supabase/client';
 import { usePersistentTradelines } from '@/hooks/usePersistentTradelines';
 import { usePersistentProfile } from '@/hooks/usePersistentProfile';
-import { Loader2 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-
-// Import components (these need to be created or imported from the correct paths)
-import { CreditNavbar } from "@/components/navbar/CreditNavbar";
-import { WorkflowNavigation } from "@/components/workflow/WorkflowNavigation";
-import { DisputeWizardHeader } from "@/components/dispute-wizard/DisputeWizardHeader";
-import { ProfileRequirements } from "@/components/dispute-wizard/ProfileRequirements";
-import { ProfileStatus } from "@/components/profile-status";
-import { TradelinesStatus } from "@/components/ui/tradelines-status";
-import { ProfileSummary } from "@/components/dispute-wizard/ProfileSummary";
-import { TradelineSelection } from "@/components/dispute-wizard/TradelineSelection";
-import { DisputeLetterGeneration } from "@/components/dispute-wizard/DisputeLetterGeneration";
+import { TradelinesStatus } from '@/components/ui/tradelines-status';
+import { ProfileStatus } from '@/components/ui/profile-status';
+import { v4 as uuidv4 } from 'uuid';
 import { DocumentUploadSection } from "@/components/disputes/DocumentUploadSection";
-import { PacketGenerationSection } from "@/components/disputes/PacketGenerationSection";
 import { MailingInstructions } from "@/components/disputes/MailingInstructions";
+
+// Import new components
+import { DisputeWizardHeader } from '@/components/dispute-wizard/DisputeWizardHeader';
+import { ProfileRequirements } from '@/components/dispute-wizard/ProfileRequirements';
+import { ProfileSummary } from '@/components/dispute-wizard/ProfileSummary';
+import { TradelineSelection } from '@/components/dispute-wizard/TradelineSelection';
+import { DisputeLetterGeneration } from '@/components/dispute-wizard/DisputeLetterGeneration';
 
 // Import lazy-loaded utils
 import { 
@@ -55,8 +53,6 @@ const DisputeWizardPage = () => {
   
   // State management
   const [showDocsSection, setShowDocsSection] = useState(false);
-  const [documentsCompleted, setDocumentsCompleted] = useState(false);
-  const [showPacketGeneration, setShowPacketGeneration] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [generationProgress, setGenerationProgress] = useState<PacketProgress>({
@@ -82,9 +78,6 @@ const DisputeWizardPage = () => {
     getNegativeTradelines: getPersistentNegativeTradelines,
     refreshTradelines
   } = usePersistentTradelines();
-
-  // Use workflow state
-  const { workflowState, refreshWorkflowState } = useWorkflowState();
 
   // Component state
   const [negativeTradelines, setNegativeTradelines] = useState<ParsedTradeline[]>([]);
@@ -143,13 +136,13 @@ const DisputeWizardPage = () => {
   const isReadyToGenerate = disputeProfile && isProfileComplete && selectedTradelines.length > 0 && !isLoading && !profileLoading;
 
   // Event handlers
-  const handleToggleTradelineSelection = useCallback((userId: string) => {
+  const handleToggleTradelineSelection = useCallback((tradelineId: string) => {
     setSelectedTradelines(prev => {
       const newSelection = new Set(prev);
-      if (newSelection.has(userId)) {
-        newSelection.delete(userId);
+      if (newSelection.has(tradelineId)) {
+        newSelection.delete(tradelineId);
       } else {
-        newSelection.add(userId);
+        newSelection.add(tradelineId);
       }
       return Array.from(newSelection);
     });
@@ -163,62 +156,14 @@ const DisputeWizardPage = () => {
     setSelectedTradelines([]);
   }, []);
 
-  const saveDisputePacketRecord = async (
-    userId: string,
-    letters: GeneratedDisputeLetter[],
-    filename: string
-  ) => {
-    try {
-      // Start with base schema columns that definitely exist
-      const disputePacketData: any = {
-        user_id: userId,
-        packet_status: 'generated',
-      };
-
-      // Try to add optional columns that may exist after migration
-      try {
-        // Test if we can safely add these fields by doing a quick schema check
-        const { error: testError } = await supabase
-          .from('dispute_packets')
-          .select('filename, bureau_count, tradeline_count, letters_data')
-          .limit(0);
-
-        if (!testError) {
-          // Schema supports these columns, add them
-          disputePacketData.filename = filename;
-          disputePacketData.bureau_count = letters.length;
-          disputePacketData.tradeline_count = letters.reduce((sum, l) => sum + l.tradelines.length, 0);
-          disputePacketData.letters_data = letters;
-        }
-      } catch (schemaError) {
-        console.log('Extended schema not available yet, using base schema');
-      }
-
-      // Always include base columns that exist in the original schema
-      disputePacketData.document_urls = [];
-      disputePacketData.dispute_letter_url = null;
-
-      const { error } = await supabase
-        .from('dispute_packets')
-        .insert(disputePacketData);
-
-      if (error) {
-        console.error('Supabase error details:', error);
-        throw error;
-      }
-      
-      console.log('Successfully saved dispute packet record');
-    } catch (error) {
-      console.error('Error saving dispute packet record:', error);
-      // Don't throw the error to prevent breaking the UX
-      // The letters are still generated successfully
-    }
-  };
-
-  // Fixed: Added missing handleGenerateLetters function
   const handleGenerateLetters = useCallback(async () => {
-    if (!disputeProfile || !isProfileComplete || selectedTradelines.length === 0) {
-      toast.error("Please ensure your profile is complete and select tradelines to dispute");
+    if (!disputeProfile || !isProfileComplete) {
+      toast.error("Complete your profile first");
+      return;
+    }
+
+    if (selectedTradelines.length === 0) {
+      toast.error("Select at least one tradeline to dispute");
       return;
     }
 
@@ -243,7 +188,10 @@ const DisputeWizardPage = () => {
       setPdfFilename(filename);
       setShowDocsSection(true);
 
-      setGenerationProgress({ step: 'Letters Generated!', progress: 100, message: 'Now upload supporting documents' });
+      // Save to database
+      await saveDisputePacketRecord(letters, filename);
+
+      setGenerationProgress({ step: 'Complete!', progress: 100, message: 'Dispute packet ready for download' });
       
       toast.success("Dispute letters generated successfully!", {
         description: `Created ${letters.length} letter(s) for ${selectedTradelines.length} tradeline(s)`
@@ -259,26 +207,31 @@ const DisputeWizardPage = () => {
     }
   }, [disputeProfile, isProfileComplete, selectedTradelines, negativeTradelines]);
 
+  const saveDisputePacketRecord = async (letters: GeneratedDisputeLetter[], filename: string) => {
+    try {
+      if (!user?.id) throw new Error('User not authenticated');
+
+      const { error } = await supabase
+        .from('dispute_packets')
+        .insert({
+          id: uuidv4(),
+          user_id: user.id,
+          filename: filename,
+          bureau_count: letters.length,
+          tradeline_count: selectedTradelines.length,
+          letters_data: letters,
+          created_at: new Date().toISOString(),
+          status: 'generated'
+        });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error saving dispute packet record:', error);
+    }
+  };
+
   const handleDocumentUpload = (documents: UploadedDocument[]) => {
     setUploadedDocuments(documents);
-  };
-
-  const handleDocumentsComplete = () => {
-    setDocumentsCompleted(true);
-    setShowDocsSection(false);
-    setShowPacketGeneration(true);
-    toast.success("Documents uploaded successfully!", {
-      description: "Ready to generate final dispute packet"
-    });
-  };
-
-  const handleSkipDocuments = () => {
-    setDocumentsCompleted(true);
-    setShowDocsSection(false);
-    setShowPacketGeneration(true);
-    toast.info("Documents skipped", {
-      description: "Proceeding to generate dispute packet"
-    });
   };
 
   const handleDownloadPDF = () => {
@@ -474,113 +427,84 @@ const DisputeWizardPage = () => {
   return (
     <div className="min-h-screen bg-background text-foreground py-10 px-4 md:px-10">
       <CreditNavbar />
-      
-      <div className="max-w-6xl mx-auto space-y-6">
+      <Card className="max-w-6xl mx-auto space-y-6">
+        <DisputeWizardHeader />
         
-        {/* Workflow Navigation */}
-        <WorkflowNavigation
-          currentStep="dispute"
-          completionData={{
-            hasUploadedReports: workflowState.hasUploadedReports,
-            hasSelectedTradelines: workflowState.hasSelectedTradelines,
-            hasGeneratedLetter: workflowState.hasGeneratedPacket
-          }}
-          canProceed={false} // This is the final step
-        />
-        
-        <Card className="space-y-6">
-          <DisputeWizardHeader />
+        <CardContent className="space-y-6">
           
-          <CardContent className="space-y-6">
-            
-            {/* Requirements Check */}
-            <ProfileRequirements
-              disputeProfile={disputeProfile}
-              isProfileComplete={isProfileComplete}
+          {/* Requirements Check */}
+          <ProfileRequirements
+            disputeProfile={disputeProfile}
+            isProfileComplete={isProfileComplete}
+            missingFields={missingFields}
+          />
+
+          {/* Status Components */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <ProfileStatus
+              loading={profileLoading}
+              error={profileError}
+              isComplete={isProfileComplete}
               missingFields={missingFields}
+              onRefresh={refreshProfile}
+              onEdit={() => navigate('/profile')}
             />
-
-            {/* Status Components */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <ProfileStatus
-                loading={profileLoading}
-                error={profileError}
-                isComplete={isProfileComplete}
-                missingFields={missingFields}
-                onRefresh={refreshProfile}
-                onEdit={() => navigate('/profile')}
-              />
-              <TradelinesStatus
-                loading={tradelinesLoading}
-                error={tradelinesError}
-                tradelinesCount={persistentTradelines.length}
-                onRefresh={refreshTradelines}
-              />
-            </div>
-
-            {/* Profile Summary */}
-            <ProfileSummary
-              disputeProfile={disputeProfile}
-              isProfileComplete={isProfileComplete}
+            <TradelinesStatus
+              loading={tradelinesLoading}
+              error={tradelinesError}
+              tradelinesCount={persistentTradelines.length}
+              onRefresh={refreshTradelines}
             />
+          </div>
 
-            {/* Tradeline Selection */}
-            <TradelineSelection
-              negativeTradelines={negativeTradelines}
-              selectedTradelines={selectedTradelines}
-              onToggleSelection={handleToggleTradelineSelection}
-              onSelectAll={handleSelectAllTradelines}
-              onDeselectAll={handleDeselectAllTradelines}
+          {/* Profile Summary */}
+          <ProfileSummary
+            disputeProfile={disputeProfile}
+            isProfileComplete={isProfileComplete}
+          />
+
+          {/* Tradeline Selection */}
+          <TradelineSelection
+            negativeTradelines={negativeTradelines}
+            selectedTradelines={selectedTradelines}
+            onToggleSelection={handleToggleTradelineSelection}
+            onSelectAll={handleSelectAllTradelines}
+            onDeselectAll={handleDeselectAllTradelines}
+          />
+
+          {/* Dispute Letter Generation */}
+          <DisputeLetterGeneration
+            isGenerating={isGenerating}
+            generationProgress={generationProgress}
+            generatedLetters={generatedLetters}
+            editingLetter={editingLetter}
+            editedContent={editedContent}
+            isReadyToGenerate={isReadyToGenerate}
+            onGenerate={handleGenerateLetters}
+            onEditLetter={handleEditLetter}
+            onSaveEdit={handleSaveEdit}
+            onCancelEdit={handleCancelEdit}
+            onEditContentChange={setEditedContent}
+            onDownloadPDF={handleDownloadPDF}
+            generatedPDF={generatedPDF}
+          />
+
+          {/* Document Upload Section */}
+          {showDocsSection && (
+            <DocumentUploadSection 
+              onDocumentsUploaded={handleDocumentUpload}
+              documents={uploadedDocuments}
             />
+          )}
 
-            {/* Dispute Letter Generation */}
-            <DisputeLetterGeneration
-              isGenerating={isGenerating}
-              generationProgress={generationProgress}
-              generatedLetters={generatedLetters}
-              editingLetter={editingLetter}
-              editedContent={editedContent}
-              isReadyToGenerate={isReadyToGenerate}
-              onGenerate={handleGenerateLetters}
-              onEditLetter={handleEditLetter}
-              onSaveEdit={handleSaveEdit}
-              onCancelEdit={handleCancelEdit}
-              onEditContentChange={setEditedContent}
-              onDownloadPDF={handleDownloadPDF}
-              generatedPDF={generatedPDF}
+          {/* Mailing Instructions */}
+          {showDocsSection && (
+            <MailingInstructions 
+              creditBureaus={generatedLetters.map(l => l.creditBureau)}
             />
-
-            {/* Document Upload Section */}
-            {showDocsSection && (
-              <DocumentUploadSection 
-                onClose={() => setShowDocsSection(false)}
-                onComplete={handleDocumentsComplete}
-                onSkip={handleSkipDocuments}
-              />
-            )}
-
-            {/* Packet Generation Section */}
-            {showPacketGeneration && (
-              <PacketGenerationSection
-                isGenerating={isGenerating}
-                generationProgress={generationProgress}
-                generatedPDF={generatedPDF}
-                documentsCompleted={documentsCompleted}
-                onPreparePacket={handlePrepareDisputePacket}
-                onDownloadPDF={handleDownloadPDF}
-                onClose={() => setShowPacketGeneration(false)}
-              />
-            )}
-
-            {/* Mailing Instructions */}
-            {showPacketGeneration && generationProgress.progress === 100 && (
-              <MailingInstructions 
-                creditBureaus={generatedLetters.map(l => l.creditBureau)}
-              />
-            )}
-          </CardContent>
-        </Card>
-      </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };

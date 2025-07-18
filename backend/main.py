@@ -11,10 +11,9 @@ import re
 import traceback
 from typing import List, Dict, Any, Optional
 
-from fastapi import FastAPI, APIRouter, BackgroundTasks, UploadFile, File, HTTPException, Form, Depends # type: ignore
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form # type: ignore
 from fastapi.middleware.cors import CORSMiddleware # type: ignore
 from pydantic import BaseModel, ValidationError # type: ignore
-
 
 # Document AI imports
 from google.api_core.client_options import ClientOptions # type: ignore
@@ -30,15 +29,6 @@ from datetime import datetime
 
 from dotenv import load_dotenv # type: ignore
 load_dotenv()
-
-# Import JWKS authentication
-from utils.jwks_auth import (
-    get_current_user_jwt,
-    get_current_user_id_jwt,
-    require_authenticated_user,
-    cleanup_auth,
-    RateLimiter
-)
 
 # Enhanced logging setup
 logging.basicConfig(
@@ -127,15 +117,6 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"]
 )
-
-# Add cleanup handler for authentication
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup resources on shutdown"""
-    await cleanup_auth()
-
-# Initialize rate limiter
-rate_limiter = RateLimiter(max_requests=100, window_minutes=60)
 
 class SupabaseService:
     def __init__(self):
@@ -608,30 +589,13 @@ async def save_tradeline_to_supabase(tradeline: Dict[str, Any], user_id: str) ->
     # Add this endpoint to your main.py file (after the existing endpoints)
 
 @app.post("/save-tradelines")
-async def save_tradelines_endpoint(
-    request: dict,
-    user_data: dict = Depends(require_authenticated_user)
-):
+async def save_tradelines_endpoint(request: dict):
     """
     Endpoint to save tradelines to database
-    Requires authentication via JWT token
     """
     try:
-        # Get authenticated user ID from JWT
-        authenticated_user_id = user_data.get('sub')
-        
-        # Get user ID from request (should match authenticated user)
         user_id = request.get('userId')
         tradelines = request.get('tradelines', [])
-        
-        # Security check: ensure user can only save their own tradelines
-        if user_id != authenticated_user_id:
-            logger.warning(f"Security violation: User {authenticated_user_id} attempted to save tradelines for {user_id}")
-            raise HTTPException(
-                status_code=403, 
-                detail="You can only save your own tradelines"
-            )
-        
         supabase.table('tradelines').select('*').execute()
 
         if not user_id:
@@ -810,20 +774,16 @@ async def debug_parsing(
 @app.post("/process-credit-report")
 async def process_credit_report(
     file: UploadFile = File(...),
-    user_data: dict = Depends(require_authenticated_user)
+    user_id: str = Form(default="default-user")
 ):
     """
     Main endpoint: Process uploaded credit report PDF
-    Requires authentication via JWT token
+    FIXED: Properly handle file upload without filename attribute errors
     """
     temp_file_path = None
     
     try:
-        # Get authenticated user ID from JWT
-        user_id = user_data.get('sub')
-        
         logger.info("🚀 ===== NEW CREDIT REPORT PROCESSING REQUEST =====")
-        logger.info(f"👤 Authenticated user: {user_id}")
         
         # ✅ FIXED: Store filename early before file operations
         original_filename = file.filename or "unknown.pdf"

@@ -1,8 +1,7 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
-import { useWorkflowState } from "@/hooks/useWorkflowState";
 import { Database } from "@/integrations/supabase/types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -10,8 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { CreditNavbar } from "@/components/navbar/CreditNavbar";
-import { WorkflowNavigation } from "@/components/workflow/WorkflowNavigation";
-import { AlertCircle, CheckCircle, X } from "lucide-react";
+import { AlertCircle, CheckCircle, X, RefreshCw } from "lucide-react";
 import { useTradelines, useUpdateTradeline, useDeleteTradeline } from "@/hooks/queries/useTradelinesQueries";
 
 // Define Tradeline type from Supabase schema
@@ -41,9 +39,6 @@ const NegativeTradelinesPage = () => {
   const { data: accounts = [], isLoading, error: queryError, refetch } = useTradelines();
   const updateTradelineMutation = useUpdateTradeline();
   const deleteTradelineMutation = useDeleteTradeline();
-  
-  // Use workflow state
-  const { workflowState, canProceedTo, updateSelectedTradelinesCount } = useWorkflowState();
   
   const [editingAccount, setEditingAccount] = useState<Tradeline | null>(null);
   const [selection, setSelection] = useState<SelectionState>({
@@ -214,11 +209,6 @@ const NegativeTradelinesPage = () => {
     });
   }, [deleteTradelineMutation]);
 
-  // Update workflow state when selection changes
-  useEffect(() => {
-    updateSelectedTradelinesCount(selection.selectedTradelineIds.size);
-  }, [selection.selectedTradelineIds.size, updateSelectedTradelinesCount]);
-
   const handleGenerateDisputePacket = useCallback(() => {
     if (!selection.selectedBureau || selection.selectedTradelineIds.size === 0) return;
 
@@ -346,26 +336,6 @@ const NegativeTradelinesPage = () => {
     <div className="min-h-screen bg-background text-foreground">
       <CreditNavbar />
       <div className="container mx-auto px-4 py-8">
-        
-        {/* Workflow Navigation */}
-        <div className="mb-8">
-          <WorkflowNavigation
-            currentStep="tradelines"
-            canProceed={canProceedTo('dispute') && selection.selectedTradelineIds.size > 0}
-            completionData={{
-              hasUploadedReports: workflowState.hasUploadedReports,
-              hasSelectedTradelines: workflowState.hasSelectedTradelines,
-              hasGeneratedLetter: workflowState.hasGeneratedLetter
-            }}
-            nextLabel={
-              selection.selectedTradelineIds.size > 0 
-                ? `Generate Dispute Packet (${selection.selectedTradelineIds.size} items)`
-                : "Continue to Dispute Wizard"
-            }
-            onNext={handleGenerateDisputePacket}
-          />
-        </div>
-
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Tradelines by Credit Bureau</h1>

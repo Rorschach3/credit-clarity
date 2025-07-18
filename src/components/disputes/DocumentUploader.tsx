@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -45,22 +45,15 @@ export function DocumentUploader({
     if (!user) return;
     
     try {
-      // Check authentication first
-      const { data: session } = await supabase.auth.getSession();
-      if (!session?.session) {
-        console.log('No active session for fetching existing document');
-        return;
-      }
-
       const { data, error } = await supabase
         .from('user_documents')
         .select('*')
         .eq('user_id', user.id)
         .eq('document_type', documentType)
-        .maybeSingle();
+        .single();
         
-      if (error) {
-        console.log("Error fetching existing document:", error.message);
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+        console.error("Error fetching existing document:", error);
         return;
       }
       
@@ -73,11 +66,9 @@ export function DocumentUploader({
   };
   
   // Check for existing document on component mount
-  useEffect(() => {
-    if (user) {
-      fetchExistingDocument();
-    }
-  }, [user, documentType]);
+  useState(() => {
+    fetchExistingDocument();
+  });
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {

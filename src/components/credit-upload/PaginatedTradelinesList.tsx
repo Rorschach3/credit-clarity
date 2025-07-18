@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Pagination,
@@ -12,21 +13,24 @@ import {
   PaginationPrevious,
 } from '@/components/ui/pagination';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Loader2 } from 'lucide-react';
+import { ArrowUpDown, ChevronUp, ChevronDown, Loader2 } from 'lucide-react';
 import { usePaginatedTradelines } from '@/hooks/usePaginatedTradelines';
-import { PaginationOptions, ParsedTradeline } from '@/utils/tradelineParser';
-import { EditableTradelineCard } from './EditableTradelineCard';
+import { PaginationOptions } from '@/utils/tradelineParser';
 
 interface PaginatedTradelinesListProps {
   userId: string;
-  onUpdate?: (id: string, updates: Partial<ParsedTradeline>) => void;
+  onSelect?: (id: string) => void;
+  onUpdate?: (id: string, updates: any) => void;
   onDelete?: (id: string) => void;
+  selectedIds?: Set<string>;
 }
 
 const PaginatedTradelinesList: React.FC<PaginatedTradelinesListProps> = ({
   userId,
+  onSelect,
   onUpdate,
-  onDelete
+  onDelete,
+  selectedIds = new Set()
 }) => {
   const {
     tradelines,
@@ -54,6 +58,16 @@ const PaginatedTradelinesList: React.FC<PaginatedTradelinesListProps> = ({
     field: 'created_at',
     direction: 'desc'
   });
+
+  const handleSort = (field: PaginationOptions['sortBy']) => {
+    const newDirection = 
+      currentSort.field === field && currentSort.direction === 'desc' 
+        ? 'asc' 
+        : 'desc';
+    
+    setCurrentSort({ field, direction: newDirection });
+    setSorting(field, newDirection);
+  };
 
   const generatePageNumbers = () => {
     const pages = [];
@@ -87,6 +101,15 @@ const PaginatedTradelinesList: React.FC<PaginatedTradelinesListProps> = ({
     }
     
     return pages;
+  };
+
+  const SortIcon = ({ field }: { field: PaginationOptions['sortBy'] }) => {
+    if (currentSort.field !== field) {
+      return <ArrowUpDown className="h-4 w-4" />;
+    }
+    return currentSort.direction === 'asc' 
+      ? <ChevronUp className="h-4 w-4" />
+      : <ChevronDown className="h-4 w-4" />;
   };
 
   if (error) {
@@ -146,50 +169,105 @@ const PaginatedTradelinesList: React.FC<PaginatedTradelinesListProps> = ({
           </div>
         ) : (
           <>
-            {/* Sorting Controls */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Sort by:</span>
-                <Select 
-                  value={`${currentSort.field}-${currentSort.direction}`}
-                  onValueChange={(value) => {
-                    const [field, direction] = value.split('-') as [PaginationOptions['sortBy'], PaginationOptions['sortOrder']];
-                    setCurrentSort({ field, direction });
-                    setSorting(field, direction);
-                  }}
-                >
-                  <SelectTrigger className="w-48">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="creditor_name-asc">Creditor A-Z</SelectItem>
-                    <SelectItem value="creditor_name-desc">Creditor Z-A</SelectItem>
-                    <SelectItem value="account_balance-asc">Balance Low-High</SelectItem>
-                    <SelectItem value="account_balance-desc">Balance High-Low</SelectItem>
-                    <SelectItem value="created_at-asc">Date Added Oldest</SelectItem>
-                    <SelectItem value="created_at-desc">Date Added Newest</SelectItem>
-                  </SelectContent>
-                </Select>
+            {/* Table Header */}
+            <div className="grid grid-cols-12 gap-4 p-3 bg-muted rounded-lg mb-4 text-sm font-medium">
+              <div className="col-span-1">
+                <input
+                  type="checkbox"
+                  className="rounded"
+                  // Add select all functionality here if needed
+                />
               </div>
+              <div className="col-span-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto p-0 font-medium"
+                  onClick={() => handleSort('creditor_name')}
+                >
+                  Creditor
+                  <SortIcon field="creditor_name" />
+                </Button>
+              </div>
+              <div className="col-span-2">Account Number</div>
+              <div className="col-span-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto p-0 font-medium"
+                  onClick={() => handleSort('account_balance')}
+                >
+                  Balance
+                  <SortIcon field="account_balance" />
+                </Button>
+              </div>
+              <div className="col-span-2">Status</div>
+              <div className="col-span-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto p-0 font-medium"
+                  onClick={() => handleSort('created_at')}
+                >
+                  Date
+                  <SortIcon field="created_at" />
+                </Button>
+              </div>
+              <div className="col-span-1">Actions</div>
             </div>
 
-            {/* Editable Tradeline Cards */}
-            <div className="space-y-4">
+            {/* Table Body */}
+            <div className="space-y-2">
               {tradelines.map((tradeline) => (
-                <EditableTradelineCard
+                <div
                   key={tradeline.id}
-                  tradeline={tradeline}
-                  onUpdate={(updates) => {
-                    if (onUpdate) {
-                      onUpdate(tradeline.id, updates);
-                    }
-                  }}
-                  onDelete={() => {
-                    if (onDelete) {
-                      onDelete(tradeline.id);
-                    }
-                  }}
-                />
+                  className={`grid grid-cols-12 gap-4 p-3 border rounded-lg transition-colors ${
+                    selectedIds.has(tradeline.id) ? 'bg-blue-50 border-blue-200' : 'hover:bg-muted/50'
+                  }`}
+                >
+                  <div className="col-span-1 flex items-center">
+                    <input
+                      type="checkbox"
+                      className="rounded"
+                      checked={selectedIds.has(tradeline.id)}
+                      onChange={() => onSelect?.(tradeline.id)}
+                    />
+                  </div>
+                  <div className="col-span-3 flex items-center">
+                    <div>
+                      <p className="font-medium">{tradeline.creditor_name}</p>
+                      <p className="text-sm text-muted-foreground">{tradeline.account_type}</p>
+                    </div>
+                  </div>
+                  <div className="col-span-2 flex items-center">
+                    <span className="font-mono text-sm">
+                      {tradeline.account_number}
+                    </span>
+                  </div>
+                  <div className="col-span-2 flex items-center">
+                    <span className="font-medium">{tradeline.account_balance}</span>
+                  </div>
+                  <div className="col-span-2 flex items-center">
+                    <Badge variant={tradeline.is_negative ? "destructive" : "secondary"}>
+                      {tradeline.account_status}
+                    </Badge>
+                  </div>
+                  <div className="col-span-1 flex items-center">
+                    <span className="text-sm text-muted-foreground">
+                      {new Date(tradeline.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="col-span-1 flex items-center">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onDelete?.(tradeline.id)}
+                      className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                    >
+                      ×
+                    </Button>
+                  </div>
+                </div>
               ))}
             </div>
 
