@@ -41,9 +41,12 @@ export const PacketGenerationSection: React.FC<PacketGenerationSectionProps> = (
         <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
           <CheckCircle className="h-5 w-5 text-green-600" />
           <div>
-            <p className="font-medium text-green-800">Ready to Generate Packet</p>
+            <p className="font-medium text-green-800">Ready to Generate Complete Packet</p>
             <p className="text-sm text-green-600">
               Letters generated • {documentsCompleted ? 'Documents uploaded' : 'Documents skipped'}
+            </p>
+            <p className="text-xs text-green-500 mt-1">
+              Will include dispute letters + any uploaded documents (ID, SSN, utility bill)
             </p>
           </div>
         </div>
@@ -69,7 +72,7 @@ export const PacketGenerationSection: React.FC<PacketGenerationSectionProps> = (
               size="lg"
             >
               <Upload className="h-4 w-4 mr-2" />
-              Generate & Save Dispute Packet
+              Generate Complete Dispute Packet
             </Button>
           )}
 
@@ -81,7 +84,7 @@ export const PacketGenerationSection: React.FC<PacketGenerationSectionProps> = (
               variant="default"
             >
               <Download className="h-4 w-4 mr-2" />
-              Download Dispute Packet
+              Download Complete Packet
             </Button>
           )}
 
@@ -97,9 +100,12 @@ export const PacketGenerationSection: React.FC<PacketGenerationSectionProps> = (
         {/* Success Message */}
         {generationProgress.progress === 100 && (
           <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-            <p className="font-medium text-green-800">Dispute Packet Complete!</p>
+            <p className="font-medium text-green-800">Complete Dispute Packet Ready!</p>
             <p className="text-sm text-green-600 mt-1">
-              Your dispute packet has been generated and saved. Download it, print, sign, and mail with certified mail.
+              Your complete dispute packet has been generated and includes all dispute letters plus any uploaded documents (ID, SSN card, utility bill).
+            </p>
+            <p className="text-sm text-green-600 mt-2">
+              📋 Next steps: Download, print, sign, and mail with certified mail to each credit bureau.
             </p>
           </div>
         )}

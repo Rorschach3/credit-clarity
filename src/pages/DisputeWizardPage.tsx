@@ -27,9 +27,17 @@ import { MailingInstructions } from "@/components/disputes/MailingInstructions";
 import { 
   generateDisputeLetters, 
   generatePDFPacket,
+  generateCompletePacket,
   type GeneratedDisputeLetter,
   type PacketProgress
 } from '@/utils/disputeUtils';
+import { 
+  fetchUserDocuments,
+  downloadDocumentBlobs,
+  hasRequiredDocuments,
+  getMissingDocuments,
+  type DocumentBlob
+} from '@/utils/documentPacketUtils';
 import { type ParsedTradeline } from '@/utils/tradelineParser';
 
 interface UploadedDocument {
@@ -319,32 +327,78 @@ const DisputeWizardPage = () => {
   };
 
   const handlePrepareDisputePacket = async () => {
-    if (!generatedPDF || !user?.id || !generatedLetters.length) {
-      toast.error("No dispute packet ready to upload");
+    if (!user?.id || !generatedLetters.length) {
+      toast.error("No dispute letters ready");
       return;
     }
 
     try {
       setIsGenerating(true);
       setGenerationProgress({ 
-        step: 'Uploading packet...', 
+        step: 'Fetching documents...', 
         progress: 0, 
-        message: 'Preparing to upload dispute packet' 
+        message: 'Checking for uploaded documents' 
       });
 
-      // Upload PDF to Supabase storage
-      const fileName = `dispute-packet-${Date.now()}.pdf`;
-      const filePath = `${user.id}/${fileName}`;
+      // Fetch user documents
+      const userDocuments = await fetchUserDocuments(user.id);
       
       setGenerationProgress({ 
-        step: 'Uploading to storage...', 
-        progress: 25, 
-        message: 'Uploading PDF to secure storage' 
+        step: 'Validating documents...', 
+        progress: 10, 
+        message: 'Checking required documents' 
       });
 
+      // Check if we have documents to include
+      let documentBlobs: DocumentBlob[] = [];
+      
+      if (userDocuments.length > 0) {
+        // Check for missing documents
+        const missingDocs = getMissingDocuments(userDocuments);
+        if (missingDocs.length > 0) {
+          toast.info(`Missing documents: ${missingDocs.join(', ')}`, {
+            description: "Proceeding with available documents"
+          });
+        }
+
+        // Download document blobs
+        documentBlobs = await downloadDocumentBlobs(userDocuments, setGenerationProgress);
+        
+        if (documentBlobs.length === 0) {
+          toast.warning("No documents could be downloaded", {
+            description: "Creating packet with dispute letters only"
+          });
+        }
+      } else {
+        toast.info("No documents uploaded", {
+          description: "Creating packet with dispute letters only"
+        });
+      }
+
+      // Generate complete packet
+      const completePacket = await generateCompletePacket(
+        generatedLetters, 
+        documentBlobs, 
+        setGenerationProgress
+      );
+
+      // Update the generated PDF state
+      setGeneratedPDF(completePacket);
+      
+      const fileName = `complete-dispute-packet-${Date.now()}.pdf`;
+      setPdfFilename(fileName);
+
+      setGenerationProgress({ 
+        step: 'Uploading packet...', 
+        progress: 80, 
+        message: 'Uploading to secure storage' 
+      });
+
+      // Upload complete packet to storage
+      const filePath = `${user.id}/${fileName}`;
       const { error: uploadError } = await supabase.storage
         .from('dispute_packets')
-        .upload(filePath, generatedPDF, {
+        .upload(filePath, completePacket, {
           contentType: 'application/pdf',
           upsert: false
         });
@@ -353,18 +407,12 @@ const DisputeWizardPage = () => {
 
       setGenerationProgress({ 
         step: 'Saving to database...', 
-        progress: 50, 
+        progress: 90, 
         message: 'Saving packet information' 
       });
 
       // Save to database with updated info
-      await saveDisputePacketRecord(user.id, generatedLetters, pdfFilename);
-
-      setGenerationProgress({ 
-        step: 'Updating storage reference...', 
-        progress: 75, 
-        message: 'Linking storage file' 
-      });
+      await saveDisputePacketRecord(user.id, generatedLetters, fileName);
 
       // Update the dispute packet record with the storage URL
       const { error: updateError } = await supabase
@@ -375,21 +423,22 @@ const DisputeWizardPage = () => {
           updated_at: new Date().toISOString()
         })
         .eq('user_id', user.id)
-        .eq('filename', pdfFilename);
+        .eq('filename', fileName);
 
       if (updateError) throw updateError;
 
       setGenerationProgress({ 
         step: 'Complete!', 
         progress: 100, 
-        message: 'Dispute packet saved successfully' 
+        message: 'Complete dispute packet ready for download' 
       });
 
       // Refresh workflow state to mark as completed
       refreshWorkflowState();
 
-      toast.success("Dispute packet prepared successfully!", {
-        description: "Your packet has been saved and is ready for download"
+      const documentsIncluded = documentBlobs.length;
+      toast.success("Complete dispute packet prepared successfully!", {
+        description: `Includes ${generatedLetters.length} letter(s) and ${documentsIncluded} document(s)`
       });
 
       // Close the packet generation section

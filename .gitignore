@@ -44,3 +44,4 @@ my-fullstack-agent/uv.lock
 __pycache__/llm_parser.cpython-313.pyc
 backend/service_account.json
 .mcp.json
+.mcp.json
