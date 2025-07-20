@@ -246,30 +246,59 @@ export default function ProfilePage() {
             {/* Avatar Section */}
             <div className="flex flex-col items-center mb-6 p-4 border rounded-lg">
               <div className="relative mb-4">
-                {user && (
-                  <CurrentUserAvatar 
-                    user={{
-                      id: user.id,
-                      name: `${profile.first_name} ${profile.last_name}`.trim() || undefined,
-                      email: user.email || undefined,
-                      avatar: avatarUrl || undefined
-                    }} 
-                  />
-                )}
-                <Button
-                  type="button"
-                  size="icon"
-                  className="absolute -bottom-2 -right-2 rounded-full"
+                {/* Custom larger avatar for profile page */}
+                <div 
+                  className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-gray-200 bg-gray-100 cursor-pointer transition-all duration-200 hover:border-primary hover:shadow-md group"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingAvatar}
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Upload profile picture"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      fileInputRef.current?.click();
+                    }
+                  }}
                 >
-                  {uploadingAvatar ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                  {avatarUrl ? (
+                    <img 
+                      src={avatarUrl} 
+                      alt="Profile avatar" 
+                      className="w-full h-full object-cover group-hover:brightness-75 transition-all duration-200"
+                    />
                   ) : (
-                    <Camera className="h-4 w-4" />
+                    <div className="w-full h-full bg-primary/10 flex items-center justify-center text-2xl font-semibold text-primary group-hover:bg-primary/20 transition-colors duration-200">
+                      {profile.first_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
+                    </div>
                   )}
-                </Button>
+                  
+                  {/* Camera overlay that appears on hover */}
+                  <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                    <Camera className="h-6 w-6 text-white" />
+                  </div>
+                  
+                  {/* Camera button overlay */}
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="default"
+                    className="absolute -bottom-1 -right-1 rounded-full w-8 h-8 shadow-lg z-10"
+                    onClick={(e) => {
+                      e.stopPropagation(); // Prevent double-clicking
+                      fileInputRef.current?.click();
+                    }}
+                    disabled={uploadingAvatar}
+                    aria-label="Change profile picture"
+                  >
+                    {uploadingAvatar ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                    ) : (
+                      <Camera className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
               </div>
+              
               <input
                 ref={fileInputRef}
                 type="file"
@@ -277,8 +306,9 @@ export default function ProfilePage() {
                 onChange={handleAvatarUpload}
                 className="hidden"
               />
+              
               <p className="text-sm text-muted-foreground text-center">
-                Click the camera icon to update your profile picture
+                Click anywhere on the avatar or camera icon to update your profile picture
               </p>
             </div>
 

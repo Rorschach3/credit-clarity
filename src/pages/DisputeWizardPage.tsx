@@ -13,6 +13,7 @@ import { ProfileStatus } from '@/components/ui/profile-status';
 import { v4 as uuidv4 } from 'uuid';
 import { DocumentUploadSection } from "@/components/disputes/DocumentUploadSection";
 import { MailingInstructions } from "@/components/disputes/MailingInstructions";
+import ChatbotWidget from "@/components/ChatbotWidget";
 
 // Import new components
 import { DisputeWizardHeader } from '@/components/dispute-wizard/DisputeWizardHeader';
@@ -505,6 +506,9 @@ const DisputeWizardPage = () => {
           )}
         </CardContent>
       </Card>
+      
+      {/* Credit Clarity AI Chatbot */}
+      <ChatbotWidget />
     </div>
   );
 };

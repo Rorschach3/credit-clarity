@@ -1,17 +1,22 @@
 // Lazy-loaded processing utilities for CreditReportUploadPage
 import { ParsedTradeline } from '@/utils/tradelineParser';
+import { 
+  processWithOCR as processOCR, 
+  processWithAI as processAI,
+  extractKeywordsFromText,
+  generateAIInsights,
+  type ProcessingProgress
+} from '@/utils/creditReportProcessor';
 
 // Dynamic imports for heavy processing dependencies
 export const loadOCRProcessor = async () => {
-  // This would load OCR libraries only when needed
-  const { useCreditReportProcessing } = await import('@/hooks/useCreditReportProcessing');
-  return useCreditReportProcessing;
+  // Return the pure OCR processing function
+  return processOCR;
 };
 
 export const loadAIProcessor = async () => {
-  // This would load AI/ML libraries only when needed
-  const { useCreditReportProcessing } = await import('@/hooks/useCreditReportProcessing');
-  return useCreditReportProcessing;
+  // Return the pure AI processing function
+  return processAI;
 };
 
 export const loadFileUploadHandler = async () => {
@@ -20,12 +25,8 @@ export const loadFileUploadHandler = async () => {
   return useFileUploadHandler;
 };
 
-// Processing status interface
-export interface ProcessingProgress {
-  step: string;
-  progress: number;
-  message: string;
-}
+// Re-export the interface
+export type { ProcessingProgress };
 
 // Async OCR processing
 export const processFileWithOCR = async (
@@ -39,9 +40,8 @@ export const processFileWithOCR = async (
     message: 'Initializing text extraction'
   });
 
-  // Dynamically import OCR processor
-  const useCreditReportProcessing = await loadOCRProcessor();
-  const processor = useCreditReportProcessing(userId);
+  // Get the pure OCR processing function
+  const processOCR = await loadOCRProcessor();
 
   updateProgress({
     step: 'Extracting Text...',
@@ -49,25 +49,30 @@ export const processFileWithOCR = async (
     message: 'Reading document content'
   });
 
-  const extractedText = await processor.processWithOCR(file);
+  try {
+    const extractedText = await processOCR(file, userId);
 
-  updateProgress({
-    step: 'Parsing Tradelines...',
-    progress: 70,
-    message: 'Identifying credit accounts'
-  });
+    updateProgress({
+      step: 'Parsing Tradelines...',
+      progress: 70,
+      message: 'Identifying credit accounts'
+    });
 
-  // Simulate tradeline parsing
-  await new Promise(resolve => setTimeout(resolve, 1000));
+    // Since OCR only extracts text, we don't get tradelines directly
+    // You might want to parse the text or send it to AI processing instead
+    updateProgress({
+      step: 'Finalizing...',
+      progress: 90,
+      message: 'Text extraction complete'
+    });
 
-  updateProgress({
-    step: 'Finalizing...',
-    progress: 90,
-    message: 'Preparing results'
-  });
-
-  // Return empty array for now - this would contain actual parsed tradelines
-  return [];
+    // Return empty array for OCR-only processing
+    // In a real scenario, you'd want to parse tradelines from the extracted text
+    return [];
+  } catch (error) {
+    console.error('OCR processing failed:', error);
+    throw error;
+  }
 };
 
 // Async AI processing
@@ -82,9 +87,8 @@ export const processFileWithAI = async (
     message: 'Initializing AI processing'
   });
 
-  // Dynamically import AI processor
-  const useCreditReportProcessing = await loadAIProcessor();
-  const processor = useCreditReportProcessing(userId);
+  // Get the pure AI processing function
+  const processAI = await loadAIProcessor();
 
   updateProgress({
     step: 'AI Analysis...',
@@ -92,22 +96,27 @@ export const processFileWithAI = async (
     message: 'Analyzing credit report structure'
   });
 
-  const result = await processor.processWithAI(file);
+  try {
+    const result = await processAI(file, userId);
 
-  updateProgress({
-    step: 'Validating Results...',
-    progress: 80,
-    message: 'Verifying extracted data'
-  });
+    updateProgress({
+      step: 'Validating Results...',
+      progress: 80,
+      message: 'Verifying extracted data'
+    });
 
-  // Simulate validation
-  await new Promise(resolve => setTimeout(resolve, 500));
+    // Simulate validation
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-  updateProgress({
-    step: 'Complete!',
-    progress: 100,
-    message: 'Processing finished'
-  });
+    updateProgress({
+      step: 'Complete!',
+      progress: 100,
+      message: 'Processing finished'
+    });
 
-  return result.tradelines;
+    return result.tradelines;
+  } catch (error) {
+    console.error('AI processing failed:', error);
+    throw error;
+  }
 };

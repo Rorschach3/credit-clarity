@@ -72,7 +72,17 @@ const CreditReportUploadPage = () => {
   };
 
   // Handle file upload and processing
-  const handleFileUpload = useCallback(async (file: File) => {
+  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log("🔥 CACHE BUSTER - handleFileUpload called with:", typeof event, event.constructor.name);
+    
+    const file = event.target.files?.[0];
+    console.log("📁 File extracted:", file instanceof File, file?.name, file?.type, file?.size);
+    
+    if (!file) {
+      sonnerToast.error("Please select a file");
+      return;
+    }
+    
     if (!user?.id) {
       sonnerToast.error("Please log in to upload files");
       return;
@@ -212,25 +222,23 @@ const CreditReportUploadPage = () => {
         </Suspense>
 
         {/* Tradelines Display */}
-        {extractedTradelines.length > 0 && (
-          <Suspense fallback={<ComponentLoading message="Loading tradelines..." />}>
-            {usePagination ? (
-              <PaginatedTradelinesList
-                tradelines={extractedTradelines}
-                onDelete={handleTradelineDelete}
-                onSaveAll={handleSaveAll}
-                onAddManual={() => setShowManualModal(true)}
-              />
-            ) : (
+        <Suspense fallback={<ComponentLoading message="Loading tradelines..." />}>
+          {usePagination ? (
+            <PaginatedTradelinesList
+              userId={user?.id || ""}
+              onDelete={handleTradelineDelete}
+            />
+          ) : (
+            extractedTradelines.length > 0 && (
               <TradelinesList
                 tradelines={extractedTradelines}
                 onDelete={handleTradelineDelete}
                 onSaveAll={handleSaveAll}
                 onAddManual={() => setShowManualModal(true)}
               />
-            )}
-          </Suspense>
-        )}
+            )
+          )}
+        </Suspense>
 
         {/* Manual Tradeline Modal */}
         {showManualModal && (

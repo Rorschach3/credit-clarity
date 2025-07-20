@@ -1,5 +1,6 @@
 {
     "recommendations": [
-        "rooveterinaryinc.roo-cline"
+        "rooveterinaryinc.roo-cline",
+        "anthropic.claude-code"
     ]
 }

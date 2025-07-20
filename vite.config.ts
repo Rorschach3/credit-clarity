@@ -14,6 +14,13 @@ export default defineConfig(({ mode }) => ({
     watch: {
       ignored: ['**/.venv/**'],
     },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+    },
   },
   plugins: [react()], // visualizer({ filename: "./dist/bundle-analysis.html", open: true, gzipSize: true, brotliSize: true })],
   resolve: {
@@ -26,7 +33,16 @@ export default defineConfig(({ mode }) => ({
     minify: mode === "production",
     target: "esnext",
     chunkSizeWarningLimit: 1000,
+    commonjsOptions: {
+      include: [/pako/, /node_modules/],
+      transformMixedEsModules: true,
+    },
     rollupOptions: {
+      external: (id) => {
+        // Handle external dependencies that cause issues
+        if (id.includes('node:')) return true;
+        return false;
+      },
       output: {
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
@@ -90,6 +106,7 @@ export default defineConfig(({ mode }) => ({
       "@tanstack/react-query",
       "@supabase/supabase-js",
       "lucide-react",
+      "pako", // Include pako for proper CommonJS to ES module conversion
     ],
     exclude: [
       "@google-cloud/aiplatform",
@@ -100,5 +117,9 @@ export default defineConfig(({ mode }) => ({
       "jspdf",
       "pdf-lib",
     ],
+  },
+  define: {
+    // Fix for pako default export issue
+    global: 'globalThis',
   },
 }));

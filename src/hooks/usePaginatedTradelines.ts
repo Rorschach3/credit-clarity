@@ -111,6 +111,16 @@ export const usePaginatedTradelines = ({
   }, [loadTradelines]);
 
   const setPageSize = useCallback((pageSize: number) => {
+    // Immediately update pagination state for responsive UI
+    setPagination(prev => ({
+      ...prev,
+      pageSize,
+      page: 1,
+      totalPages: Math.ceil(prev.totalCount / pageSize),
+      hasNext: 1 < Math.ceil(prev.totalCount / pageSize),
+      hasPrevious: false
+    }));
+    
     // Reset to first page when changing page size
     loadTradelines({ pageSize, page: 1 });
   }, [loadTradelines]);

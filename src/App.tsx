@@ -16,6 +16,7 @@ import {
   ProfileLoading,
   DashboardLoading 
 } from './components/ui/loading';
+import { Analytics } from "@vercel/analytics/next"
 
 // Eager load lightweight pages
 import HomePage from "@/pages/HomePage";
@@ -49,6 +50,7 @@ function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
+        <Analytics />
         <AuthProvider>
           <Router>
             <AppContent />
@@ -56,6 +58,7 @@ function App() {
         </AuthProvider>
         {/* React Query DevTools - only shows in development */}
         <ReactQueryDevtools initialIsOpen={false} />
+        < Analytics />
       </QueryClientProvider>
     </ErrorBoundary>
   );

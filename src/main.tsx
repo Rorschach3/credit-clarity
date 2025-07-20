@@ -5,6 +5,7 @@ import './index.css';
 import './styles/globals.css';
 import { ThemeProvider } from './components/theme-provider';
 import { AuthProvider } from './hooks/use-auth';
+import { Analytics } from "@vercel/analytics/next"
 
 const container = document.getElementById('root');
 if (!container) {
@@ -17,6 +18,7 @@ root.render(
   <React.StrictMode>
     <AuthProvider>
       <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+        <Analytics />
         <App />
       </ThemeProvider>
     </AuthProvider>

@@ -20,7 +20,7 @@ export async function processCreditReport(
   formData.append('file', file);
   formData.append('user_id', userId);
 
-  const response = await fetch('/api/process-credit-report', {
+  const response = await fetch('http://localhost:8000/process-credit-report', {
     method: 'POST',
     body: formData,
   });

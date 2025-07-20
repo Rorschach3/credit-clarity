@@ -13,7 +13,10 @@
       "Bash(npm cache clean:*)",
       "Bash(npx vite:*)",
       "Bash(node:*)",
-      "Bash(npm:*)"
+      "Bash(npm:*)",
+      "Bash(pkill:*)",
+      "Bash(curl:*)",
+      "Bash(python:*)"
     ],
     "deny": []
   }

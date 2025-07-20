@@ -107,45 +107,125 @@ export const convertAPITradelineToDatabase = (
 };
 };
 
-// Save tradelines to Supabase database
+// Save tradelines to Supabase database with fuzzy matching for deduplication
 export const saveTradelinesToDatabase = async (tradelines: ParsedTradeline[], authUserId: string) => {
   try {
     console.log(`[DEBUG] 💾 Saving ${tradelines.length} tradelines to Supabase for user ${authUserId}`);
     
-    // ✅ Use authUserId directly instead of getUserProfileId
-    const userId = authUserId; // Don't call getUserProfileId
-    
+    const userId = authUserId;
     console.log(`[DEBUG] 👤 Using auth user ID directly: ${userId}`);
     
-    // No deletion - just upsert new tradelines (will update existing duplicates)
-    const tradelinesForDB = tradelines.map(t => ({
-      ...t,
-      user_id: userId, // Use auth user ID
-    }));
-
-    // Log each tradeline being saved for debugging
-    console.log(`[DEBUG] ➕ Upserting ${tradelinesForDB.length} tradelines (will overwrite duplicates)`);
-    console.log(`[DEBUG] Tradelines to save:`, tradelinesForDB.map(t => ({
-      creditor: t.creditor_name,
-      account: t.account_number,
-      user_id: t.user_id
-    })));
+    // Import fuzzy matching functions
+    const { 
+      findExistingTradelineByFuzzyMatch, 
+      mergeTradelineFields, 
+      updateTradelineFields 
+    } = await import('@/utils/fuzzyTradelineMatching');
     
-    const { data, error: insertError } = await supabase
-      .from('tradelines')
-      .upsert(tradelinesForDB, { 
-        onConflict: 'user_id,account_number,creditor_name',
-        ignoreDuplicates: false 
-      })
-      .select();
-
-    if (insertError) {
-      console.error('[ERROR] ❌ Failed to save tradelines to Supabase:', insertError);
-      throw insertError;
+    const newTradelines: ParsedTradeline[] = [];
+    const updatedTradelines: { id: string, updates: any }[] = [];
+    
+    // Process each tradeline individually for fuzzy matching
+    for (const tradeline of tradelines) {
+      // Ensure we only include valid database fields with proper defaults
+      const tradelineForDB: ParsedTradeline = {
+        id: tradeline.id || generateUUID(),
+        user_id: userId,
+        creditor_name: tradeline.creditor_name || 'Unknown Creditor',
+        account_number: tradeline.account_number || 'Unknown',
+        account_balance: tradeline.account_balance || '$0',
+        account_status: tradeline.account_status || 'Unknown',
+        account_type: tradeline.account_type || 'Unknown',
+        date_opened: tradeline.date_opened || '',
+        is_negative: Boolean(tradeline.is_negative),
+        dispute_count: tradeline.dispute_count || 0,
+        created_at: tradeline.created_at || new Date().toISOString(),
+        credit_limit: tradeline.credit_limit || '$0',
+        credit_bureau: tradeline.credit_bureau || 'Unknown',
+        monthly_payment: tradeline.monthly_payment || '$0',
+      };
+      
+      console.log(`[DEBUG] 🔍 Processing tradeline: ${tradeline.creditor_name} - ${tradeline.account_number}`);
+      
+      // Check for fuzzy matches
+      const fuzzyMatch = await findExistingTradelineByFuzzyMatch(tradelineForDB, userId);
+      
+      if (fuzzyMatch && fuzzyMatch.isMatch && fuzzyMatch.existingTradeline) {
+        // Found a match - merge only empty fields
+        const updates = mergeTradelineFields(fuzzyMatch.existingTradeline, tradelineForDB);
+        
+        if (Object.keys(updates).length > 0) {
+          updatedTradelines.push({
+            id: fuzzyMatch.existingTradeline.id,
+            updates
+          });
+          console.log(`[DEBUG] 🔄 Will update existing tradeline ${fuzzyMatch.existingTradeline.id} with ${Object.keys(updates).length} fields`);
+        } else {
+          console.log(`[DEBUG] ✅ Existing tradeline ${fuzzyMatch.existingTradeline.id} is already complete, no updates needed`);
+        }
+      } else {
+        // No match found - add as new tradeline
+        newTradelines.push(tradelineForDB);
+        console.log(`[DEBUG] ➕ Will insert new tradeline: ${tradeline.creditor_name}`);
+      }
     }
+    
+    const results = [];
+    
+    // Insert new tradelines (duplicates are already handled by fuzzy matching)
+    if (newTradelines.length > 0) {
+      console.log(`[DEBUG] ➕ Upserting ${newTradelines.length} new tradelines`);
+      console.log('[DEBUG] 📋 Sample tradeline data being upserted:', JSON.stringify(newTradelines[0], null, 2));
+      
+      // Validate all tradelines before upsert
+      const validatedTradelines = newTradelines.map((tradeline) => {
+        const validation = validateParsedTradeline(tradeline);
+        if (!validation.success) {
+          console.error('[ERROR] ❌ Tradeline validation failed:', validation.error);
+          throw new Error(`Tradeline validation failed: ${validation.error}`);
+        }
+        return validation.data!;
+      });
+      
+      const { data: insertData, error: insertError } = await supabase
+        .from('tradelines')
+        .upsert(validatedTradelines, { 
+          onConflict: 'id',
+          ignoreDuplicates: false 
+        })
+        .select('*');
 
-    console.log(`[SUCCESS] ✅ Successfully saved ${data?.length || 0} tradelines`);
-    return data;
+      if (insertError) {
+        console.error('[ERROR] ❌ Failed to upsert new tradelines:', insertError);
+        throw insertError;
+      }
+      
+      results.push(...(insertData || []));
+      console.log(`[SUCCESS] ✅ Successfully upserted ${insertData?.length || 0} tradelines`);
+    }
+    
+    // Update existing tradelines
+    if (updatedTradelines.length > 0) {
+      console.log(`[DEBUG] 🔄 Updating ${updatedTradelines.length} existing tradelines`);
+      
+      for (const { id, updates } of updatedTradelines) {
+        const success = await updateTradelineFields(id, updates);
+        if (!success) {
+          console.warn(`[WARNING] ⚠️ Failed to update tradeline ${id}`);
+        }
+      }
+      
+      console.log(`[SUCCESS] ✅ Successfully processed ${updatedTradelines.length} tradeline updates`);
+    }
+    
+    console.log(`[SUMMARY] 📊 Tradeline processing complete:`, {
+      total: tradelines.length,
+      newInserts: newTradelines.length,
+      updates: updatedTradelines.length,
+      totalProcessed: newTradelines.length + updatedTradelines.length
+    });
+    
+    return results;
     
   } catch (error) {
     console.error('[ERROR] ❌ Error in saveTradelinesToDatabase:', error);

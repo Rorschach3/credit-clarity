@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test File Upload</title>
+</head>
+<body>
+    <h1>Test File Upload</h1>
+    <input type="file" id="fileInput" accept=".pdf" />
+    <button onclick="testUpload()">Test Upload</button>
+    <div id="output"></div>
+
+    <script>
+        async function testUpload() {
+            const fileInput = document.getElementById('fileInput');
+            const output = document.getElementById('output');
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                output.innerHTML = '<p style="color: red;">Please select a file first</p>';
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            
+            // Debug file details
+            console.log('File instance check:', file instanceof File);
+            console.log('File details:', { name: file.name, type: file.type, size: file.size });
+            
+            // Create FormData
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('user_id', 'test-user-123');
+            
+            // Log FormData contents
+            console.log('FormData contents:');
+            for (let [key, value] of formData.entries()) {
+                console.log(key, value);
+            }
+            
+            try {
+                output.innerHTML = '<p>Uploading...</p>';
+                
+                const response = await fetch('http://localhost:8000/process-credit-report', {
+                    method: 'POST',
+                    body: formData,
+                    // Do NOT set Content-Type - browser sets it with boundary
+                });
+                
+                const responseText = await response.text();
+                
+                if (response.ok) {
+                    output.innerHTML = `<p style="color: green;">Success: ${responseText}</p>`;
+                } else {
+                    output.innerHTML = `<p style="color: orange;">Response (${response.status}): ${responseText}</p>`;
+                }
+            } catch (error) {
+                output.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+                console.error('Upload error:', error);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -30,6 +30,9 @@ from datetime import datetime
 from dotenv import load_dotenv # type: ignore
 load_dotenv()
 
+# Import chatbot service
+from services.chatbot_service import CreditChatbotService
+
 # Enhanced logging setup
 logging.basicConfig(
     level=logging.DEBUG,
@@ -78,6 +81,18 @@ except Exception as e:
     logger.error(f"❌ Gemini initialization failed: {e}")
     gemini_model = None
 
+# Initialize chatbot service
+try:
+    if supabase and GEMINI_API_KEY:
+        chatbot_service = CreditChatbotService(supabase, GEMINI_API_KEY)
+        logger.info("✅ Chatbot service initialized")
+    else:
+        logger.error("❌ Chatbot service initialization failed - missing dependencies")
+        chatbot_service = None
+except Exception as e:
+    logger.error(f"❌ Chatbot service initialization failed: {e}")
+    chatbot_service = None
+
 # Initialize Document AI client
 try:
     if os.path.exists('./service-account.json'):
@@ -117,6 +132,35 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"]
 )
+
+def detect_credit_bureau(text_content: str) -> str:
+    """
+    Detect credit bureau from PDF text content.
+    Searches for: Equifax, Experian, TransUnion
+    Returns the first bureau found, or "Unknown" if none detected.
+    """
+    if not text_content:
+        return "Unknown"
+    
+    # Convert to lowercase for case-insensitive matching
+    text_lower = text_content.lower()
+    
+    # Credit bureau names to search for (in order of priority)
+    bureaus = [
+        ("equifax", "Equifax"),
+        ("experian", "Experian"), 
+        ("transunion", "TransUnion"),
+        ("trans union", "TransUnion")  # Handle space variation
+    ]
+    
+    # Search for each bureau name
+    for search_term, bureau_name in bureaus:
+        if search_term in text_lower:
+            logger.info(f"🔍 Credit bureau detected: {bureau_name}")
+            return bureau_name
+    
+    logger.info("🔍 No credit bureau detected, using 'Unknown'")
+    return "Unknown"
 
 class SupabaseService:
     def __init__(self):
@@ -175,10 +219,10 @@ class DocumentAIProcessor:
         )
         logger.info(f"✅ Document AI processor configured for {LOCATION}")
     
-    def extract_text(self, pdf_path: str) -> str:
-        """Extract text from PDF using Document AI"""
+    def extract_text_and_entities(self, pdf_path: str) -> tuple[str, list]:
+        """Extract both text and structured entities from PDF using Document AI Form Parser"""
         try:
-            logger.info(f"📄 Starting Document AI text extraction from {pdf_path}")
+            logger.info(f"📄 Starting Document AI form parsing from {pdf_path}")
             
             with open(pdf_path, "rb") as pdf_file:
                 pdf_content = pdf_file.read()
@@ -191,23 +235,174 @@ class DocumentAIProcessor:
             )
             
             name = self.client.processor_path(PROJECT_ID, LOCATION, PROCESSOR_ID)
-            logger.info(f"🔗 Using processor: {name}")
+            logger.info(f"🔗 Using Form Parser processor: {name}")
             
             request = documentai.ProcessRequest(name=name, raw_document=raw_document)
             
-            logger.info("🚀 Sending request to Document AI...")
+            logger.info("🚀 Sending request to Document AI Form Parser...")
             result = self.client.process_document(request=request)
             
-            extracted_text = result.document.text
-            logger.info(f"✅ Document AI extracted {len(extracted_text)} characters")
-            logger.debug(f"📝 First 500 chars: {extracted_text[:500]}...")
+            document = result.document
+            extracted_text = document.text
+            logger.info(f"✅ Document AI extracted {len(extracted_text)} characters of text")
             
-            return extracted_text
+            # Extract form fields (key-value pairs)
+            form_fields = []
+            for page in document.pages:
+                for form_field in page.form_fields:
+                    field_name = ""
+                    field_value = ""
+                    
+                    if form_field.field_name:
+                        field_name = self._get_text(form_field.field_name, extracted_text)
+                    if form_field.field_value:
+                        field_value = self._get_text(form_field.field_value, extracted_text)
+                    
+                    if field_name and field_value:
+                        form_fields.append({
+                            "field_name": field_name.strip(),
+                            "field_value": field_value.strip()
+                        })
+            
+            logger.info(f"📋 Extracted {len(form_fields)} form fields")
+            for field in form_fields[:5]:  # Log first 5 fields for debugging
+                logger.debug(f"  Field: '{field['field_name']}' = '{field['field_value']}'")
+            
+            return extracted_text, form_fields
+            
+        except Exception as e:
+            logger.error(f"❌ Document AI form parsing failed: {str(e)}")
+            logger.error(f"📍 Traceback: {traceback.format_exc()}")
+            raise
+    
+    def _get_text(self, text_anchor, full_text: str) -> str:
+        """Extract text from Document AI text anchor"""
+        if not text_anchor or not text_anchor.text_segments:
+            return ""
+        
+        text_segments = []
+        for segment in text_anchor.text_segments:
+            start_index = int(segment.start_index) if segment.start_index else 0
+            end_index = int(segment.end_index) if segment.end_index else len(full_text)
+            text_segments.append(full_text[start_index:end_index])
+        
+        return "".join(text_segments)
+    
+    def extract_text(self, pdf_path: str) -> str:
+        """Extract text from PDF using Document AI (backwards compatibility)"""
+        try:
+            # Use the new method but only return text
+            text, _ = self.extract_text_and_entities(pdf_path)
+            return text
             
         except Exception as e:
             logger.error(f"❌ Document AI failed: {str(e)}")
             logger.error(f"📍 Traceback: {traceback.format_exc()}")
             raise
+    
+    def extract_structured_tradelines(self, pdf_path: str) -> List[Dict[str, Any]]:
+        """Extract tradelines using Document AI form fields for better accuracy"""
+        try:
+            text, form_fields = self.extract_text_and_entities(pdf_path)
+            logger.info(f"🔍 Processing {len(form_fields)} form fields for tradeline extraction")
+            
+            # Group form fields by proximity and likely tradeline groupings
+            tradelines = []
+            field_groups = self._group_form_fields_by_tradeline(form_fields)
+            
+            for group in field_groups:
+                tradeline = self._extract_tradeline_from_field_group(group)
+                if tradeline and tradeline.get("creditor_name"):
+                    tradelines.append(tradeline)
+            
+            logger.info(f"✅ Document AI structured extraction found {len(tradelines)} tradelines")
+            return tradelines
+            
+        except Exception as e:
+            logger.error(f"❌ Document AI structured extraction failed: {str(e)}")
+            return []
+    
+    def _group_form_fields_by_tradeline(self, form_fields: List[Dict]) -> List[List[Dict]]:
+        """Group form fields that likely belong to the same tradeline"""
+        groups = []
+        current_group = []
+        
+        # Simple grouping based on creditor names and field patterns
+        for field in form_fields:
+            field_name = field["field_name"].lower()
+            field_value = field["field_value"]
+            
+            # Check if this might be a new tradeline (creditor name)
+            is_creditor = any(keyword in field_name for keyword in ["name", "bank", "creditor", "lender"])
+            is_company = any(keyword in field_value.upper() for keyword in ["BANK", "CREDIT", "FINANCIAL", "CAPITAL", "CHASE", "AMEX"])
+            
+            if (is_creditor or is_company) and current_group:
+                # Start new group
+                groups.append(current_group)
+                current_group = [field]
+            else:
+                current_group.append(field)
+        
+        if current_group:
+            groups.append(current_group)
+        
+        logger.debug(f"📊 Grouped {len(form_fields)} fields into {len(groups)} potential tradelines")
+        return groups
+    
+    def _extract_tradeline_from_field_group(self, field_group: List[Dict]) -> Dict[str, Any]:
+        """Extract tradeline data from a group of related form fields"""
+        tradeline = {
+            "creditor_name": "",
+            "account_balance": "",
+            "credit_limit": "",
+            "monthly_payment": "",
+            "account_number": "",
+            "date_opened": "",
+            "account_type": "Credit Card",
+            "account_status": "Open",
+            "credit_bureau": "",
+            "is_negative": False,
+            "dispute_count": 0
+        }
+        
+        for field in field_group:
+            field_name = field["field_name"].lower()
+            field_value = field["field_value"].strip()
+            
+            if not field_value:
+                continue
+            
+            # Map field names to tradeline fields using enhanced patterns
+            if any(keyword in field_name for keyword in ["name", "creditor", "lender", "bank"]):
+                tradeline["creditor_name"] = field_value
+            
+            elif any(keyword in field_name for keyword in ["high credit", "credit limit", "limit", "maximum", "credit line"]):
+                if field_mapper.validate_currency_format(field_value):
+                    tradeline["credit_limit"] = field_value
+            
+            elif any(keyword in field_name for keyword in ["payment", "monthly", "minimum", "pay amt"]):
+                if field_mapper.validate_currency_format(field_value):
+                    tradeline["monthly_payment"] = field_value
+            
+            elif any(keyword in field_name for keyword in ["balance", "current", "amount owed"]):
+                if field_mapper.validate_currency_format(field_value):
+                    tradeline["account_balance"] = field_value
+            
+            elif any(keyword in field_name for keyword in ["account", "number", "acct"]):
+                tradeline["account_number"] = field_value
+            
+            elif any(keyword in field_name for keyword in ["date", "opened", "start"]):
+                tradeline["date_opened"] = field_value
+            
+            elif any(keyword in field_name for keyword in ["type", "kind", "category"]):
+                account_type = field_mapper.extract_account_type(field_value, tradeline["creditor_name"])
+                if account_type:
+                    tradeline["account_type"] = account_type.replace("_", " ").title()
+            
+            elif any(keyword in field_name for keyword in ["status", "condition", "state"]):
+                tradeline["account_status"] = field_value
+        
+        return tradeline
 
 class GeminiProcessor:
     def extract_tradelines(self, text: str) -> List[Dict[str, Any]]:
@@ -232,18 +427,54 @@ class GeminiProcessor:
     def _extract_tradelines_single(self, text: str) -> List[Dict[str, Any]]:
         """Extract tradelines from a single text chunk"""
         prompt = f"""
-        Extract credit tradeline information from this credit report text. 
-        Return ONLY a JSON array of objects with these exact fields:
-        - creditor_name (string)
-        - account_balance (string, include $ if present)
-        - credit_limit (string, include $ if present) 
-        - monthly_payment (string, include $ if present)
-        - account_number (string)
-        - date_opened (string, format: MM/DD/YYYY)
-        - account_type (string: Credit Card, Mortgage, Auto Loan, etc.)
-        - account_status (string: Open, Closed, Current, etc.)
-        - credit_bureau (string: Experian, Equifax, TransUnion)
-        - is_negative (boolean: true if account has negative marks)
+        You are analyzing a credit report that may have OCR errors. Extract credit tradeline information carefully.
+
+        CRITICAL FIELD PATTERNS TO FIND:
+        
+        CREDIT_LIMIT field names (look for these exact phrases):
+        - "High Credit", "High Cr edit", "HighCredit"
+        - "Credit Limit", "Credit Lim it", "CreditLimit" 
+        - "Limit", "Lmt", "Credit Line", "CL"
+        - "Maximum", "Max", "Original Amount"
+        - "Available Credit", "Credit Available"
+        
+        MONTHLY_PAYMENT field names (look for these exact phrases):
+        - "Monthly Payment", "Monthly Pay ment", "MonthlyPayment"
+        - "Payment", "Pay ment", "Pmt", "Pay"
+        - "Min Payment", "Minimum Payment", "Min Pmt"
+        - "Payment Amount", "Payment Amt", "PaymentAmt"
+        - "Amount Due", "Due Amount"
+
+        ACCOUNT_TYPE indicators:
+        - "R" or "Rev" or "Revolving" = Credit Card
+        - "I" or "Inst" or "Installment" = Installment Loan  
+        - "M" or "Mtg" or "Mortgage" = Mortgage
+        - Look at creditor name for context (FORD = Auto, NAVIENT = Student)
+
+        OCR ERROR HANDLING:
+        - Text may have extra spaces: "High Cr edit" instead of "High Credit"
+        - Numbers may be split: "2, 500.00" instead of "2,500.00"
+        - Dollar signs may be separate: "$ 1,234" instead of "$1,234"
+        - Field names may be broken across lines
+
+        REAL CREDIT REPORT EXAMPLES:
+        Example 1: "CHASE BANK    High Credit: $5,000    Payment: $125    Balance: $1,250"
+        Example 2: "Capital One   Limit $3,000   Min Payment $89   Current Bal $892"
+        Example 3: "FORD CREDIT   Original Amount: $25,000   Monthly Pmt: $389   Balance: $18,500"
+
+        Return ONLY a JSON array with these exact fields:
+        - creditor_name (string): Bank/lender name
+        - account_balance (string): Current balance with $ (e.g., "$1,234.56")
+        - credit_limit (string): High credit/limit with $ (e.g., "$5,000.00") - PRIORITY FIELD
+        - monthly_payment (string): Monthly/min payment with $ (e.g., "$125.00") - PRIORITY FIELD  
+        - account_number (string): Account number (e.g., "****1234")
+        - date_opened (string): Date opened (MM/DD/YYYY format)
+        - account_type (string): "Credit Card", "Auto Loan", "Mortgage", "Student Loan", "Personal Loan", "Store Card", "Line of Credit"
+        - account_status (string): "Open", "Closed", "Current", "Late", "Charged Off"
+        - credit_bureau (string): "Experian", "Equifax", "TransUnion"
+        - is_negative (boolean): true if negative marks present
+
+        FOCUS ESPECIALLY on finding credit_limit and monthly_payment values - these are the most important fields.
 
         Text to analyze:
         {text[:15000]}
@@ -269,8 +500,29 @@ class GeminiProcessor:
         if json_match:
             import json
             tradelines = json.loads(json_match.group())
-            logger.info(f"✅ Gemini extracted {len(tradelines)} tradelines")
-            return tradelines
+            logger.info(f"🔍 Gemini extracted {len(tradelines)} raw tradelines")
+            
+            # Validate and score Gemini results
+            validated_tradelines = []
+            for tradeline in tradelines:
+                validation_result = field_validator.validate_tradeline(tradeline)
+                
+                # Add validation metadata
+                tradeline["_validation"] = {
+                    "confidence_score": validation_result["confidence_score"],
+                    "is_valid": validation_result["is_valid"],
+                    "warnings": validation_result["warnings"],
+                    "errors": validation_result["errors"]
+                }
+                
+                # Include tradelines with reasonable confidence
+                if validation_result["confidence_score"] >= 0.4:  # Higher threshold for Gemini
+                    validated_tradelines.append(tradeline)
+                else:
+                    logger.warning(f"⚠️ Excluding low-confidence Gemini tradeline: {tradeline.get('creditor_name')} (confidence: {validation_result['confidence_score']:.2f})")
+            
+            logger.info(f"✅ Gemini extracted {len(validated_tradelines)}/{len(tradelines)} valid tradelines")
+            return validated_tradelines
         else:
             logger.warning("⚠️ No JSON array found in Gemini response")
             return []
@@ -311,6 +563,10 @@ class GeminiProcessor:
         
         logger.info(f"✅ Total tradelines extracted from all chunks: {len(all_tradelines)}")
         return all_tradelines
+
+# Import the new field mapper and validator
+from utils.credit_report_field_mappings import field_mapper
+from utils.field_validator import field_validator
 
 def parse_tradelines_basic(text: str) -> List[Dict[str, Any]]:
     """Basic tradeline parsing as backup"""
@@ -450,7 +706,7 @@ def parse_tradelines_basic(text: str) -> List[Dict[str, Any]]:
                     }
                     break
             
-            # Enhance data extraction for current tradeline
+            # Enhance data extraction for current tradeline using the new field mapper
             if current_tradeline:
                 # Look for account numbers (various formats)
                 account_patterns = [
@@ -467,29 +723,48 @@ def parse_tradelines_basic(text: str) -> List[Dict[str, Any]]:
                         current_tradeline["account_number"] = account_match.group(0)
                         break
                 
-                # Look for dollar amounts with better context
+                # Use enhanced field mapper for better extraction
+                if not current_tradeline["credit_limit"]:
+                    extracted_limit = field_mapper.extract_credit_limit(line)
+                    if extracted_limit:
+                        current_tradeline["credit_limit"] = extracted_limit
+                
+                if not current_tradeline["monthly_payment"]:
+                    extracted_payment = field_mapper.extract_monthly_payment(line)
+                    if extracted_payment:
+                        current_tradeline["monthly_payment"] = extracted_payment
+                
+                # Update account type using enhanced mapping
+                extracted_type = field_mapper.extract_account_type(line, current_tradeline["creditor_name"])
+                if extracted_type:
+                    # Convert internal format to display format
+                    type_display_map = {
+                        "credit_card": "Credit Card",
+                        "auto_loan": "Auto Loan", 
+                        "mortgage": "Mortgage",
+                        "student_loan": "Student Loan",
+                        "personal_loan": "Personal Loan",
+                        "store_card": "Store Card",
+                        "line_of_credit": "Line of Credit",
+                        "installment": "Installment Loan",
+                        "business": "Business",
+                        "secured": "Secured"
+                    }
+                    current_tradeline["account_type"] = type_display_map.get(extracted_type, extracted_type.replace("_", " ").title())
+                
+                # Fallback: Look for dollar amounts with basic context
                 dollar_matches = re.findall(r'\$[\d,]+\.?\d*', line)
-                balance_keywords = ['balance', 'amount', 'owed', 'debt']
-                limit_keywords = ['limit', 'credit limit', 'maximum']
-                payment_keywords = ['payment', 'monthly', 'minimum']
+                balance_keywords = ['balance', 'amount', 'owed', 'debt', 'current']
                 
                 for amount in dollar_matches:
                     line_lower = line.lower()
                     
-                    # Check context for balance
+                    # Check context for balance (only if not already set)
                     if any(kw in line_lower for kw in balance_keywords) and not current_tradeline["account_balance"]:
                         current_tradeline["account_balance"] = amount
-                    # Check context for credit limit
-                    elif any(kw in line_lower for kw in limit_keywords) and not current_tradeline["credit_limit"]:
-                        current_tradeline["credit_limit"] = amount
-                    # Check context for payment
-                    elif any(kw in line_lower for kw in payment_keywords) and not current_tradeline["monthly_payment"]:
-                        current_tradeline["monthly_payment"] = amount
-                    # Default assignment if no context
-                    elif not current_tradeline["account_balance"]:
+                    # Default assignment if no other fields set
+                    elif not current_tradeline["account_balance"] and not current_tradeline["credit_limit"] and not current_tradeline["monthly_payment"]:
                         current_tradeline["account_balance"] = amount
-                    elif not current_tradeline["credit_limit"]:
-                        current_tradeline["credit_limit"] = amount
                 
                 # Look for dates
                 date_patterns = [
@@ -538,8 +813,27 @@ def parse_tradelines_basic(text: str) -> List[Dict[str, Any]]:
         if current_tradeline and current_tradeline.get("creditor_name"):
             tradelines.append(current_tradeline)
         
-        logger.info(f"✅ Basic parsing extracted {len(tradelines)} tradelines")
-        return tradelines
+        # Validate and score all extracted tradelines
+        validated_tradelines = []
+        for tradeline in tradelines:
+            validation_result = field_validator.validate_tradeline(tradeline)
+            
+            # Add validation metadata to tradeline
+            tradeline["_validation"] = {
+                "confidence_score": validation_result["confidence_score"],
+                "is_valid": validation_result["is_valid"],
+                "warnings": validation_result["warnings"],
+                "errors": validation_result["errors"]
+            }
+            
+            # Only include tradelines with reasonable confidence
+            if validation_result["confidence_score"] >= 0.3:  # Minimum 30% confidence
+                validated_tradelines.append(tradeline)
+            else:
+                logger.warning(f"⚠️ Excluding low-confidence tradeline: {tradeline.get('creditor_name')} (confidence: {validation_result['confidence_score']:.2f})")
+        
+        logger.info(f"✅ Basic parsing extracted {len(validated_tradelines)}/{len(tradelines)} valid tradelines")
+        return validated_tradelines
         
     except Exception as e:
         logger.error(f"❌ Basic parsing failed: {str(e)}")
@@ -771,6 +1065,102 @@ async def debug_parsing(
         logger.error(f"❌ Debug parsing failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Debug parsing failed: {str(e)}")
 
+# Chatbot endpoints
+@app.post("/chat")
+async def chat_endpoint(request: dict):
+    """
+    Main chatbot endpoint for credit-focused conversations
+    """
+    try:
+        if not chatbot_service:
+            raise HTTPException(status_code=503, detail="Chatbot service not available")
+        
+        user_id = request.get('userId')
+        message = request.get('message')
+        conversation_history = request.get('conversationHistory', [])
+        
+        if not user_id:
+            raise HTTPException(status_code=400, detail="User ID is required")
+        
+        if not message:
+            raise HTTPException(status_code=400, detail="Message is required")
+        
+        logger.info(f"💬 Chat request from user {user_id}: {message[:100]}...")
+        
+        # Generate response using chatbot service
+        result = await chatbot_service.generate_response(user_id, message, conversation_history)
+        
+        if result["success"]:
+            logger.info(f"✅ Chat response generated for user {user_id}")
+            return {
+                "success": True,
+                "response": result["response"],
+                "user_context": result.get("user_context", {}),
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+        else:
+            logger.error(f"❌ Chat response failed: {result.get('error')}")
+            return {
+                "success": False,
+                "error": result.get("error"),
+                "response": result.get("response", "Sorry, I couldn't process your request."),
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Chat endpoint failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Chat request failed: {str(e)}")
+
+@app.get("/chat/history/{user_id}")
+async def get_chat_history(user_id: str, limit: int = 10):
+    """
+    Get conversation history for a user
+    """
+    try:
+        if not chatbot_service:
+            raise HTTPException(status_code=503, detail="Chatbot service not available")
+        
+        logger.info(f"📜 Fetching chat history for user {user_id}")
+        
+        history = await chatbot_service.get_conversation_history(user_id, limit)
+        
+        return {
+            "success": True,
+            "history": history,
+            "count": len(history),
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Chat history request failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch chat history: {str(e)}")
+
+@app.get("/chat/suggestions/{user_id}")
+async def get_credit_suggestions(user_id: str):
+    """
+    Get proactive credit improvement suggestions for a user
+    """
+    try:
+        if not chatbot_service:
+            raise HTTPException(status_code=503, detail="Chatbot service not available")
+        
+        logger.info(f"💡 Generating credit suggestions for user {user_id}")
+        
+        suggestions = await chatbot_service.suggest_credit_actions(user_id)
+        
+        return {
+            "success": suggestions["success"],
+            "suggestions": suggestions.get("suggestions", []),
+            "user_summary": suggestions.get("user_summary", {}),
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Credit suggestions request failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate suggestions: {str(e)}")
+
 @app.post("/process-credit-report")
 async def process_credit_report(
     file: UploadFile = File(...),
@@ -820,31 +1210,49 @@ async def process_credit_report(
         
         tradelines = []
         processing_method = "none"
+        detected_bureau = "Unknown"  # Initialize with default value
         
-        # Step 1: Try Document AI first
+        # Step 1: Try Document AI Form Parser first (enhanced structured extraction)
         try:
             if client and PROJECT_ID and PROCESSOR_ID:
-                logger.info("🤖 Attempting Document AI processing...")
-                processing_method = "document_ai"
+                logger.info("🤖 Attempting Document AI Form Parser processing...")
+                processing_method = "document_ai_form_parser"
                 
-                extracted_text = document_ai.extract_text(temp_file_path)
-                logger.info(f"✅ Document AI text extraction successful")
-                
-                # Try Gemini for tradeline extraction
-                if gemini_model:
-                    logger.info("🧠 Attempting Gemini tradeline extraction...")
-                    tradelines = gemini_processor.extract_tradelines(extracted_text)
-                    if tradelines:
-                        processing_method = "document_ai + gemini"
-                        logger.info(f"✅ Gemini extraction successful: {len(tradelines)} tradelines")
+                # Try structured extraction first (best for credit_limit and monthly_payment)
+                structured_tradelines = document_ai.extract_structured_tradelines(temp_file_path)
+                if structured_tradelines:
+                    # For structured extraction, we still need to extract text to detect bureau
+                    extracted_text = document_ai.extract_text(temp_file_path)
+                    detected_bureau = detect_credit_bureau(extracted_text)
+                    logger.info(f"🏢 Credit bureau detected from structured path: {detected_bureau}")
+                    
+                    tradelines = structured_tradelines
+                    processing_method = "document_ai_structured"
+                    logger.info(f"✅ Document AI structured extraction successful: {len(tradelines)} tradelines")
+                else:
+                    # Fallback to text + AI extraction
+                    extracted_text = document_ai.extract_text(temp_file_path)
+                    logger.info(f"✅ Document AI text extraction successful")
+                    
+                    # Detect credit bureau from extracted text
+                    detected_bureau = detect_credit_bureau(extracted_text)
+                    logger.info(f"🏢 Credit bureau detected: {detected_bureau}")
+                    
+                    # Try Gemini for tradeline extraction
+                    if gemini_model:
+                        logger.info("🧠 Attempting Gemini tradeline extraction...")
+                        tradelines = gemini_processor.extract_tradelines(extracted_text)
+                        if tradelines:
+                            processing_method = "document_ai + gemini"
+                            logger.info(f"✅ Gemini extraction successful: {len(tradelines)} tradelines")
+                        else:
+                            logger.info("⚠️ Gemini found no tradelines, trying basic parsing...")
+                            tradelines = parse_tradelines_basic(extracted_text)
+                            processing_method = "document_ai + basic"
                     else:
-                        logger.info("⚠️ Gemini found no tradelines, trying basic parsing...")
+                        logger.info("⚠️ Gemini not available, using basic parsing...")
                         tradelines = parse_tradelines_basic(extracted_text)
                         processing_method = "document_ai + basic"
-                else:
-                    logger.info("⚠️ Gemini not available, using basic parsing...")
-                    tradelines = parse_tradelines_basic(extracted_text)
-                    processing_method = "document_ai + basic"
             else:
                 logger.warning("⚠️ Document AI not properly configured")
                 raise Exception("Document AI not configured")
@@ -852,28 +1260,29 @@ async def process_credit_report(
         except Exception as doc_ai_error:
             logger.error(f"❌ Document AI processing failed: {str(doc_ai_error)}")
             
-            # Fallback: Try PyPDF2 + Gemini
+            # Fallback: Try Enhanced PyPDF2 + Gemini
             try:
-                logger.info("🔄 Trying PyPDF2 + Gemini fallback...")
-                processing_method = "pypdf2_fallback"
+                logger.info("🔄 Trying Enhanced PyPDF2 + Gemini fallback...")
+                processing_method = "pypdf2_enhanced_fallback"
                 
-                with open(temp_file_path, 'rb') as file:
-                    reader = PyPDF2.PdfReader(file)
-                    text = ""
-                    for page in reader.pages:
-                        text += page.extract_text()
+                # Enhanced PDF text extraction with table structure preservation
+                extracted_text = _extract_text_with_table_structure(temp_file_path)
                 
-                logger.info(f"📖 PyPDF2 extracted {len(text)} characters")
+                logger.info(f"📖 Enhanced PyPDF2 extracted {len(extracted_text)} characters")
                 
-                if gemini_model and text.strip():
-                    tradelines = gemini_processor.extract_tradelines(text)
-                    processing_method = "pypdf2 + gemini"
-                    logger.info(f"✅ PyPDF2 + Gemini successful: {len(tradelines)} tradelines")
+                # Detect credit bureau from extracted text
+                detected_bureau = detect_credit_bureau(extracted_text)
+                logger.info(f"🏢 Credit bureau detected: {detected_bureau}")
+                
+                if gemini_model and extracted_text.strip():
+                    tradelines = gemini_processor.extract_tradelines(extracted_text)
+                    processing_method = "pypdf2_enhanced + gemini"
+                    logger.info(f"✅ Enhanced PyPDF2 + Gemini successful: {len(tradelines)} tradelines")
                 
                 if not tradelines:
-                    logger.info("🔧 Using basic parsing as final fallback...")
-                    tradelines = parse_tradelines_basic(text)
-                    processing_method = "pypdf2 + basic"
+                    logger.info("🔧 Using enhanced basic parsing as final fallback...")
+                    tradelines = parse_tradelines_basic(extracted_text)
+                    processing_method = "pypdf2_enhanced + basic"
                     
             except Exception as fallback_error:
                 logger.error(f"❌ All processing methods failed: {str(fallback_error)}")
@@ -882,6 +1291,16 @@ async def process_credit_report(
         
         logger.info(f"📊 Processing completed using: {processing_method}")
         logger.info(f"📈 Found {len(tradelines)} tradelines")
+        
+        # Apply detected credit bureau to all tradelines if not already set
+        if detected_bureau != "Unknown":
+            applied_count = 0
+            for tradeline in tradelines:
+                if not tradeline.get('credit_bureau') or tradeline.get('credit_bureau') == "Unknown" or tradeline.get('credit_bureau') == "":
+                    tradeline['credit_bureau'] = detected_bureau
+                    applied_count += 1
+            if applied_count > 0:
+                logger.info(f"🏢 Applied bureau '{detected_bureau}' to {applied_count} tradelines")
         
         # Step 2: Save tradelines to Supabase (if available)
         saved_count = 0
@@ -948,3 +1367,115 @@ async def process_credit_report(
             status_code=500, 
             detail=f"Processing failed: {str(e)}"
         )
+
+def _extract_text_with_table_structure(pdf_path: str) -> str:
+    """Enhanced PyPDF2 text extraction that preserves table structure for financial documents"""
+    try:
+        logger.info(f"📊 Enhanced PyPDF2 extraction with table structure preservation from {pdf_path}")
+        
+        with open(pdf_path, 'rb') as file:
+            reader = PyPDF2.PdfReader(file)
+            enhanced_text = ""
+            
+            for page_num, page in enumerate(reader.pages):
+                logger.debug(f"Processing page {page_num + 1}")
+                
+                # Extract text with better spacing preservation
+                page_text = page.extract_text()
+                
+                # Apply enhanced table structure detection
+                structured_text = _enhance_table_structure(page_text)
+                
+                # Add page separators
+                if page_num > 0:
+                    enhanced_text += "\n\n===== PAGE BREAK =====\n\n"
+                
+                enhanced_text += structured_text
+        
+        logger.info(f"✅ Enhanced extraction completed: {len(enhanced_text)} characters")
+        return enhanced_text
+        
+    except Exception as e:
+        logger.error(f"❌ Enhanced PyPDF2 extraction failed: {str(e)}")
+        # Fallback to basic PyPDF2
+        with open(pdf_path, 'rb') as file:
+            reader = PyPDF2.PdfReader(file)
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text()
+        return text
+
+def _enhance_table_structure(text: str) -> str:
+    """Enhance table structure in extracted text for better field recognition"""
+    lines = text.split('\n')
+    enhanced_lines = []
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        # Detect potential table rows by looking for patterns common in credit reports
+        if _is_likely_tradeline_row(line):
+            # Add extra spacing around tradeline data for better field separation
+            enhanced_line = _format_tradeline_row(line)
+            enhanced_lines.append(enhanced_line)
+        else:
+            enhanced_lines.append(line)
+    
+    return '\n'.join(enhanced_lines)
+
+def _is_likely_tradeline_row(line: str) -> bool:
+    """Detect if a line likely contains tradeline data"""
+    line_lower = line.lower()
+    
+    # Look for patterns that indicate tradeline data
+    tradeline_indicators = [
+        # Dollar amounts
+        r'\$\d+',
+        # Account numbers
+        r'\*{4,}\d{4}',
+        r'x{4,}\d{4}',
+        # Dates
+        r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}',
+        # Credit terms
+        r'\b(credit|limit|payment|balance|high)\b',
+        # Bank names
+        r'\b(bank|credit|capital|chase|amex|discover|wells|citi)\b',
+    ]
+    
+    matches = 0
+    for pattern in tradeline_indicators:
+        if re.search(pattern, line_lower):
+            matches += 1
+    
+    # If multiple indicators present, likely a tradeline row
+    return matches >= 2
+
+def _format_tradeline_row(line: str) -> str:
+    """Format a tradeline row to improve field extraction"""
+    # Split on multiple spaces to preserve field boundaries
+    parts = re.split(r'\s{2,}', line)
+    
+    formatted_parts = []
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        
+        # Add labels to help field recognition
+        if re.match(r'^\$\d+', part):
+            # This looks like a dollar amount - try to identify what type
+            if any(keyword in line.lower() for keyword in ['limit', 'high', 'maximum', 'credit line']):
+                formatted_parts.append(f"Credit Limit: {part}")
+            elif any(keyword in line.lower() for keyword in ['payment', 'monthly', 'minimum']):
+                formatted_parts.append(f"Monthly Payment: {part}")
+            elif any(keyword in line.lower() for keyword in ['balance', 'current', 'owed']):
+                formatted_parts.append(f"Current Balance: {part}")
+            else:
+                formatted_parts.append(part)
+        else:
+            formatted_parts.append(part)
+    
+    # Join with clear separators
+    return '    |    '.join(formatted_parts)
