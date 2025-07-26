@@ -42,3 +42,6 @@ influxdata-archive_compat.key
 
 mcp.json.roo/mcp.json
 .roo/mcp.json
+
+backend/service-account.json
+backend/service_account.json
