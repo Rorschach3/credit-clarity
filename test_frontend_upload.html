@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test File Upload</title>
+</head>
+<body>
+    <h1>Test File Upload to Backend</h1>
+    <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" id="fileInput" accept=".pdf" required>
+        <input type="text" id="userIdInput" value="test-user" placeholder="User ID">
+        <button type="submit">Upload</button>
+    </form>
+    
+    <div id="result"></div>
+    
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('fileInput');
+            const userIdInput = document.getElementById('userIdInput');
+            const resultDiv = document.getElementById('result');
+            
+            if (!fileInput.files[0]) {
+                resultDiv.innerHTML = '<p style="color: red;">Please select a file</p>';
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            const userId = userIdInput.value;
+            
+            console.log('File details:', {
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                lastModified: file.lastModified
+            });
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('user_id', userId);
+            
+            // Log FormData contents
+            console.log('FormData entries:');
+            for (const [key, value] of formData.entries()) {
+                console.log(`${key}:`, value instanceof File ? `File(${value.name})` : value);
+            }
+            
+            try {
+                resultDiv.innerHTML = '<p>Uploading...</p>';
+                
+                const response = await fetch('http://localhost:8000/debug-upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <h3 style="color: green;">Upload Successful!</h3>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <h3 style="color: red;">Upload Failed!</h3>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                resultDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        });
+    </script>
+</body>
+</html>

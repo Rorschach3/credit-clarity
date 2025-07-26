@@ -27,7 +27,14 @@ dist-ssr
 .env
 dist/
 .env.local
-
+.continue/
+.next/
+.claude/
+.vite/
+.vscode/
+archie/
+.vercel/
+.venv/
 .env
 .env
 influxdata-archive_compat.key

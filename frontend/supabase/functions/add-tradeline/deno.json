@@ -1,0 +1,11 @@
+{
+  "imports": {
+    "std/": "https://deno.land/std@0.177.0/",
+    "supabase/": "https://esm.sh/@supabase/supabase-js@2.43.4",
+    "zod/": "https://deno.land/x/zod@v3.23.3/mod.ts"
+  },
+  "compilerOptions": {
+    "lib": ["deno.ns", "deno.window"],
+    "types": ["https://deno.land/std@0.177.0/http/server.ts"]
+  }
+}

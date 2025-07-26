@@ -1,0 +1,13 @@
+{
+  "tasks": {
+    "start": "deno run --allow-all index.ts"
+  },
+  "imports": {
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.38.4",
+    "@google-cloud/documentai": "https://esm.sh/@google-cloud/documentai@8.6.0",
+    "https://deno.land/x/xhr@0.3.0/mod.ts": "https://deno.land/x/xhr@0.3.0/mod.ts"
+  },
+  "compilerOptions": {
+    "types": ["https://esm.sh/@types/node@20.10.0"]
+  }
+}
