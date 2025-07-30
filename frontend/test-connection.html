@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Frontend-Backend Connection Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        button { padding: 10px 20px; margin: 5px; }
+        input[type="file"] { margin: 10px 0; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow: auto; }
+    </style>
+</head>
+<body>
+    <h1>Frontend-Backend Connection Test</h1>
+    
+    <div class="result info">
+        <strong>Backend URL:</strong> <span id="backend-url">http://localhost:8000</span>
+    </div>
+    
+    <button onclick="testHealth()">1. Test Backend Health</button>
+    <div id="health-result"></div>
+    
+    <button onclick="testConnectivity()">2. Test API Connectivity</button>
+    <div id="connectivity-result"></div>
+    
+    <h3>3. Test PDF Upload</h3>
+    <input type="file" id="pdf-file" accept=".pdf">
+    <button onclick="testUpload()">Upload PDF</button>
+    <div id="upload-result"></div>
+    
+    <h3>Debug Info</h3>
+    <pre id="debug-info"></pre>
+
+    <script>
+        const BACKEND_URL = 'http://localhost:8000';
+        
+        async function testHealth() {
+            const resultDiv = document.getElementById('health-result');
+            resultDiv.innerHTML = '<div class="result info">Testing health endpoint...</div>';
+            
+            try {
+                const response = await fetch(`${BACKEND_URL}/health`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="result success">
+                            ✅ Health check passed!<br>
+                            Status: ${data.status}<br>
+                            Document AI: ${data.services?.document_ai?.configured ? 'Configured' : 'Not configured'}<br>
+                            Gemini: ${data.services?.gemini?.configured ? 'Configured' : 'Not configured'}<br>
+                            Supabase: ${data.services?.supabase?.available ? 'Available' : 'Not available'}
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<div class="result error">❌ Health check failed: ${response.status}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result error">❌ Connection failed: ${error.message}</div>`;
+            }
+        }
+        
+        async function testConnectivity() {
+            const resultDiv = document.getElementById('connectivity-result');
+            resultDiv.innerHTML = '<div class="result info">Testing API connectivity...</div>';
+            
+            try {
+                // Test CORS
+                const response = await fetch(`${BACKEND_URL}/health`, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                    }
+                });
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="result success">
+                            ✅ CORS and connectivity working!<br>
+                            Response headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2)}
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<div class="result error">❌ Connectivity issue: ${response.status}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result error">❌ Connectivity failed: ${error.message}</div>`;
+            }
+        }
+        
+        async function testUpload() {
+            const fileInput = document.getElementById('pdf-file');
+            const resultDiv = document.getElementById('upload-result');
+            const debugDiv = document.getElementById('debug-info');
+            
+            if (!fileInput.files[0]) {
+                resultDiv.innerHTML = '<div class="result error">❌ Please select a PDF file first</div>';
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            resultDiv.innerHTML = '<div class="result info">Uploading PDF...</div>';
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('user_id', 'test-user-frontend');
+                
+                console.log('🚀 Uploading file:', file.name, 'Size:', file.size);
+                
+                // Debug FormData
+                console.log('📦 FormData contents:');
+                for (const [key, value] of formData.entries()) {
+                    console.log(`  ${key}:`, value instanceof File ? `File(${value.name})` : value);
+                }
+                
+                const startTime = Date.now();
+                
+                const response = await fetch(`${BACKEND_URL}/process-credit-report`, {
+                    method: 'POST',
+                    body: formData
+                    // No headers for FormData - let browser set them
+                });
+                
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+                
+                console.log('📨 Response status:', response.status, response.statusText);
+                console.log('📨 Response headers:', Object.fromEntries(response.headers.entries()));
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    resultDiv.innerHTML = `
+                        <div class="result success">
+                            ✅ Upload successful!<br>
+                            Processing time: ${duration}ms<br>
+                            Tradelines found: ${data.tradelines_found || 0}<br>
+                            Processing method: ${data.processing_method || 'Unknown'}
+                        </div>
+                    `;
+                    
+                    debugDiv.textContent = JSON.stringify(data, null, 2);
+                } else {
+                    const errorText = await response.text();
+                    console.error('❌ Upload failed:', response.status, errorText);
+                    
+                    resultDiv.innerHTML = `
+                        <div class="result error">
+                            ❌ Upload failed!<br>
+                            Status: ${response.status} ${response.statusText}<br>
+                            Error: ${errorText}
+                        </div>
+                    `;
+                    
+                    debugDiv.textContent = `Error response: ${errorText}`;
+                }
+            } catch (error) {
+                console.error('❌ Upload error:', error);
+                
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        ❌ Upload error: ${error.message}
+                    </div>
+                `;
+                
+                debugDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        // Auto-populate debug info
+        document.getElementById('debug-info').textContent = `
+Environment:
+- BACKEND_URL: ${BACKEND_URL}
+- User Agent: ${navigator.userAgent}
+- Current URL: ${window.location.href}
+- Current Time: ${new Date().toISOString()}
+        `.trim();
+    </script>
+</body>
+</html>

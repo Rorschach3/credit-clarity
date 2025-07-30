@@ -10,8 +10,10 @@ import logging
 import re
 import traceback
 from typing import List, Dict, Any, Optional
+import sys
+from datetime import datetime
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form # type: ignore
 from fastapi.middleware.cors import CORSMiddleware # type: ignore
 from pydantic import BaseModel, ValidationError # type: ignore
 
@@ -27,11 +29,27 @@ from google.oauth2 import service_account # type: ignore
 from supabase import create_client, Client
 from datetime import datetime
 
+# Import asyncio for timeout handling
+import asyncio
+
 from dotenv import load_dotenv # type: ignore
 load_dotenv()
 
-# Import chatbot service
-from services.chatbot_service import CreditChatbotService
+# Add current directory to Python path for local imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+# Import utility modules
+from utils.field_validator import field_validator
+from utils.tradeline_normalizer import tradeline_normalizer
+
+async def with_timeout(coro, timeout_seconds):
+    try:
+        return await asyncio.wait_for(coro, timeout=timeout_seconds)
+    except asyncio.TimeoutError:
+        logger.error(f"Operation timed out after {timeout_seconds} seconds")
+        raise TimeoutError("Operation timed out")
 
 # Enhanced logging setup
 logging.basicConfig(
@@ -39,6 +57,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+app = FastAPI(title="Credit Report Processor", debug=True)
 
 # Environment variables with debugging
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT_ID")
@@ -81,18 +100,6 @@ except Exception as e:
     logger.error(f"❌ Gemini initialization failed: {e}")
     gemini_model = None
 
-# Initialize chatbot service
-try:
-    if supabase and GEMINI_API_KEY:
-        chatbot_service = CreditChatbotService(supabase, GEMINI_API_KEY)
-        logger.info("✅ Chatbot service initialized")
-    else:
-        logger.error("❌ Chatbot service initialization failed - missing dependencies")
-        chatbot_service = None
-except Exception as e:
-    logger.error(f"❌ Chatbot service initialization failed: {e}")
-    chatbot_service = None
-
 # Initialize Document AI client
 try:
     if os.path.exists('./service-account.json'):
@@ -107,21 +114,19 @@ except Exception as e:
     logger.error(f"❌ Document AI initialization failed: {e}")
     client = None
 
-# Zod-like validation using Pydantic
+# Pydantic validation schema
 class TradelineSchema(BaseModel):
     creditor_name: str = "NULL"
     account_balance: str = ""
     credit_limit: str = ""
     monthly_payment: str = ""
     account_number: str = ""
-    date_opened: str = "xx/xx/xxxxx"
+    date_opened: str = ""
     account_type: str = ""
     account_status: str = ""
     credit_bureau: str = ""
     is_negative: bool = False
     dispute_count: int = 0
-
-app = FastAPI(title="Credit Report Processor", debug=True)
 
 # Enhanced CORS configuration
 app.add_middleware(
@@ -240,7 +245,15 @@ class DocumentAIProcessor:
             request = documentai.ProcessRequest(name=name, raw_document=raw_document)
             
             logger.info("🚀 Sending request to Document AI Form Parser...")
-            result = self.client.process_document(request=request)
+            logger.info(f"📊 Request details - Document size: {len(pdf_content)} bytes, Processor: {name}")
+            
+            # Use asyncio timeout instead of signal for cross-platform compatibility
+            try:
+                result = self.client.process_document(request=request)
+                logger.info("✅ Document AI request completed successfully")
+            except Exception as e:
+                logger.error(f"❌ Document AI error: {e}")
+                raise
             
             document = result.document
             extracted_text = document.text
@@ -275,18 +288,32 @@ class DocumentAIProcessor:
             logger.error(f"📍 Traceback: {traceback.format_exc()}")
             raise
     
-    def _get_text(self, text_anchor, full_text: str) -> str:
-        """Extract text from Document AI text anchor"""
-        if not text_anchor or not text_anchor.text_segments:
+    def _get_text(self, layout, full_text: str) -> str:
+        """Extract text from Document AI layout object"""
+        if not layout:
             return ""
         
-        text_segments = []
-        for segment in text_anchor.text_segments:
-            start_index = int(segment.start_index) if segment.start_index else 0
-            end_index = int(segment.end_index) if segment.end_index else len(full_text)
-            text_segments.append(full_text[start_index:end_index])
+        # Handle Layout objects that have text_anchor property
+        if hasattr(layout, 'text_anchor') and layout.text_anchor:
+            text_anchor = layout.text_anchor
+            if hasattr(text_anchor, 'text_segments') and text_anchor.text_segments:
+                text_segments = []
+                for segment in text_anchor.text_segments:
+                    start_index = int(segment.start_index) if segment.start_index else 0
+                    end_index = int(segment.end_index) if segment.end_index else len(full_text)
+                    text_segments.append(full_text[start_index:end_index])
+                return "".join(text_segments)
         
-        return "".join(text_segments)
+        # Fallback: if the layout object has text_segments directly (older API structure)
+        if hasattr(layout, 'text_segments') and layout.text_segments:
+            text_segments = []
+            for segment in layout.text_segments:
+                start_index = int(segment.start_index) if segment.start_index else 0
+                end_index = int(segment.end_index) if segment.end_index else len(full_text)
+                text_segments.append(full_text[start_index:end_index])
+            return "".join(text_segments)
+        
+        return ""
     
     def extract_text(self, pdf_path: str) -> str:
         """Extract text from PDF using Document AI (backwards compatibility)"""
@@ -306,14 +333,47 @@ class DocumentAIProcessor:
             text, form_fields = self.extract_text_and_entities(pdf_path)
             logger.info(f"🔍 Processing {len(form_fields)} form fields for tradeline extraction")
             
+            # 📊 LOG: Form fields data
+            logger.info("📋 EXTRACTED FORM FIELDS:")
+            for i, field in enumerate(form_fields[:10]):  # Log first 10 fields
+                logger.info(f"  Field {i+1}: '{field['field_name']}' = '{field['field_value']}'")
+            if len(form_fields) > 10:
+                logger.info(f"  ... and {len(form_fields) - 10} more fields")
+            
             # Group form fields by proximity and likely tradeline groupings
             tradelines = []
             field_groups = self._group_form_fields_by_tradeline(form_fields)
             
-            for group in field_groups:
+            # 📊 LOG: Field groupings
+            logger.info(f"🗂️ GROUPED INTO {len(field_groups)} POTENTIAL TRADELINES:")
+            for i, group in enumerate(field_groups):
+                logger.info(f"  Group {i+1}: {len(group)} fields")
+                for field in group[:3]:  # Log first 3 fields per group
+                    logger.info(f"    - '{field['field_name']}' = '{field['field_value']}'")
+                if len(group) > 3:
+                    logger.info(f"    ... and {len(group) - 3} more fields")
+            
+            for i, group in enumerate(field_groups):
+                logger.info(f"🔄 PROCESSING GROUP {i+1}/{len(field_groups)}:")
                 tradeline = self._extract_tradeline_from_field_group(group)
-                if tradeline and tradeline.get("creditor_name"):
-                    tradelines.append(tradeline)
+                
+                # 📊 LOG: Extracted tradeline data
+                if tradeline:
+                    logger.info(f"  📄 EXTRACTED TRADELINE {i+1}:")
+                    logger.info(f"    Creditor: '{tradeline.get('creditor_name', 'N/A')}'")
+                    logger.info(f"    Credit Limit: '{tradeline.get('credit_limit', 'N/A')}'")
+                    logger.info(f"    Monthly Payment: '{tradeline.get('monthly_payment', 'N/A')}'")
+                    logger.info(f"    Balance: '{tradeline.get('account_balance', 'N/A')}'")
+                    logger.info(f"    Account Type: '{tradeline.get('account_type', 'N/A')}'")
+                    logger.info(f"    Account Status: '{tradeline.get('account_status', 'N/A')}'")
+                    
+                    if tradeline.get("creditor_name"):
+                        tradelines.append(tradeline)
+                        logger.info(f"  ✅ ADDED to tradelines list")
+                    else:
+                        logger.info(f"  ❌ SKIPPED - no creditor name")
+                else:
+                    logger.info(f"  ❌ FAILED to extract tradeline from group {i+1}")
             
             logger.info(f"✅ Document AI structured extraction found {len(tradelines)} tradelines")
             return tradelines
@@ -365,6 +425,10 @@ class DocumentAIProcessor:
             "dispute_count": 0
         }
         
+        # First pass: collect potential creditor names and account numbers
+        potential_creditors = []
+        potential_account_numbers = []
+        
         for field in field_group:
             field_name = field["field_name"].lower()
             field_value = field["field_value"].strip()
@@ -372,37 +436,188 @@ class DocumentAIProcessor:
             if not field_value:
                 continue
             
-            # Map field names to tradeline fields using enhanced patterns
-            if any(keyword in field_name for keyword in ["name", "creditor", "lender", "bank"]):
-                tradeline["creditor_name"] = field_value
+            # Enhanced creditor name detection
+            if any(keyword in field_name for keyword in ["name", "creditor", "lender", "bank", "company"]):
+                potential_creditors.append(field_value)
+            elif self._is_likely_creditor_name(field_value):
+                potential_creditors.append(field_value)
             
-            elif any(keyword in field_name for keyword in ["high credit", "credit limit", "limit", "maximum", "credit line"]):
-                if field_mapper.validate_currency_format(field_value):
+            # Enhanced account number detection
+            if any(keyword in field_name for keyword in ["account", "number", "acct", "card"]):
+                potential_account_numbers.append(field_value)
+            elif self._is_likely_account_number(field_value):
+                potential_account_numbers.append(field_value)
+            
+            # Standard field mapping
+            if any(keyword in field_name for keyword in ["high credit", "credit limit", "limit", "maximum", "credit line"]):
+                if self._is_currency_format(field_value):
                     tradeline["credit_limit"] = field_value
             
             elif any(keyword in field_name for keyword in ["payment", "monthly", "minimum", "pay amt"]):
-                if field_mapper.validate_currency_format(field_value):
+                if self._is_currency_format(field_value):
                     tradeline["monthly_payment"] = field_value
             
             elif any(keyword in field_name for keyword in ["balance", "current", "amount owed"]):
-                if field_mapper.validate_currency_format(field_value):
+                if self._is_currency_format(field_value):
                     tradeline["account_balance"] = field_value
             
-            elif any(keyword in field_name for keyword in ["account", "number", "acct"]):
-                tradeline["account_number"] = field_value
-            
-            elif any(keyword in field_name for keyword in ["date", "opened", "start"]):
-                tradeline["date_opened"] = field_value
+            elif any(keyword in field_name for keyword in ["date", "opened", "start", "open"]):
+                if self._is_likely_date(field_value):
+                    tradeline["date_opened"] = field_value
             
             elif any(keyword in field_name for keyword in ["type", "kind", "category"]):
-                account_type = field_mapper.extract_account_type(field_value, tradeline["creditor_name"])
+                account_type = self._extract_account_type_basic(field_value, tradeline["creditor_name"])
                 if account_type:
                     tradeline["account_type"] = account_type.replace("_", " ").title()
             
             elif any(keyword in field_name for keyword in ["status", "condition", "state"]):
                 tradeline["account_status"] = field_value
         
+        # Select best creditor name (prefer actual company names over numeric codes)
+        if potential_creditors:
+            tradeline["creditor_name"] = self._select_best_creditor_name(potential_creditors)
+        
+        # Select best account number (prefer masked numbers)
+        if potential_account_numbers:
+            tradeline["account_number"] = self._select_best_account_number(potential_account_numbers)
+        
         return tradeline
+    
+    def _is_likely_creditor_name(self, value: str) -> bool:
+        """Check if a value is likely a creditor name (not a numeric code)"""
+        if not value or len(value) < 3:
+            return False
+        
+        # Skip purely numeric values (these are likely reference codes)
+        if value.isdigit():
+            return False
+        
+        # Look for company indicators
+        company_indicators = ["bank", "credit", "financial", "capital", "corp", "inc", "llc", "card", "fund", "union"]
+        value_lower = value.lower()
+        
+        # If contains company indicators, likely a creditor
+        if any(indicator in value_lower for indicator in company_indicators):
+            return True
+        
+        # If contains letters and has reasonable length, might be creditor
+        has_letters = any(c.isalpha() for c in value)
+        reasonable_length = 4 <= len(value) <= 50
+        
+        return has_letters and reasonable_length
+    
+    def _is_likely_account_number(self, value: str) -> bool:
+        """Check if a value is likely an account number"""
+        if not value or len(value) < 4:
+            return False
+        
+        # Look for masked account number patterns
+        masked_patterns = [
+            r'\*+\d{4}',           # ****1234
+            r'\d{4}\*+',           # 1234****
+            r'x+\d{4}',            # xxxx1234
+            r'\d{4}x+',            # 1234xxxx
+            r'\*{4}.*\d{4}',       # ****-1234 or similar
+            r'\d{4}.*\*{4}',       # 1234-**** or similar
+        ]
+        
+        for pattern in masked_patterns:
+            if re.search(pattern, value, re.IGNORECASE):
+                return True
+        
+        # Look for account-like numeric patterns (but not phone numbers or dates)
+        if re.match(r'^\d{8,20}$', value):  # 8-20 digit numbers
+            return True
+        
+        return False
+    
+    def _is_likely_date(self, value: str) -> bool:
+        """Check if a value is likely a date"""
+        if not value:
+            return False
+        
+        # Common date patterns
+        date_patterns = [
+            r'\d{1,2}/\d{1,2}/\d{4}',     # MM/DD/YYYY
+            r'\d{1,2}-\d{1,2}-\d{4}',     # MM-DD-YYYY
+            r'\d{4}-\d{1,2}-\d{1,2}',     # YYYY-MM-DD
+            r'\d{1,2}/\d{4}',             # MM/YYYY
+            r'\d{1,2}-\d{4}',             # MM-YYYY
+        ]
+        
+        for pattern in date_patterns:
+            if re.match(pattern, value):
+                return True
+        
+        return False
+    
+    def _select_best_creditor_name(self, candidates: List[str]) -> str:
+        """Select the best creditor name from candidates"""
+        if not candidates:
+            return ""
+        
+        # Score each candidate
+        scored_candidates = []
+        for candidate in candidates:
+            score = 0
+            
+            # Prefer non-numeric values
+            if not candidate.isdigit():
+                score += 10
+            
+            # Prefer values with company indicators
+            company_indicators = ["bank", "credit", "financial", "capital", "corp", "inc", "llc", "card", "fund", "union"]
+            if any(indicator in candidate.lower() for indicator in company_indicators):
+                score += 5
+            
+            # Prefer reasonable length (not too short, not too long)
+            if 4 <= len(candidate) <= 30:
+                score += 3
+            
+            # Prefer values with mixed case (likely proper names)
+            if candidate != candidate.upper() and candidate != candidate.lower():
+                score += 2
+            
+            scored_candidates.append((candidate, score))
+        
+        # Return the highest scoring candidate
+        best_candidate = max(scored_candidates, key=lambda x: x[1])
+        return best_candidate[0]
+    
+    def _select_best_account_number(self, candidates: List[str]) -> str:
+        """Select the best account number from candidates"""
+        if not candidates:
+            return ""
+        
+        # Prefer masked account numbers
+        for candidate in candidates:
+            if self._is_likely_account_number(candidate) and ("*" in candidate or "x" in candidate.lower()):
+                return candidate
+        
+        # Fallback to first candidate
+        return candidates[0]
+    
+    def _is_currency_format(self, value: str) -> bool:
+        """Basic currency format validation"""
+        return bool(re.match(r'^\$?[\d,]+\.?\d*$', value.strip()))
+    
+    def _extract_account_type_basic(self, value: str, creditor_name: str) -> str:
+        """Basic account type extraction"""
+        value_lower = value.lower()
+        creditor_lower = creditor_name.lower()
+        
+        if any(term in value_lower for term in ["revolving", "credit card", "card"]):
+            return "Credit Card"
+        elif any(term in value_lower for term in ["installment", "loan"]):
+            return "Installment Loan"
+        elif any(term in creditor_lower for term in ["auto", "ford", "honda", "toyota"]):
+            return "Auto Loan"
+        elif any(term in creditor_lower for term in ["mortgage", "home"]):
+            return "Mortgage"
+        elif any(term in creditor_lower for term in ["student", "education"]):
+            return "Student Loan"
+        else:
+            return "Credit Card"  # Default
 
 class GeminiProcessor:
     def extract_tradelines(self, text: str) -> List[Dict[str, Any]]:
@@ -426,6 +641,11 @@ class GeminiProcessor:
     
     def _extract_tradelines_single(self, text: str) -> List[Dict[str, Any]]:
         """Extract tradelines from a single text chunk"""
+        logger.info("🧠 GEMINI EXTRACTION - INPUT DATA:")
+        logger.info(f"  Text length: {len(text)} characters")
+        logger.info(f"  First 200 chars: {text[:200]}...")
+        logger.info(f"  Last 200 chars: ...{text[-200:]}")
+        
         prompt = f"""
         You are analyzing a credit report that may have OCR errors. Extract credit tradeline information carefully.
 
@@ -445,10 +665,17 @@ class GeminiProcessor:
         - "Payment Amount", "Payment Amt", "PaymentAmt"
         - "Amount Due", "Due Amount"
 
+        ACCOUNT_NUMBER patterns (PRIORITY - look for these):
+        - Masked numbers: "****1234", "xxxx5678", "1234****", "5678xxxx"
+        - Account references: "Account #: 1234****", "Acct: ****5678"  
+        - Card numbers: "4123 **** **** 5678", "5555-****-****-1234"
+        - Special formats: "CBA0000000001022****", "25068505471E0012024052124****"
+        - Look near creditor names for account identifiers
+        
         ACCOUNT_TYPE indicators:
-        - "R" or "Rev" or "Revolving" = Credit Card
-        - "I" or "Inst" or "Installment" = Installment Loan  
-        - "M" or "Mtg" or "Mortgage" = Mortgage
+        - "R" or "Rev" or "Revolving" = Revolving (Credit Cards)
+        - "I" or "Inst" or "Installment" = Installment (Loans)  
+        - "M" or "Mtg" or "Mortgage" = Installment
         - Look at creditor name for context (FORD = Auto, NAVIENT = Student)
 
         OCR ERROR HANDLING:
@@ -456,6 +683,7 @@ class GeminiProcessor:
         - Numbers may be split: "2, 500.00" instead of "2,500.00"
         - Dollar signs may be separate: "$ 1,234" instead of "$1,234"
         - Field names may be broken across lines
+        - Account numbers may be split: "1234 ****" or "* * * * 5678"
 
         REAL CREDIT REPORT EXAMPLES:
         Example 1: "CHASE BANK    High Credit: $5,000    Payment: $125    Balance: $1,250"
@@ -463,15 +691,15 @@ class GeminiProcessor:
         Example 3: "FORD CREDIT   Original Amount: $25,000   Monthly Pmt: $389   Balance: $18,500"
 
         Return ONLY a JSON array with these exact fields:
-        - creditor_name (string): Bank/lender name
-        - account_balance (string): Current balance with $ (e.g., "$1,234.56")
-        - credit_limit (string): High credit/limit with $ (e.g., "$5,000.00") - PRIORITY FIELD
-        - monthly_payment (string): Monthly/min payment with $ (e.g., "$125.00") - PRIORITY FIELD  
-        - account_number (string): Account number (e.g., "****1234")
-        - date_opened (string): Date opened (MM/DD/YYYY format)
-        - account_type (string): "Credit Card", "Auto Loan", "Mortgage", "Student Loan", "Personal Loan", "Store Card", "Line of Credit"
-        - account_status (string): "Open", "Closed", "Current", "Late", "Charged Off"
-        - credit_bureau (string): "Experian", "Equifax", "TransUnion"
+        - creditor_name (string): Bank/lender name (required)
+        - account_number (string): Account number with masking (e.g., "****1234", "1234****") - PRIORITY FIELD
+        - account_balance (string): Current balance with $ (e.g., "$1,234.56") or null
+        - credit_limit (string): High credit/limit with $ (e.g., "$5,000.00") - PRIORITY FIELD  
+        - monthly_payment (string): Monthly/min payment with $ (e.g., "$125.00") - PRIORITY FIELD
+        - date_opened (string): Date opened (MM/DD/YYYY format) or null
+        - account_type (string): "Revolving" or "Installment" (standardized)
+        - account_status (string): "Current", "Closed", "Late" (standardized)
+        - credit_bureau (string): "Experian", "Equifax", "TransUnion" or null
         - is_negative (boolean): true if negative marks present
 
         FOCUS ESPECIALLY on finding credit_limit and monthly_payment values - these are the most important fields.
@@ -488,41 +716,58 @@ class GeminiProcessor:
         
         # Clean up response to extract JSON
         response_text = response.text.strip()
-        logger.debug(f"📝 Raw Gemini response: {response_text[:500]}...")
+        logger.info(f"📝 GEMINI RAW RESPONSE:")
+        logger.info(f"  Full response: {response_text}")
         
         # Remove markdown code blocks if present
         if response_text.startswith("```"):
             response_text = re.sub(r'^```json\s*', '', response_text)
             response_text = re.sub(r'\s*```$', '', response_text)
+            logger.info(f"  Cleaned response: {response_text}")
         
         # Find JSON array
         json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
         if json_match:
             import json
-            tradelines = json.loads(json_match.group())
-            logger.info(f"🔍 Gemini extracted {len(tradelines)} raw tradelines")
-            
-            # Validate and score Gemini results
-            validated_tradelines = []
-            for tradeline in tradelines:
-                validation_result = field_validator.validate_tradeline(tradeline)
+            try:
+                tradelines = json.loads(json_match.group())
+                logger.info(f"🔍 GEMINI EXTRACTED {len(tradelines)} RAW TRADELINES:")
                 
-                # Add validation metadata
-                tradeline["_validation"] = {
-                    "confidence_score": validation_result["confidence_score"],
-                    "is_valid": validation_result["is_valid"],
-                    "warnings": validation_result["warnings"],
-                    "errors": validation_result["errors"]
-                }
+                # 📊 LOG: Each raw tradeline from Gemini
+                for i, tradeline in enumerate(tradelines):
+                    logger.info(f"  🧠 RAW TRADELINE {i+1}:")
+                    logger.info(f"    Creditor: '{tradeline.get('creditor_name', 'N/A')}'")
+                    logger.info(f"    Credit Limit: '{tradeline.get('credit_limit', 'N/A')}'")
+                    logger.info(f"    Monthly Payment: '{tradeline.get('monthly_payment', 'N/A')}'")
+                    logger.info(f"    Balance: '{tradeline.get('account_balance', 'N/A')}'")
+                    logger.info(f"    Account Type: '{tradeline.get('account_type', 'N/A')}'")
+                    logger.info(f"    Account Status: '{tradeline.get('account_status', 'N/A')}'")
+                    logger.info(f"    Is Negative: {tradeline.get('is_negative', False)}")
                 
-                # Include tradelines with reasonable confidence
-                if validation_result["confidence_score"] >= 0.4:  # Higher threshold for Gemini
-                    validated_tradelines.append(tradeline)
-                else:
-                    logger.warning(f"⚠️ Excluding low-confidence Gemini tradeline: {tradeline.get('creditor_name')} (confidence: {validation_result['confidence_score']:.2f})")
-            
-            logger.info(f"✅ Gemini extracted {len(validated_tradelines)}/{len(tradelines)} valid tradelines")
-            return validated_tradelines
+                # Basic validation - keep tradelines with creditor names
+                validated_tradelines = []
+                logger.info("🔍 VALIDATING GEMINI TRADELINES:")
+                
+                for i, tradeline in enumerate(tradelines):
+                    logger.info(f"  🔍 VALIDATING TRADELINE {i+1}: {tradeline.get('creditor_name', 'N/A')}")
+                    
+                    # Basic validation - must have creditor name
+                    has_creditor = bool(tradeline.get('creditor_name', '').strip())
+                    has_data = bool(tradeline.get('credit_limit') or tradeline.get('monthly_payment') or tradeline.get('account_balance'))
+                    
+                    if has_creditor and has_data:
+                        validated_tradelines.append(tradeline)
+                        logger.info(f"    ✅ ACCEPTED - has creditor and data")
+                    else:
+                        logger.warning(f"    ❌ REJECTED - missing creditor ({has_creditor}) or data ({has_data})")
+                
+                logger.info(f"✅ GEMINI FINAL RESULT: {len(validated_tradelines)}/{len(tradelines)} valid tradelines")
+                return validated_tradelines
+                
+            except json.JSONDecodeError as e:
+                logger.error(f"❌ Failed to parse Gemini JSON: {e}")
+                logger.error(f"  Attempted to parse: {json_match.group()}")
+                return []
         else:
             logger.warning("⚠️ No JSON array found in Gemini response")
             return []
@@ -564,16 +809,23 @@ class GeminiProcessor:
         logger.info(f"✅ Total tradelines extracted from all chunks: {len(all_tradelines)}")
         return all_tradelines
 
-# Import the new field mapper and validator
-from utils.credit_report_field_mappings import field_mapper
-from utils.field_validator import field_validator
-
 def parse_tradelines_basic(text: str) -> List[Dict[str, Any]]:
     """Basic tradeline parsing as backup"""
     try:
-        logger.info("🔧 Using basic tradeline parsing as fallback")
+        logger.info("🔧 BASIC PARSING - INPUT DATA:")
+        logger.info(f"  Text length: {len(text)} characters")
+        logger.info(f"  Number of lines: {len(text.split('\n'))}")
+        logger.info(f"  First 300 chars: {text[:300]}...")
+        
         tradelines = []
         lines = text.split('\n')
+        
+        logger.info("🔍 BASIC PARSING - ANALYZING LINES:")
+        for i, line in enumerate(lines[:20]):  # Log first 20 lines
+            if line.strip():
+                logger.info(f"  Line {i+1}: {line.strip()}")
+        if len(lines) > 20:
+            logger.info(f"  ... and {len(lines) - 20} more lines")
         
         # Comprehensive creditor patterns
         creditor_patterns = [
@@ -663,17 +915,29 @@ def parse_tradelines_basic(text: str) -> List[Dict[str, Any]]:
         ]
         
         current_tradeline = {}
+        tradeline_count = 0
         
-        for line in lines:
+        logger.info("🔍 BASIC PARSING - SEARCHING FOR CREDITORS:")
+        
+        for line_num, line in enumerate(lines):
             line = line.strip()
             if not line:
                 continue
             
             # Look for creditor names
-            for pattern in creditor_patterns:
+            for pattern_idx, pattern in enumerate(creditor_patterns):
                 if re.search(pattern, line, re.IGNORECASE):
+                    logger.info(f"  📍 FOUND CREDITOR on line {line_num+1}: '{line}'")
+                    logger.info(f"    Pattern #{pattern_idx+1}: {pattern}")
+                    
                     # Save previous tradeline if it exists
                     if current_tradeline and current_tradeline.get("creditor_name"):
+                        tradeline_count += 1
+                        logger.info(f"  💾 SAVING PREVIOUS TRADELINE #{tradeline_count}:")
+                        logger.info(f"    Creditor: '{current_tradeline.get('creditor_name')}'")
+                        logger.info(f"    Credit Limit: '{current_tradeline.get('credit_limit')}'")
+                        logger.info(f"    Monthly Payment: '{current_tradeline.get('monthly_payment')}'")
+                        logger.info(f"    Balance: '{current_tradeline.get('account_balance')}'")
                         tradelines.append(current_tradeline)
                     
                     # Extract creditor name
@@ -704,15 +968,28 @@ def parse_tradelines_basic(text: str) -> List[Dict[str, Any]]:
                         "date_opened": "",
                         "dispute_count": 0
                     }
+                    
+                    logger.info(f"  🆕 CREATED NEW TRADELINE:")
+                    logger.info(f"    Creditor: '{creditor_name}'")
+                    logger.info(f"    Account Type: '{account_type}'")
+                    
                     break
             
-            # Enhance data extraction for current tradeline using the new field mapper
+            # Enhance data extraction for current tradeline
             if current_tradeline:
-                # Look for account numbers (various formats)
+                logger.debug(f"    🔍 Analyzing line for tradeline data: '{line}'")
+                
+                # Look for account numbers (enhanced patterns)
                 account_patterns = [
-                    r'\*{4,}\d{4}',  # ****1234
-                    r'x{4,}\d{4}',   # xxxx1234
-                    r'\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}',  # Full card numbers
+                    r'\*{4,}\d{4,}',  # ****1234
+                    r'x{4,}\d{4,}',   # xxxx1234 
+                    r'\d{4,}\*{4,}',  # 1234****
+                    r'\d{4,}x{4,}',   # 1234xxxx
+                    r'(?:account|acct|card)\s*#?\s*:?\s*(\*{4,}\d{4,}|\d{4,}\*{4,})',  # Account #: ****1234
+                    r'(?:account|acct|card)\s*#?\s*:?\s*(x{4,}\d{4,}|\d{4,}x{4,})',    # Account #: xxxx1234
+                    r'\d{13,19}',     # Full card numbers
+                    r'[A-Z]{2,3}\d{10,}\*{4,}',  # CBA0000000001022****
+                    r'\d{8,}[A-Z]\d{4,}\*{4,}',  # 25068505471E0012024052124****
                     r'Account\s*#?\s*:?\s*(\d+)',  # Account #: 123456
                     r'Acct\s*#?\s*:?\s*(\d+)'     # Acct #: 123456
                 ]
@@ -720,51 +997,57 @@ def parse_tradelines_basic(text: str) -> List[Dict[str, Any]]:
                 for pattern in account_patterns:
                     account_match = re.search(pattern, line, re.IGNORECASE)
                     if account_match:
+                        old_account = current_tradeline["account_number"]
                         current_tradeline["account_number"] = account_match.group(0)
+                        logger.info(f"    💳 FOUND ACCOUNT NUMBER: '{old_account}' → '{current_tradeline['account_number']}'")
                         break
                 
-                # Use enhanced field mapper for better extraction
-                if not current_tradeline["credit_limit"]:
-                    extracted_limit = field_mapper.extract_credit_limit(line)
-                    if extracted_limit:
-                        current_tradeline["credit_limit"] = extracted_limit
+                # Look for credit limits
+                credit_limit_patterns = [
+                    r'(high credit|credit limit|limit|maximum|credit line|available credit)\s*:?\s*\$?([\d,]+\.?\d*)',
+                    r'\$?([\d,]+\.?\d*)\s*(high credit|credit limit|limit|maximum)',
+                    r'(high|limit|max)\s*\$?([\d,]+\.?\d*)'
+                ]
                 
-                if not current_tradeline["monthly_payment"]:
-                    extracted_payment = field_mapper.extract_monthly_payment(line)
-                    if extracted_payment:
-                        current_tradeline["monthly_payment"] = extracted_payment
+                for pattern in credit_limit_patterns:
+                    limit_match = re.search(pattern, line, re.IGNORECASE)
+                    if limit_match and not current_tradeline["credit_limit"]:
+                        amount = limit_match.group(2) if len(limit_match.groups()) > 1 else limit_match.group(1)
+                        if amount.isdigit() or ',' in amount or '.' in amount:
+                            current_tradeline["credit_limit"] = f"${amount}"
+                            logger.info(f"    💰 FOUND CREDIT LIMIT: '{current_tradeline['credit_limit']}' from line: '{line}'")
+                            break
                 
-                # Update account type using enhanced mapping
-                extracted_type = field_mapper.extract_account_type(line, current_tradeline["creditor_name"])
-                if extracted_type:
-                    # Convert internal format to display format
-                    type_display_map = {
-                        "credit_card": "Credit Card",
-                        "auto_loan": "Auto Loan", 
-                        "mortgage": "Mortgage",
-                        "student_loan": "Student Loan",
-                        "personal_loan": "Personal Loan",
-                        "store_card": "Store Card",
-                        "line_of_credit": "Line of Credit",
-                        "installment": "Installment Loan",
-                        "business": "Business",
-                        "secured": "Secured"
-                    }
-                    current_tradeline["account_type"] = type_display_map.get(extracted_type, extracted_type.replace("_", " ").title())
+                # Look for monthly payments
+                payment_patterns = [
+                    r'(monthly payment|payment|min payment|minimum payment|pay amt|amount due)\s*:?\s*\$?([\d,]+\.?\d*)',
+                    r'\$?([\d,]+\.?\d*)\s*(monthly payment|payment|min payment|minimum)',
+                    r'(pmt|pay)\s*\$?([\d,]+\.?\d*)'
+                ]
                 
-                # Fallback: Look for dollar amounts with basic context
-                dollar_matches = re.findall(r'\$[\d,]+\.?\d*', line)
-                balance_keywords = ['balance', 'amount', 'owed', 'debt', 'current']
+                for pattern in payment_patterns:
+                    payment_match = re.search(pattern, line, re.IGNORECASE)
+                    if payment_match and not current_tradeline["monthly_payment"]:
+                        amount = payment_match.group(2) if len(payment_match.groups()) > 1 else payment_match.group(1)
+                        if amount.isdigit() or ',' in amount or '.' in amount:
+                            current_tradeline["monthly_payment"] = f"${amount}"
+                            logger.info(f"    💸 FOUND MONTHLY PAYMENT: '{current_tradeline['monthly_payment']}' from line: '{line}'")
+                            break
                 
-                for amount in dollar_matches:
-                    line_lower = line.lower()
-                    
-                    # Check context for balance (only if not already set)
-                    if any(kw in line_lower for kw in balance_keywords) and not current_tradeline["account_balance"]:
-                        current_tradeline["account_balance"] = amount
-                    # Default assignment if no other fields set
-                    elif not current_tradeline["account_balance"] and not current_tradeline["credit_limit"] and not current_tradeline["monthly_payment"]:
-                        current_tradeline["account_balance"] = amount
+                # Look for balances
+                balance_patterns = [
+                    r'(balance|current|amount owed|owed)\s*:?\s*\$?([\d,]+\.?\d*)',
+                    r'\$?([\d,]+\.?\d*)\s*(balance|current|owed)'
+                ]
+                
+                for pattern in balance_patterns:
+                    balance_match = re.search(pattern, line, re.IGNORECASE)
+                    if balance_match and not current_tradeline["account_balance"]:
+                        amount = balance_match.group(2) if len(balance_match.groups()) > 1 else balance_match.group(1)
+                        if amount.isdigit() or ',' in amount or '.' in amount:
+                            current_tradeline["account_balance"] = f"${amount}"
+                            logger.info(f"    💳 FOUND BALANCE: '{current_tradeline['account_balance']}' from line: '{line}'")
+                            break
                 
                 # Look for dates
                 date_patterns = [
@@ -811,28 +1094,33 @@ def parse_tradelines_basic(text: str) -> List[Dict[str, Any]]:
         
         # Add the last tradeline if it exists
         if current_tradeline and current_tradeline.get("creditor_name"):
+            tradeline_count += 1
+            logger.info(f"💾 SAVING FINAL TRADELINE #{tradeline_count}:")
+            logger.info(f"  Creditor: '{current_tradeline.get('creditor_name')}'")
+            logger.info(f"  Credit Limit: '{current_tradeline.get('credit_limit')}'")
+            logger.info(f"  Monthly Payment: '{current_tradeline.get('monthly_payment')}'")
+            logger.info(f"  Balance: '{current_tradeline.get('account_balance')}'")
             tradelines.append(current_tradeline)
         
-        # Validate and score all extracted tradelines
-        validated_tradelines = []
-        for tradeline in tradelines:
-            validation_result = field_validator.validate_tradeline(tradeline)
-            
-            # Add validation metadata to tradeline
-            tradeline["_validation"] = {
-                "confidence_score": validation_result["confidence_score"],
-                "is_valid": validation_result["is_valid"],
-                "warnings": validation_result["warnings"],
-                "errors": validation_result["errors"]
-            }
-            
-            # Only include tradelines with reasonable confidence
-            if validation_result["confidence_score"] >= 0.3:  # Minimum 30% confidence
-                validated_tradelines.append(tradeline)
-            else:
-                logger.warning(f"⚠️ Excluding low-confidence tradeline: {tradeline.get('creditor_name')} (confidence: {validation_result['confidence_score']:.2f})")
+        logger.info(f"🔧 BASIC PARSING EXTRACTED {len(tradelines)} RAW TRADELINES")
         
-        logger.info(f"✅ Basic parsing extracted {len(validated_tradelines)}/{len(tradelines)} valid tradelines")
+        # Basic validation - keep tradelines with creditor names and some data
+        validated_tradelines = []
+        logger.info("🔍 VALIDATING BASIC PARSING TRADELINES:")
+        
+        for i, tradeline in enumerate(tradelines):
+            logger.info(f"  🔍 VALIDATING TRADELINE {i+1}: {tradeline.get('creditor_name', 'N/A')}")
+            
+            has_creditor = bool(tradeline.get('creditor_name', '').strip())
+            has_data = bool(tradeline.get('credit_limit') or tradeline.get('monthly_payment') or tradeline.get('account_balance'))
+            
+            if has_creditor:
+                validated_tradelines.append(tradeline)
+                logger.info(f"    ✅ ACCEPTED - has creditor name")
+            else:
+                logger.warning(f"    ❌ REJECTED - no creditor name")
+        
+        logger.info(f"✅ BASIC PARSING FINAL RESULT: {len(validated_tradelines)}/{len(tradelines)} valid tradelines")
         return validated_tradelines
         
     except Exception as e:
@@ -846,13 +1134,65 @@ async def save_tradeline_to_supabase(tradeline: Dict[str, Any], user_id: str) ->
             logger.warning("⚠️ Supabase not initialized, skipping save")
             return False
             
-        logger.info(f"💾 Saving tradeline to Supabase: {tradeline.get('creditor_name', 'unknown')}")
+        logger.info(f"💾 SUPABASE SAVE - Starting save for: {tradeline.get('creditor_name', 'unknown')}")
+        logger.info(f"    User ID: {user_id}")
         
-        # Validate with Pydantic (Zod equivalent)
-        validated_tradeline = TradelineSchema(**tradeline)
+        # 📊 LOG: Input tradeline data before validation
+        logger.info(f"    📄 INPUT TRADELINE DATA:")
+        logger.info(f"      Creditor: '{tradeline.get('creditor_name', 'N/A')}'")
+        logger.info(f"      Credit Limit: '{tradeline.get('credit_limit', 'N/A')}'")
+        logger.info(f"      Monthly Payment: '{tradeline.get('monthly_payment', 'N/A')}'")
+        logger.info(f"      Balance: '{tradeline.get('account_balance', 'N/A')}'")
+        logger.info(f"      Account Type: '{tradeline.get('account_type', 'N/A')}'")
+        logger.info(f"      Account Status: '{tradeline.get('account_status', 'N/A')}'")
+        logger.info(f"      Credit Bureau: '{tradeline.get('credit_bureau', 'N/A')}'")
+        logger.info(f"      Account Number: '{tradeline.get('account_number', 'N/A')}'")
         
-        # Call Supabase RPC function
-        result = supabase.rpc('upsert_tradeline', {
+        # Normalize tradeline data first
+        logger.info("    🔧 NORMALIZING tradeline data...")
+        normalized_tradeline = tradeline_normalizer.normalize_tradeline(tradeline)
+        
+        # 📊 LOG: Normalized tradeline data
+        logger.info(f"    📄 NORMALIZED TRADELINE DATA:")
+        logger.info(f"      Creditor: '{normalized_tradeline.get('creditor_name', 'N/A')}'")
+        logger.info(f"      Credit Limit: '{normalized_tradeline.get('credit_limit', 'N/A')}'")
+        logger.info(f"      Monthly Payment: '{normalized_tradeline.get('monthly_payment', 'N/A')}'")
+        logger.info(f"      Balance: '{normalized_tradeline.get('account_balance', 'N/A')}'")
+        logger.info(f"      Account Type: '{normalized_tradeline.get('account_type', 'N/A')}'")
+        logger.info(f"      Account Status: '{normalized_tradeline.get('account_status', 'N/A')}'")
+        logger.info(f"      Credit Bureau: '{normalized_tradeline.get('credit_bureau', 'N/A')}'")
+        logger.info(f"      Account Number: '{normalized_tradeline.get('account_number', 'N/A')}'")
+        logger.info(f"      Date Opened: '{normalized_tradeline.get('date_opened', 'N/A')}'")
+        
+        # Validate with field validator
+        logger.info("    🔍 VALIDATING with field validator...")
+        validation_result = field_validator.validate_tradeline(normalized_tradeline)
+        logger.info(f"    📊 Validation confidence: {validation_result['confidence_score']:.2f}")
+        
+        if not validation_result['is_valid']:
+            logger.warning(f"    ⚠️ Tradeline validation failed: {validation_result['errors']}")
+            # Continue anyway but log the issues
+        
+        # Validate with Pydantic (use normalized data)
+        logger.info("    🔍 VALIDATING with Pydantic schema...")
+        # Convert None values to empty strings for Pydantic compatibility
+        pydantic_data = {k: (v if v is not None else "") for k, v in normalized_tradeline.items()}
+        validated_tradeline = TradelineSchema(**pydantic_data)
+        logger.info("    ✅ Pydantic validation passed")
+        
+        # 📊 LOG: Validated tradeline data
+        logger.info(f"    📄 VALIDATED TRADELINE DATA:")
+        logger.info(f"      Creditor: '{validated_tradeline.creditor_name}'")
+        logger.info(f"      Credit Limit: '{validated_tradeline.credit_limit}'")
+        logger.info(f"      Monthly Payment: '{validated_tradeline.monthly_payment}'")
+        logger.info(f"      Balance: '{validated_tradeline.account_balance}'")
+        logger.info(f"      Account Type: '{validated_tradeline.account_type}'")
+        logger.info(f"      Account Status: '{validated_tradeline.account_status}'")
+        logger.info(f"      Credit Bureau: '{validated_tradeline.credit_bureau}'")
+        logger.info(f"      Account Number: '{validated_tradeline.account_number}'")
+        
+        # Prepare RPC parameters
+        rpc_params = {
             'p_account_balance': validated_tradeline.account_balance,
             'p_account_number': validated_tradeline.account_number,
             'p_account_status': validated_tradeline.account_status,
@@ -861,26 +1201,40 @@ async def save_tradeline_to_supabase(tradeline: Dict[str, Any], user_id: str) ->
             'p_credit_limit': validated_tradeline.credit_limit,
             'p_creditor_name': validated_tradeline.creditor_name,
             'p_monthly_payment': validated_tradeline.monthly_payment,
+            'p_date_opened': normalized_tradeline.get('date_opened'),  # Use normalized date
+            'p_is_negative': validated_tradeline.is_negative,
             'p_user_id': user_id
-        }).execute()
+        }
+        
+        logger.info(f"    🚀 CALLING Supabase RPC 'upsert_tradeline'...")
+        logger.info(f"      Parameters: {rpc_params}")
+        
+        # Call Supabase RPC function
+        result = supabase.rpc('upsert_tradeline', rpc_params).execute()
+        
+        logger.info(f"    📨 SUPABASE RESPONSE:")
+        logger.info(f"      Data: {result.data}")
+        logger.info(f"      Count: {getattr(result, 'count', 'N/A')}")
         
         if result.data:
-            logger.info(f"✅ Tradeline saved successfully: {validated_tradeline.creditor_name}")
+            logger.info(f"    ✅ SUPABASE SAVE SUCCESSFUL: {validated_tradeline.creditor_name}")
             return True
         else:
-            logger.error(f"❌ Failed to save tradeline - no data returned: {result}")
+            logger.error(f"    ❌ SUPABASE SAVE FAILED - no data returned")
+            logger.error(f"      Full result: {result}")
             return False
             
     except ValidationError as e:
-        logger.error(f"❌ Validation error for tradeline: {e}")
+        logger.error(f"❌ PYDANTIC VALIDATION ERROR:")
+        logger.error(f"  Tradeline: {tradeline}")
+        logger.error(f"  Error: {e}")
         return False
     except Exception as e:
-        logger.error(f"❌ Database error while saving tradeline: {e}")
-        logger.error(f"📍 Traceback: {traceback.format_exc()}")
+        logger.error(f"❌ SUPABASE DATABASE ERROR:")
+        logger.error(f"  Error: {e}")
+        logger.error(f"  Tradeline: {tradeline}")
+        logger.error(f"  Traceback: {traceback.format_exc()}")
         return False
-    
-
-    # Add this endpoint to your main.py file (after the existing endpoints)
 
 @app.post("/save-tradelines")
 async def save_tradelines_endpoint(request: dict):
@@ -890,8 +1244,7 @@ async def save_tradelines_endpoint(request: dict):
     try:
         user_id = request.get('userId')
         tradelines = request.get('tradelines', [])
-        supabase.table('tradelines').select('*').execute()
-
+        
         if not user_id:
             raise HTTPException(status_code=400, detail="User ID is required")
         
@@ -933,7 +1286,6 @@ async def save_tradelines_endpoint(request: dict):
         logger.error(f"❌ Save endpoint failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to save tradelines: {str(e)}")
 
-# Also add this function to check/fix Supabase connection
 def check_supabase_connection():
     """Check if Supabase is properly configured"""
     global supabase
@@ -957,7 +1309,6 @@ def check_supabase_connection():
         logger.error(f"❌ Supabase connection test failed: {e}")
         return False
 
-# Update the health endpoint to include Supabase status
 @app.get("/health")
 async def health_check():
     """Enhanced health check endpoint"""
@@ -965,7 +1316,7 @@ async def health_check():
     
     health_status = {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat() + "Z", # type: ignore
+        "timestamp": datetime.utcnow().isoformat() + "Z",
         "services": {
             "document_ai": {
                 "configured": bool(PROJECT_ID and PROCESSOR_ID and client),
@@ -979,7 +1330,7 @@ async def health_check():
             },
             "supabase": {
                 "configured": bool(SUPABASE_URL and SUPABASE_ANON_KEY),
-                "available": supabase_available,  # ✅ Added availability check
+                "available": supabase_available,
                 "url": SUPABASE_URL[:30] + "..." if SUPABASE_URL else None
             }
         },
@@ -1065,102 +1416,6 @@ async def debug_parsing(
         logger.error(f"❌ Debug parsing failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Debug parsing failed: {str(e)}")
 
-# Chatbot endpoints
-@app.post("/chat")
-async def chat_endpoint(request: dict):
-    """
-    Main chatbot endpoint for credit-focused conversations
-    """
-    try:
-        if not chatbot_service:
-            raise HTTPException(status_code=503, detail="Chatbot service not available")
-        
-        user_id = request.get('userId')
-        message = request.get('message')
-        conversation_history = request.get('conversationHistory', [])
-        
-        if not user_id:
-            raise HTTPException(status_code=400, detail="User ID is required")
-        
-        if not message:
-            raise HTTPException(status_code=400, detail="Message is required")
-        
-        logger.info(f"💬 Chat request from user {user_id}: {message[:100]}...")
-        
-        # Generate response using chatbot service
-        result = await chatbot_service.generate_response(user_id, message, conversation_history)
-        
-        if result["success"]:
-            logger.info(f"✅ Chat response generated for user {user_id}")
-            return {
-                "success": True,
-                "response": result["response"],
-                "user_context": result.get("user_context", {}),
-                "timestamp": datetime.utcnow().isoformat() + "Z"
-            }
-        else:
-            logger.error(f"❌ Chat response failed: {result.get('error')}")
-            return {
-                "success": False,
-                "error": result.get("error"),
-                "response": result.get("response", "Sorry, I couldn't process your request."),
-                "timestamp": datetime.utcnow().isoformat() + "Z"
-            }
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ Chat endpoint failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Chat request failed: {str(e)}")
-
-@app.get("/chat/history/{user_id}")
-async def get_chat_history(user_id: str, limit: int = 10):
-    """
-    Get conversation history for a user
-    """
-    try:
-        if not chatbot_service:
-            raise HTTPException(status_code=503, detail="Chatbot service not available")
-        
-        logger.info(f"📜 Fetching chat history for user {user_id}")
-        
-        history = await chatbot_service.get_conversation_history(user_id, limit)
-        
-        return {
-            "success": True,
-            "history": history,
-            "count": len(history),
-            "timestamp": datetime.utcnow().isoformat() + "Z"
-        }
-        
-    except Exception as e:
-        logger.error(f"❌ Chat history request failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch chat history: {str(e)}")
-
-@app.get("/chat/suggestions/{user_id}")
-async def get_credit_suggestions(user_id: str):
-    """
-    Get proactive credit improvement suggestions for a user
-    """
-    try:
-        if not chatbot_service:
-            raise HTTPException(status_code=503, detail="Chatbot service not available")
-        
-        logger.info(f"💡 Generating credit suggestions for user {user_id}")
-        
-        suggestions = await chatbot_service.suggest_credit_actions(user_id)
-        
-        return {
-            "success": suggestions["success"],
-            "suggestions": suggestions.get("suggestions", []),
-            "user_summary": suggestions.get("user_summary", {}),
-            "timestamp": datetime.utcnow().isoformat() + "Z"
-        }
-        
-    except Exception as e:
-        logger.error(f"❌ Credit suggestions request failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to generate suggestions: {str(e)}")
-
 @app.post("/process-credit-report")
 async def process_credit_report(
     file: UploadFile = File(...),
@@ -1168,20 +1423,22 @@ async def process_credit_report(
 ):
     """
     Main endpoint: Process uploaded credit report PDF
-    FIXED: Properly handle file upload without filename attribute errors
     """
     temp_file_path = None
+    start_time = datetime.utcnow()
     
     try:
         logger.info("🚀 ===== NEW CREDIT REPORT PROCESSING REQUEST =====")
+        logger.info(f"⏰ Processing started at: {start_time.isoformat()}Z")
         
-        # ✅ FIXED: Store filename early before file operations
+        # Store filename early before file operations
         original_filename = file.filename or "unknown.pdf"
         file_content_type = file.content_type
         
         logger.info(f"📄 File: {original_filename}")
         logger.info(f"📦 Content type: {file_content_type}")
         logger.info(f"👤 User ID: {user_id}")
+        logger.info(f"🔍 Request received - Processing method will be determined...")
         
         # Validate file type using stored filename
         if not original_filename.lower().endswith('.pdf'):
@@ -1197,7 +1454,7 @@ async def process_credit_report(
             logger.error("❌ Empty file")
             raise HTTPException(status_code=400, detail="File is empty")
         
-        # ✅ FIXED: Save uploaded file using content, not re-reading file
+        # Save uploaded file using content, not re-reading file
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
             temp_file.write(content)  # Use already-read content
             temp_file_path = temp_file.name
@@ -1218,47 +1475,58 @@ async def process_credit_report(
                 logger.info("🤖 Attempting Document AI Form Parser processing...")
                 processing_method = "document_ai_form_parser"
                 
-                # Try structured extraction first (best for credit_limit and monthly_payment)
-                structured_tradelines = document_ai.extract_structured_tradelines(temp_file_path)
-                if structured_tradelines:
-                    # For structured extraction, we still need to extract text to detect bureau
-                    extracted_text = document_ai.extract_text(temp_file_path)
-                    detected_bureau = detect_credit_bureau(extracted_text)
-                    logger.info(f"🏢 Credit bureau detected from structured path: {detected_bureau}")
+                try:
+                    # Try structured extraction first (best for credit_limit and monthly_payment)
+                    logger.info("🔍 Attempting structured tradeline extraction...")
+                    structured_tradelines = document_ai.extract_structured_tradelines(temp_file_path)
                     
-                    tradelines = structured_tradelines
-                    processing_method = "document_ai_structured"
-                    logger.info(f"✅ Document AI structured extraction successful: {len(tradelines)} tradelines")
-                else:
-                    # Fallback to text + AI extraction
-                    extracted_text = document_ai.extract_text(temp_file_path)
-                    logger.info(f"✅ Document AI text extraction successful")
-                    
-                    # Detect credit bureau from extracted text
-                    detected_bureau = detect_credit_bureau(extracted_text)
-                    logger.info(f"🏢 Credit bureau detected: {detected_bureau}")
-                    
-                    # Try Gemini for tradeline extraction
-                    if gemini_model:
-                        logger.info("🧠 Attempting Gemini tradeline extraction...")
-                        tradelines = gemini_processor.extract_tradelines(extracted_text)
-                        if tradelines:
-                            processing_method = "document_ai + gemini"
-                            logger.info(f"✅ Gemini extraction successful: {len(tradelines)} tradelines")
+                    if structured_tradelines:
+                        # For structured extraction, we still need to extract text to detect bureau
+                        logger.info("📖 Extracting text for bureau detection...")
+                        extracted_text = document_ai.extract_text(temp_file_path)
+                        detected_bureau = detect_credit_bureau(extracted_text)
+                        logger.info(f"🏢 Credit bureau detected from structured path: {detected_bureau}")
+                        
+                        tradelines = structured_tradelines
+                        processing_method = "document_ai_structured"
+                        logger.info(f"✅ Document AI structured extraction successful: {len(tradelines)} tradelines")
+                    else:
+                        # Fallback to text + AI extraction
+                        logger.info("📖 Structured extraction failed, trying text extraction...")
+                        extracted_text = document_ai.extract_text(temp_file_path)
+                        logger.info(f"✅ Document AI text extraction successful: {len(extracted_text)} chars")
+                        
+                        # Detect credit bureau from extracted text
+                        detected_bureau = detect_credit_bureau(extracted_text)
+                        logger.info(f"🏢 Credit bureau detected: {detected_bureau}")
+                        
+                        # Try Gemini for tradeline extraction
+                        if gemini_model:
+                            logger.info("🧠 Attempting Gemini tradeline extraction...")
+                            tradelines = gemini_processor.extract_tradelines(extracted_text)
+                            if tradelines:
+                                processing_method = "document_ai + gemini"
+                                logger.info(f"✅ Gemini extraction successful: {len(tradelines)} tradelines")
+                            else:
+                                logger.info("⚠️ Gemini found no tradelines, trying basic parsing...")
+                                tradelines = parse_tradelines_basic(extracted_text)
+                                processing_method = "document_ai + basic"
                         else:
-                            logger.info("⚠️ Gemini found no tradelines, trying basic parsing...")
+                            logger.info("⚠️ Gemini not available, using basic parsing...")
                             tradelines = parse_tradelines_basic(extracted_text)
                             processing_method = "document_ai + basic"
-                    else:
-                        logger.info("⚠️ Gemini not available, using basic parsing...")
-                        tradelines = parse_tradelines_basic(extracted_text)
-                        processing_method = "document_ai + basic"
+                    
+                except Exception as inner_error:
+                    logger.error(f"❌ Document AI inner error: {inner_error}")
+                    raise inner_error
+                    
             else:
                 logger.warning("⚠️ Document AI not properly configured")
                 raise Exception("Document AI not configured")
                 
         except Exception as doc_ai_error:
             logger.error(f"❌ Document AI processing failed: {str(doc_ai_error)}")
+            logger.error(f"📍 Error type: {type(doc_ai_error).__name__}")
             
             # Fallback: Try Enhanced PyPDF2 + Gemini
             try:
@@ -1302,6 +1570,42 @@ async def process_credit_report(
             if applied_count > 0:
                 logger.info(f"🏢 Applied bureau '{detected_bureau}' to {applied_count} tradelines")
         
+        # Step 1.5: Normalize tradelines for consistent frontend display
+        logger.info("🔧 Normalizing tradelines for frontend response...")
+        normalized_tradelines = []
+        for i, tradeline in enumerate(tradelines):
+            try:
+                logger.debug(f"🔧 Normalizing tradeline {i+1}/{len(tradelines)}: {tradeline.get('creditor_name', 'unknown')}")
+                
+                # Apply normalization
+                normalized_tradeline = tradeline_normalizer.normalize_tradeline(tradeline)
+                
+                # Convert None values back to empty strings for frontend compatibility
+                frontend_tradeline = {k: (v if v is not None else "") for k, v in normalized_tradeline.items()}
+                
+                normalized_tradelines.append(frontend_tradeline)
+                logger.debug(f"✅ Normalized: {frontend_tradeline.get('creditor_name')} -> {frontend_tradeline.get('account_type')}")
+                
+            except Exception as norm_error:
+                logger.warning(f"⚠️ Failed to normalize tradeline {i+1}: {norm_error}")
+                # Fallback to original tradeline if normalization fails
+                normalized_tradelines.append(tradeline)
+        
+        logger.info(f"✅ Successfully normalized {len(normalized_tradelines)} tradelines")
+        
+        # Log normalization summary for debugging
+        if normalized_tradelines:
+            sample = normalized_tradelines[0]
+            logger.info(f"📊 NORMALIZATION SAMPLE:")
+            logger.info(f"    Creditor: '{sample.get('creditor_name', 'N/A')}'")
+            logger.info(f"    Account Type: '{sample.get('account_type', 'N/A')}'")
+            logger.info(f"    Account Status: '{sample.get('account_status', 'N/A')}'")
+            logger.info(f"    Account Number: '{sample.get('account_number', 'N/A')}'")
+            logger.info(f"    Date Opened: '{sample.get('date_opened', 'N/A')}'")
+        
+        # Replace raw tradelines with normalized ones for response
+        tradelines = normalized_tradelines
+        
         # Step 2: Save tradelines to Supabase (if available)
         saved_count = 0
         failed_count = 0
@@ -1323,7 +1627,10 @@ async def process_credit_report(
             os.unlink(temp_file_path)
             logger.info("🗑️ Temporary file cleaned up")
         
-        # Step 4: Return response
+        # Step 4: Calculate processing time and return response
+        end_time = datetime.utcnow()
+        processing_duration = (end_time - start_time).total_seconds()
+        
         response = {
             "success": True,
             "message": f"Successfully processed {len(tradelines)} tradelines using {processing_method}",
@@ -1332,9 +1639,15 @@ async def process_credit_report(
             "tradelines_failed": failed_count,
             "processing_method": processing_method,
             "tradelines": tradelines,
+            "processing_time": {
+                "start_time": start_time.isoformat() + "Z",
+                "end_time": end_time.isoformat() + "Z",
+                "duration_seconds": round(processing_duration, 2),
+                "duration_formatted": f"{int(processing_duration // 60)}m {int(processing_duration % 60)}s"
+            },
             "debug_info": {
                 "file_size_bytes": len(content),
-                "file_name": original_filename,  # ✅ Use stored filename
+                "file_name": original_filename,
                 "user_id": user_id,
                 "supabase_available": supabase is not None,
                 "document_ai_available": client is not None,
@@ -1342,8 +1655,18 @@ async def process_credit_report(
             }
         }
         
-        logger.info("✅ ===== PROCESSING COMPLETED SUCCESSFULLY =====")
-        logger.info(f"📊 Final stats: {len(tradelines)} found, {saved_count} saved, {failed_count} failed")
+        # Completion logging
+        logger.info("🎉 ===== PROCESSING COMPLETED SUCCESSFULLY =====")
+        logger.info(f"⏰ Processing finished at: {end_time.isoformat()}Z")
+        logger.info(f"⏱️ Total processing time: {processing_duration:.2f} seconds ({int(processing_duration // 60)}m {int(processing_duration % 60)}s)")
+        logger.info(f"📊 Final results:")
+        logger.info(f"   📈 Tradelines found: {len(tradelines)}")
+        logger.info(f"   💾 Tradelines saved: {saved_count}")
+        logger.info(f"   ❌ Tradelines failed: {failed_count}")
+        logger.info(f"   🔧 Processing method: {processing_method}")
+        logger.info(f"   📄 File: {original_filename} ({len(content)/1024/1024:.2f} MB)")
+        logger.info(f"   👤 User: {user_id}")
+        logger.info("🏁 ===== PROCESSING SESSION COMPLETE =====")
         
         return response
         
@@ -1351,7 +1674,12 @@ async def process_credit_report(
         # Re-raise HTTP exceptions
         raise
     except Exception as e:
+        end_time = datetime.utcnow()
+        processing_duration = (end_time - start_time).total_seconds()
+        
         logger.error("❌ ===== PROCESSING FAILED =====")
+        logger.error(f"⏰ Processing failed at: {end_time.isoformat()}Z")
+        logger.error(f"⏱️ Processing duration before failure: {processing_duration:.2f} seconds")
         logger.error(f"💥 Error: {str(e)}")
         logger.error(f"📍 Traceback: {traceback.format_exc()}")
         
@@ -1362,6 +1690,8 @@ async def process_credit_report(
                 logger.info("🗑️ Temporary file cleaned up after error")
             except Exception as cleanup_error:
                 logger.error(f"❌ Failed to cleanup temp file: {cleanup_error}")
+        
+        logger.error("🏁 ===== PROCESSING SESSION FAILED =====")
         
         raise HTTPException(
             status_code=500, 
@@ -1479,3 +1809,8 @@ def _format_tradeline_row(line: str) -> str:
     
     # Join with clear separators
     return '    |    '.join(formatted_parts)
+
+if __name__ == "__main__":
+    import uvicorn
+    logger.info("🚀 Starting FastAPI server on localhost:8000")
+    uvicorn.run(app, host="0.0.0.0", port=8000)

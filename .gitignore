@@ -44,3 +44,5 @@ __pycache__/llm_parser.cpython-313.pyc
 backend/service_account.json
 .mcp.json
 .mcp.json
+./backend/service_account.json
+./backend/service-account.json

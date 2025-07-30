@@ -1,0 +1,130 @@
+// Pure utility function for AI processing (no hooks) - IMPROVED VERSION
+export const processWithAI = async (file: File, userId?: string): Promise<{ tradelines: ParsedTradeline[] }> => {
+  // BULLETPROOF FILE VALIDATION
+  if (!(file instanceof File)) {
+    console.error('❌ NOT A FILE INSTANCE:', typeof file, file);
+    throw new Error(`Expected File instance, got ${typeof file}`);
+  }
+  
+  console.log('✅ File validation passed:', {
+    name: file.name,
+    type: file.type, 
+    size: file.size,
+    isFile: file instanceof File,
+    constructor: file.constructor.name
+  });
+  
+  // BULLETPROOF FORMDATA
+  const formData = new FormData();
+  formData.append('file', file);
+  if (userId) {
+    formData.append('user_id', userId);
+  }
+  
+  // Debug FormData contents
+  console.log('📦 FormData entries:');
+  for (const [key, value] of formData.entries()) {
+    console.log(`  ${key}:`, value instanceof File ? `File(${value.name})` : value);
+  }
+  
+  // ENHANCED ERROR HANDLING WITH TIMEOUT
+  const controller = new AbortController();
+  let timeoutId: NodeJS.Timeout;
+  
+  try {
+    // Set up timeout (adjust based on your needs)
+    const timeoutMinutes = 10; // 10 minute timeout for large files
+    timeoutId = setTimeout(() => {
+      console.log(`⏰ Request timeout after ${timeoutMinutes} minutes`);
+      controller.abort();
+    }, timeoutMinutes * 60 * 1000);
+    
+    console.log('🚀 Sending request to backend...');
+    console.log('📡 URL:', 'http://localhost:8000/process-credit-report');
+    console.log('📦 File size:', `${(file.size / 1024 / 1024).toFixed(2)} MB`);
+    
+    // PROGRESS INDICATOR
+    console.log('⏳ Processing started... This may take several minutes for large files.');
+    
+    const startTime = Date.now();
+    
+    const response = await fetch('http://localhost:8000/process-credit-report', {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal
+    });
+    
+    const requestTime = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`📨 Response received in ${requestTime}s! Status: ${response.status}`);
+    
+    // Clear timeout on successful response
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Backend error:', response.status, errorText);
+      
+      // Specific error handling
+      if (response.status === 413) {
+        throw new Error('File too large - please try a smaller PDF');
+      } else if (response.status === 500) {
+        throw new Error('Server error - please try again or contact support');
+      } else if (response.status === 400) {
+        throw new Error('Invalid file - please ensure you uploaded a valid PDF');
+      } else {
+        throw new Error(`Backend error ${response.status}: ${errorText}`);
+      }
+    }
+    
+    console.log('📥 Parsing response...');
+    const result = await response.json();
+    console.log('✅ Processing Complete!', result);
+    
+    // 🎉 Visual completion indicators
+    if (result.success) {
+      console.log('🎉 ===== PDF PROCESSING COMPLETED SUCCESSFULLY =====');
+      console.log(`⏱️ Processing Time: ${result.processing_time?.duration_formatted || 'N/A'}`);
+      console.log(`📈 Tradelines Found: ${result.tradelines_found || 0}`);
+      console.log(`💾 Tradelines Saved: ${result.tradelines_saved || 0}`);
+      console.log(`🔧 Processing Method: ${result.processing_method || 'Unknown'}`);
+      console.log('🏁 Ready to view results!');
+      
+      // Show browser notification if supported
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('Credit Report Processing Complete!', {
+          body: `Found ${result.tradelines_found || 0} tradelines in ${result.processing_time?.duration_formatted || 'unknown time'}`,
+          icon: '/favicon.ico'
+        });
+      }
+    }
+    
+    return { 
+      tradelines: result.tradelines || [],
+      processingTime: result.processing_time,
+      processingMethod: result.processing_method,
+      stats: {
+        found: result.tradelines_found || 0,
+        saved: result.tradelines_saved || 0,
+        failed: result.tradelines_failed || 0
+      }
+    };
+    
+  } catch (error: any) {
+    // Clear timeout on error
+    if (timeoutId) clearTimeout(timeoutId);
+    
+    console.error('❌ Request failed:', error);
+    console.log('🏁 ===== PDF PROCESSING FAILED =====');
+    
+    // Enhanced error messages
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out - the file may be too large or the server may be overloaded. Please try again with a smaller file.');
+    } else if (error.message?.includes('Failed to fetch')) {
+      throw new Error('Cannot connect to server - please ensure the backend is running on http://localhost:8000');
+    } else if (error.message?.includes('NetworkError')) {
+      throw new Error('Network error - please check your internet connection and try again');
+    } else {
+      throw error;
+    }
+  }
+};

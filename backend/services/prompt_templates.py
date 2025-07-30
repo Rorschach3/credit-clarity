@@ -89,10 +89,10 @@ Provide your response as a valid JSON object with the following structure:
       "balance": "1000.00",
       "credit_limit": "5000.00",
       "payment_status": "Current",
-      "date_opened": "YYYY-MM-DD",
-      "date_closed": "YYYY-MM-DD or null",
-      "payment_history": ["Current", "Current", "30 days"],
-      "account_status": "Open"
+      "date_opened": "MM-DD-YYYY",
+      "date_closed": "MM-DD-YYYY or null",
+      "payment_history": ["Current" "30 days", "90 days", "60 days", "charge off", collection],
+      "account_status": ["Open", "paid.closed", "current"]
     }}
   ],
   "inquiries": [
@@ -105,7 +105,7 @@ Provide your response as a valid JSON object with the following structure:
   "public_records": [
     {{
       "type": "Bankruptcy",
-      "date_filed": "YYYY-MM-DD",
+      "date_filed": "MM-DD-YYYY",
       "amount": "0.00",
       "status": "Discharged"
     }}
@@ -115,7 +115,7 @@ Provide your response as a valid JSON object with the following structure:
 IMPORTANT GUIDELINES:
 - Extract only information that is clearly present in the document
 - Use "null" for missing information
-- Standardize date formats to YYYY-MM-DD
+- Standardize date formats to MM-DD-YYYY
 - Normalize payment statuses to standard terms (Current, 30 days late, 60 days late, etc.)
 - Mask sensitive information like full account numbers
 - If information is ambiguous, indicate uncertainty in a confidence field
@@ -159,7 +159,7 @@ TASK: Normalize this tradeline data into a standard format with the following re
 
 4. MONETARY VALUES: Convert to decimal format (e.g., "$1,234.56" → "1234.56")
 
-5. DATES: Convert to YYYY-MM-DD format
+5. DATES: Convert to MM-DD-YYYY format
 
 6. CONFIDENCE SCORING: Assign a confidence score (0.0-1.0) based on:
    - Clarity of source data
@@ -173,10 +173,10 @@ Provide a JSON object with the normalized tradeline:
   "creditor_name": "Normalized Creditor Name",
   "account_number": "****1234",
   "account_type": "Credit Card",
-  "balance": "1234.56",
-  "credit_limit": "5000.00",
+  "balance": "$1234",
+  "credit_limit": "5000g",
   "payment_status": "Current",
-  "date_opened": "2020-01-15",
+  "date_opened": "01-15-2020",
   "date_closed": null,
   "payment_history": ["Current", "Current", "30 days late"],
   "account_status": "Open",
@@ -220,8 +220,8 @@ Provide a JSON object with the consumer information:
 
 {{
   "name": "John Doe",
-  "ssn": "XXX-XX-1234",
-  "date_of_birth": "1980-01-15",
+  "ssn": "XX-1234-XXXX",
+  "date_of_birth": "01-15-1985",
   "current_address": {{
     "street": "123 Main St",
     "city": "Anytown",
@@ -240,7 +240,7 @@ Provide a JSON object with the consumer information:
   "employment": {{
     "current_employer": "ABC Company",
     "position": "Manager",
-    "income": "50000"
+    "income": "$50000"
   }},
   "confidence_score": 0.9
 }}
