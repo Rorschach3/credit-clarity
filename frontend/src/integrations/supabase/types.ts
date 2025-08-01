@@ -467,7 +467,6 @@ export type Database = {
           id: string
           is_negative: boolean | null
           monthly_payment: string | null
-          raw_text: string | null
           user_id: string | null
         }
         Insert: {
@@ -484,7 +483,6 @@ export type Database = {
           id?: string
           is_negative?: boolean | null
           monthly_payment?: string | null
-          raw_text?: string | null
           user_id?: string | null
         }
         Update: {
@@ -501,7 +499,6 @@ export type Database = {
           id?: string
           is_negative?: boolean | null
           monthly_payment?: string | null
-          raw_text?: string | null
           user_id?: string | null
         }
         Relationships: []

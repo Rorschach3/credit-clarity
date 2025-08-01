@@ -60,7 +60,6 @@ BEGIN
             credit_bureau,
             date_opened,
             is_negative,
-            raw_text,
             dispute_count,
             created_at
         ) VALUES (
@@ -75,7 +74,6 @@ BEGIN
             COALESCE(p_credit_bureau, ''),
             COALESCE(p_date_opened, 'xx/xx/xxxx'),
             COALESCE(p_is_negative, FALSE),
-            '', -- raw_text default
             0,  -- dispute_count default
             NOW()
         )

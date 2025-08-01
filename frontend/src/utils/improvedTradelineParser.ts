@@ -55,7 +55,6 @@ interface DatabaseTradeline {
   credit_limit: string | null;
   credit_bureau: string | null;
   monthly_payment: string | null;
-  raw_text?: string | null;
   updated_at?: string | null;
 }
 

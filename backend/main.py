@@ -67,6 +67,42 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 SUPABASE_URL = "https://gywohmbqohytziwsjrps.supabase.co"
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 
+def normalize_date_for_postgres(date_str: str) -> Optional[str]:
+    """
+    Ensure date_opened is in ISO format (YYYY-MM-DD) for PostgreSQL.
+    Input: '04/18/2022' or other formats
+    Output: '2022-04-18' or None for invalid dates
+    """
+    if not date_str or not date_str.strip():
+        return None
+    
+    try:
+        # If already in ISO format, validate and return
+        if re.match(r'^\d{4}-\d{2}-\d{2}$', date_str.strip()):
+            datetime.strptime(date_str.strip(), '%Y-%m-%d')
+            return date_str.strip()
+        
+        # Try MM/DD/YYYY format (most common)
+        if re.match(r'^\d{1,2}/\d{1,2}/\d{4}$', date_str.strip()):
+            parsed_date = datetime.strptime(date_str.strip(), '%m/%d/%Y').date()
+            return parsed_date.isoformat()  # Returns YYYY-MM-DD
+        
+        # Try other common formats
+        formats = ['%m-%d-%Y', '%Y/%m/%d', '%d/%m/%Y']
+        for fmt in formats:
+            try:
+                parsed_date = datetime.strptime(date_str.strip(), fmt).date()
+                return parsed_date.isoformat()
+            except ValueError:
+                continue
+                
+        logger.warning(f"⚠️ Unable to parse date format: '{date_str}'")
+        return None
+        
+    except (ValueError, TypeError) as e:
+        logger.warning(f"⚠️ Invalid date: '{date_str}' - {e}")
+        return None
+
 # Debug environment variables
 logger.info(f"🔧 Environment Check:")
 logger.info(f"  PROJECT_ID: {'✅ Set' if PROJECT_ID else '❌ Missing'}")
@@ -1191,6 +1227,13 @@ async def save_tradeline_to_supabase(tradeline: Dict[str, Any], user_id: str) ->
         logger.info(f"      Credit Bureau: '{validated_tradeline.credit_bureau}'")
         logger.info(f"      Account Number: '{validated_tradeline.account_number}'")
         
+        # Ensure date_opened is in ISO format for PostgreSQL
+        raw_date = normalized_tradeline.get('date_opened')
+        iso_date = normalize_date_for_postgres(raw_date) if raw_date else None
+        
+        if raw_date and raw_date != iso_date:
+            logger.info(f"📅 Date normalized for PostgreSQL: '{raw_date}' → '{iso_date}'")
+        
         # Prepare RPC parameters
         rpc_params = {
             'p_account_balance': validated_tradeline.account_balance,
@@ -1201,7 +1244,7 @@ async def save_tradeline_to_supabase(tradeline: Dict[str, Any], user_id: str) ->
             'p_credit_limit': validated_tradeline.credit_limit,
             'p_creditor_name': validated_tradeline.creditor_name,
             'p_monthly_payment': validated_tradeline.monthly_payment,
-            'p_date_opened': normalized_tradeline.get('date_opened'),  # Use normalized date
+            'p_date_opened': iso_date,  # Use ISO formatted date for PostgreSQL compatibility
             'p_is_negative': validated_tradeline.is_negative,
             'p_user_id': user_id
         }

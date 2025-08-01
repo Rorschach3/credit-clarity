@@ -1,5 +1,5 @@
 // Enhanced fuzzy matching utilities for tradeline deduplication
-import { ParsedTradeline } from '@/utils/tradelineParser';
+import { ParsedTradeline, DatabaseTradeline } from '@/utils/tradeline-types';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface FuzzyMatchResult {
@@ -311,23 +311,6 @@ export function isTradelineMatch(
   return result;
 }
 
-// Type for raw Supabase tradeline data (with nullable fields)
-interface DatabaseTradeline {
-  id: string | null;
-  user_id: string | null;
-  creditor_name: string | null;
-  account_number: string | null;
-  account_balance: string | null;
-  account_status: string | null;
-  account_type: string | null;
-  date_opened: string | null;
-  is_negative: boolean | null;
-  dispute_count: number | null;
-  created_at: string | null;
-  credit_limit: string | null;
-  credit_bureau: string | null;
-  monthly_payment: string | null;
-}
 
 /**
  * Sanitize Supabase data to match ParsedTradeline type
@@ -588,7 +571,7 @@ export async function updateTradelineFields(
     (Object.keys(updates) as Array<keyof ParsedTradeline>).forEach(key => {
       const value = updates[key];
       if (value !== null && value !== undefined && value !== '') {
-        validUpdates[key] = value;
+        validUpdates[key as string] = value;
       }
     });
     

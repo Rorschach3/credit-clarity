@@ -168,7 +168,6 @@ export type Database = {
           credit_bureau?: string | '';
           date_opened?: string | 'xx/xx/xxxx';
           is_negative: boolean | false;
-          raw_text: string;
         };
         Insert: {
           id?: string;
@@ -185,7 +184,6 @@ export type Database = {
           credit_bureau?: string;
           date_opened?: string;
           is_negative?: boolean;
-          raw_text?: string;
         };
         Update: {
           id?: string;
@@ -202,7 +200,6 @@ export type Database = {
           credit_bureau?: string;
           date_opened?: string;
           is_negative?: boolean;
-          raw_text?: string;
         };
         Relationships: [
           {

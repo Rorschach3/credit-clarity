@@ -2,66 +2,16 @@
 import { supabase } from '@/integrations/supabase/client';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
-
-// Zod schemas for validation - Updated to match backend normalized data
-export const APITradelineSchema = z.object({
-  creditor_name: z.string().min(1, "Creditor name is required"),
-  account_number: z.string().default(""), // Allow empty strings - backend handles missing account numbers
-  account_balance: z.string().default("$0"),
-  account_status: z.string().default(""), // Allow empty strings - backend normalizes statuses
-  account_type: z.string().min(1, "Account type is required"), // Still required
-  date_opened: z.string().default(""), // Allow empty strings - backend handles date parsing
-  credit_limit: z.string().default("$0"),
-  credit_bureau: z.string().default(""), // Allow empty strings - backend detects bureau
-  monthly_payment: z.string().default("$0"),
-  is_negative: z.boolean().default(false),
-  dispute_count: z.number().int().min(0).default(0)
-});
-
-export const ParsedTradelineSchema = z.object({
-  id: z.string().uuid("Invalid UUID format"),
-  user_id: z.string().uuid("Invalid user ID format"),
-  creditor_name: z.string().min(1, "Creditor name is required"),
-  account_number: z.string().default(""), // Allow empty strings - backend handles missing account numbers
-  account_balance: z.string().default("$0"),
-  account_status: z.string().default(""), // Allow empty strings - backend normalizes statuses  
-  account_type: z.string().min(1, "Account type is required"), // Still required
-  date_opened: z.string().default(""), // Allow empty strings - backend handles date parsing
-  is_negative: z.boolean().default(false),
-  dispute_count: z.number().int().min(0).default(0),
-  created_at: z.string().datetime("Invalid datetime format"),
-  credit_limit: z.string().default("$0"),
-  credit_bureau: z.string().default(""), // Allow empty strings - backend detects bureau
-  monthly_payment: z.string().default("$0"),
-});
-
-// TypeScript interfaces inferred from Zod schemas
-export type APITradeline = z.infer<typeof APITradelineSchema>;
-export type ParsedTradeline = z.infer<typeof ParsedTradelineSchema>;
-
-// Type for raw Supabase tradeline data (with nullable fields)
-interface DatabaseTradeline {
-  id: string | null;
-  user_id: string | null;
-  creditor_name: string | null;
-  account_number: string | null;
-  account_balance: string | null;
-  account_status: string | null;
-  account_type: string | null;
-  date_opened: string | null;
-  is_negative: boolean | null;
-  dispute_count: number | null;
-  created_at: string | null;
-  credit_limit: string | null;
-  credit_bureau: string | null;
-  monthly_payment: string | null;
-}
-
-// Interface for update operations
-interface TradelineUpdate {
-  id: string;
-  updates: Partial<ParsedTradeline>;
-}
+import {
+  APITradeline,
+  ParsedTradeline,
+  DatabaseTradeline,
+  TradelineUpdate,
+  PaginationOptions,
+  PaginatedTradelinesResponse,
+  APITradelineSchema,
+  ParsedTradelineSchema
+} from '@/utils/tradeline-types';
 
 // Negative account indicators
 const NEGATIVE_INDICATORS = [
@@ -76,8 +26,56 @@ export const generateUUID = (): string => {
   return uuidv4();
 };
 
+// Normalize date string to ISO format (YYYY-MM-DD) or null
+export const normalizeDate = (dateStr: string | null | undefined): string | null => {
+  if (!dateStr || dateStr.trim() === "") {
+    return null; // Avoid empty string — send null
+  }
+  
+  try {
+    const trimmed = dateStr.trim();
+    
+    // Handle MM/DD/YYYY format
+    const mmddyyyyMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (mmddyyyyMatch) {
+      const [, month, day, year] = mmddyyyyMatch;
+      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      
+      // Validate the date is valid (handles cases like 02/30/2023)
+      if (date.getFullYear() === parseInt(year) && 
+          date.getMonth() === parseInt(month) - 1 && 
+          date.getDate() === parseInt(day)) {
+        return date.toISOString().split('T')[0]; // Return YYYY-MM-DD
+      }
+    }
+    
+    // Try parsing as ISO date (YYYY-MM-DD)
+    const isoMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (isoMatch) {
+      const date = new Date(trimmed);
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().split('T')[0];
+      }
+    }
+    
+    // Try other common formats
+    const date = new Date(trimmed);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0];
+    }
+    
+    return null; // Invalid format fallback
+  } catch (error) {
+    console.warn(`[WARN] Invalid date format: "${dateStr}"`);
+    return null; // Invalid format fallback
+  }
+};
+
 // Sanitize Supabase data to match ParsedTradeline type
 function sanitizeDatabaseTradeline(dbTradeline: DatabaseTradeline): ParsedTradeline {
+  // Normalize date from database (in case it's in an unexpected format)
+  const normalizedDate = normalizeDate(dbTradeline.date_opened);
+  
   return {
     id: dbTradeline.id || '',
     user_id: dbTradeline.user_id || '',
@@ -86,7 +84,7 @@ function sanitizeDatabaseTradeline(dbTradeline: DatabaseTradeline): ParsedTradel
     account_balance: dbTradeline.account_balance || '$0',
     account_status: dbTradeline.account_status || '',
     account_type: dbTradeline.account_type || '',
-    date_opened: dbTradeline.date_opened || '',
+    date_opened: normalizedDate || '', // Use normalized date
     is_negative: dbTradeline.is_negative || false,
     dispute_count: dbTradeline.dispute_count || 0,
     created_at: dbTradeline.created_at || '',
@@ -136,6 +134,12 @@ export const convertAPITradelineToDatabase = (
       apiTradeline.account_status.toLowerCase().includes(indicator)
     );
 
+  // Normalize date_opened before storing
+  const normalizedDate = normalizeDate(apiTradeline.date_opened);
+  if (apiTradeline.date_opened && apiTradeline.date_opened !== normalizedDate) {
+    console.log(`[DEBUG] 📅 Normalized date: "${apiTradeline.date_opened}" → "${normalizedDate}"`);
+  }
+
   return {
     id: generateUUID(), // Generate proper UUID
     user_id: authUserId, // Use auth user ID
@@ -144,13 +148,13 @@ export const convertAPITradelineToDatabase = (
     account_balance: apiTradeline.account_balance || '$0',
     account_status: apiTradeline.account_status || '',
     account_type: apiTradeline.account_type || '',
-    date_opened: apiTradeline.date_opened || '',
+    date_opened: normalizedDate || '', // Use normalized date or empty string
     is_negative: isNegative,
     dispute_count: apiTradeline.dispute_count || 0,
     created_at: new Date().toISOString(),
-    credit_bureau: '',
-    credit_limit: '$0',
-    monthly_payment: '$0'
+    credit_bureau: apiTradeline.credit_bureau || '',
+    credit_limit: apiTradeline.credit_limit || '$0',
+    monthly_payment: apiTradeline.monthly_payment || '$0'
   };
 };
 
@@ -175,6 +179,10 @@ export const saveTradelinesToDatabase = async (tradelines: ParsedTradeline[], au
     // Process each tradeline individually for fuzzy matching
     for (const tradeline of tradelines) {
       // Ensure we only include valid database fields with proper defaults
+      const normalizedDate = normalizeDate(tradeline.date_opened);
+      if (tradeline.date_opened && tradeline.date_opened !== normalizedDate) {
+        console.log(`[DEBUG] 📅 Normalized date in processing: "${tradeline.date_opened}" → "${normalizedDate}"`);
+      }
       const tradelineForDB: ParsedTradeline = {
         id: tradeline.id || generateUUID(),
         user_id: userId,
@@ -183,7 +191,7 @@ export const saveTradelinesToDatabase = async (tradelines: ParsedTradeline[], au
         account_balance: tradeline.account_balance || '$0',
         account_status: tradeline.account_status || '',
         account_type: tradeline.account_type || '',
-        date_opened: tradeline.date_opened || '',
+        date_opened: normalizedDate || '', // Use normalized date
         is_negative: Boolean(tradeline.is_negative),
         dispute_count: tradeline.dispute_count || 0,
         created_at: tradeline.created_at || new Date().toISOString(),
@@ -225,33 +233,32 @@ export const saveTradelinesToDatabase = async (tradelines: ParsedTradeline[], au
       console.log('[DEBUG] 📋 Sample tradeline data being upserted:', JSON.stringify(newTradelines[0], null, 2));
       
       // Validate all tradelines before upsert
-    // Validate all tradelines before upsert
-    const validatedTradelines = newTradelines.map((tradeline) => {
-      const validation = validateParsedTradeline(tradeline);
-      if (!validation.success) {
-        console.error('[ERROR] ❌ Tradeline validation failed:', validation.error);
-        throw new Error(`Tradeline validation failed: ${validation.error}`);
-      }
-      return validation.data!;
-    });
+      const validatedTradelines = newTradelines.map((tradeline) => {
+        const validation = validateParsedTradeline(tradeline);
+        if (!validation.success) {
+          console.error('[ERROR] ❌ Tradeline validation failed:', validation.error);
+          throw new Error(`Tradeline validation failed: ${validation.error}`);
+        }
+        return validation.data!;
+      });
 
-    // Remove duplicates within the current batch
-    const uniqueTradelines = validatedTradelines.filter((tradeline, index, self) => {
-      const key = `${tradeline.user_id}-${tradeline.account_number}-${tradeline.creditor_name}-${tradeline.credit_bureau}`;
-      return index === self.findIndex(t => 
-        `${t.user_id}-${t.account_number}-${t.creditor_name}-${t.credit_bureau}` === key
-      );
-    });
+      // Remove duplicates within the current batch
+      const uniqueTradelines = validatedTradelines.filter((tradeline, index, self) => {
+        const key = `${tradeline.user_id}-${tradeline.account_number}-${tradeline.creditor_name}-${tradeline.credit_bureau}`;
+        return index === self.findIndex(t => 
+          `${t.user_id}-${t.account_number}-${t.creditor_name}-${t.credit_bureau}` === key
+        );
+      });
 
-    console.log(`[DEBUG] Filtered ${validatedTradelines.length} down to ${uniqueTradelines.length} unique tradelines`);
+      console.log(`[DEBUG] Filtered ${validatedTradelines.length} down to ${uniqueTradelines.length} unique tradelines`);
 
-    const { data: insertData, error: insertError } = await supabase
-      .from('tradelines')
-      .upsert(uniqueTradelines, { 
-        onConflict: 'user_id,account_number,creditor_name,credit_bureau',
-        ignoreDuplicates: false 
-      })
-      .select('*');
+      const { data: insertData, error: insertError } = await supabase
+        .from('tradelines')
+        .upsert(uniqueTradelines, { 
+          onConflict: 'user_id,account_number,creditor_name,credit_bureau',
+          ignoreDuplicates: false 
+        })
+        .select('*');
 
       if (insertError) {
         console.error('[ERROR] ❌ Failed to upsert new tradelines:', insertError);
@@ -294,26 +301,6 @@ export const saveTradelinesToDatabase = async (tradelines: ParsedTradeline[], au
   }
 };
 
-// Pagination options interface
-export interface PaginationOptions {
-  page?: number;
-  pageSize?: number;
-  sortBy?: 'created_at' | 'creditor_name' | 'account_balance';
-  sortOrder?: 'asc' | 'desc';
-}
-
-// Paginated response interface
-export interface PaginatedTradelinesResponse {
-  data: ParsedTradeline[];
-  pagination: {
-    page: number;
-    pageSize: number;
-    totalCount: number;
-    totalPages: number;
-    hasNext: boolean;
-    hasPrevious: boolean;
-  };
-}
 
 // Load tradelines with pagination
 export const loadTradelinesFromDatabase = async (

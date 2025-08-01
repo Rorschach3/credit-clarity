@@ -231,7 +231,7 @@ class TradelineNormalizer:
             return None
     
     def _normalize_date(self, value: str) -> Optional[str]:
-        """Normalize date to MM/DD/YYYY format"""
+        """Normalize date to YYYY-MM-DD format (ISO) for PostgreSQL compatibility"""
         if not value or not value.strip():
             return None
         
@@ -257,7 +257,7 @@ class TradelineNormalizer:
                     
                     # Validate ranges
                     if 1 <= month <= 12 and 1 <= day <= 31 and 1900 <= year <= datetime.now().year:
-                        return f"{month:02d}/{day:02d}/{year}"
+                        return f"{year}-{month:02d}-{day:02d}"  # ISO format YYYY-MM-DD
                         
                 except (ValueError, TypeError):
                     continue
