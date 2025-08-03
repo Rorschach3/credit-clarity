@@ -14,10 +14,23 @@ class DocumentProcessorService:
     """Main document processing orchestrator"""
     
     def __init__(self, storage_service: StorageService, job_service: JobService,
-                 document_ai_service: DocumentAIService = None, llm_parser: LLMParserService = None):
+                 document_ai_service: DocumentAIService = None, llm_parser: LLMParserService = None,
+                 google_ai_config: dict = None):
         self.storage = storage_service
         self.job_service = job_service
-        self.document_ai = document_ai_service or DocumentAIService()
+        
+        # Initialize Document AI service with Google AI configuration if provided
+        if document_ai_service:
+            self.document_ai = document_ai_service
+        else:
+            ai_config = google_ai_config or {}
+            self.document_ai = DocumentAIService(
+                project_id=ai_config.get('project_id'),
+                processor_id=ai_config.get('processor_id'),
+                location=ai_config.get('location', 'us'),
+                use_google_ai=ai_config.get('use_google_ai', False)
+            )
+        
         self.llm_parser = llm_parser or LLMParserService(config=None) # config will be set by the caller
     
     async def document_ai_workflow(self, job_id: str) -> bool:

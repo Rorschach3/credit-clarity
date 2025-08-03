@@ -1,6 +1,6 @@
 import { ChangeEvent, useCallback } from 'react';
 import { toast as sonnerToast } from "sonner";
-import { ParsedTradeline, ParsedTradelineSchema } from "@/utils/tradelineParser";
+import { ParsedTradeline, ParsedTradelineSchema } from "@/utils/tradeline-types";
 import { v4 as uuidv4 } from 'uuid';
 
 

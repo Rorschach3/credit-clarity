@@ -1,19 +1,40 @@
 import asyncio
 import logging
+import os
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
 from enum import Enum
 
 from ..models.tradeline_models import DocumentType, ExtractedTable, ExtractedText, DocumentAIResult
+from .google_document_ai_service import GoogleDocumentAIService
 
 logger = logging.getLogger(__name__)
 
 class DocumentAIService:
     """Service for processing documents with AI"""
     
-    def __init__(self, api_key: str = None, project_id: str = None):
+    def __init__(self, api_key: str = None, project_id: str = None, processor_id: str = None, 
+                 location: str = "us", use_google_ai: bool = False):
         self.api_key = api_key
         self.project_id = project_id
+        self.processor_id = processor_id
+        self.location = location
+        self.use_google_ai = use_google_ai
+        
+        # Initialize Google Document AI service if enabled
+        self.google_ai_service = None
+        if use_google_ai and project_id and processor_id:
+            try:
+                self.google_ai_service = GoogleDocumentAIService(
+                    project_id=project_id,
+                    location=location,
+                    processor_id=processor_id
+                )
+                logger.info("Google Document AI service initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Google Document AI service: {str(e)}")
+                logger.info("Falling back to PyPDF2 processing")
+        
         self.processing_stats = {
             'total_processed': 0,
             'successful': 0,
@@ -25,6 +46,29 @@ class DocumentAIService:
         try:
             logger.info(f"Starting Document AI processing for {file_name}")
             start_time = datetime.now()
+            
+            # Try Google Document AI first if available
+            if self.google_ai_service:
+                try:
+                    logger.info("Using Google Document AI service")
+                    result = await self.google_ai_service.process_document(file_content, file_name)
+                    
+                    processing_time = (datetime.now() - start_time).total_seconds()
+                    result.processing_time = processing_time
+                    
+                    # Update statistics
+                    self.processing_stats['total_processed'] += 1
+                    self.processing_stats['successful'] += 1
+                    
+                    logger.info(f"Google Document AI processing completed in {processing_time:.2f}s")
+                    return result
+                    
+                except Exception as e:
+                    logger.warning(f"Google Document AI failed, falling back to PyPDF2: {str(e)}")
+                    # Continue to fallback processing
+            
+            # Fallback to original processing
+            logger.info("Using fallback PyPDF2 processing")
             
             # Determine document type
             doc_type = self._detect_document_type(file_name, file_content)

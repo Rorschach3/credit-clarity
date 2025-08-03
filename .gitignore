@@ -46,3 +46,4 @@ backend/service_account.json
 .mcp.json
 ./backend/service_account.json
 ./backend/service-account.json
+.vercel

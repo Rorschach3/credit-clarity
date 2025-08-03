@@ -99,3 +99,7 @@ uritemplate==4.2.0
 urllib3==2.5.0
 uvicorn==0.35.0
 websockets==15.0.1
+pdfplumber==0.11.4
+PyMuPDF==1.24.14
+pytesseract==0.3.13
+Pillow==11.0.0

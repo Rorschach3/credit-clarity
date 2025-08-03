@@ -232,15 +232,29 @@ export const saveTradelinesToDatabase = async (tradelines: ParsedTradeline[], au
       console.log(`[DEBUG] ➕ Upserting ${newTradelines.length} new tradelines`);
       console.log('[DEBUG] 📋 Sample tradeline data being upserted:', JSON.stringify(newTradelines[0], null, 2));
       
-      // Validate all tradelines before upsert
-      const validatedTradelines = newTradelines.map((tradeline) => {
-        const validation = validateParsedTradeline(tradeline);
-        if (!validation.success) {
-          console.error('[ERROR] ❌ Tradeline validation failed:', validation.error);
-          throw new Error(`Tradeline validation failed: ${validation.error}`);
-        }
-        return validation.data!;
-      });
+      // Filter out tradelines with missing required fields and validate the rest
+      const validatedTradelines = newTradelines
+        .filter((tradeline) => {
+          // Skip tradelines without required fields
+          if (!tradeline.creditor_name || tradeline.creditor_name.trim() === '') {
+            console.warn(`[WARN] ⚠️ Skipping tradeline with missing creditor_name: ${JSON.stringify(tradeline)}`);
+            return false;
+          }
+          // Skip tradelines without account numbers
+          if (!tradeline.account_number || tradeline.account_number.trim() === '') {
+            console.warn(`[WARN] ⚠️ Skipping tradeline with missing account_number: ${tradeline.creditor_name}`);
+            return false;
+          }
+          return true;
+        })
+        .map((tradeline) => {
+          const validation = validateParsedTradeline(tradeline);
+          if (!validation.success) {
+            console.error('[ERROR] ❌ Tradeline validation failed:', validation.error);
+            throw new Error(`Tradeline validation failed: ${validation.error}`);
+          }
+          return validation.data!;
+        });
 
       // Remove duplicates within the current batch
       const uniqueTradelines = validatedTradelines.filter((tradeline, index, self) => {
@@ -250,25 +264,29 @@ export const saveTradelinesToDatabase = async (tradelines: ParsedTradeline[], au
         );
       });
 
-      console.log(`[DEBUG] Filtered ${validatedTradelines.length} down to ${uniqueTradelines.length} unique tradelines`);
+      console.log(`[DEBUG] Filtered ${newTradelines.length} tradelines → ${validatedTradelines.length} valid → ${uniqueTradelines.length} unique`);
 
-      const { data: insertData, error: insertError } = await supabase
-        .from('tradelines')
-        .upsert(uniqueTradelines, { 
-          onConflict: 'user_id,account_number,creditor_name,credit_bureau',
-          ignoreDuplicates: false 
-        })
-        .select('*');
+      if (uniqueTradelines.length > 0) {
+        const { data: insertData, error: insertError } = await supabase
+          .from('tradelines')
+          .upsert(uniqueTradelines, { 
+            onConflict: 'user_id,account_number,creditor_name,credit_bureau',
+            ignoreDuplicates: false 
+          })
+          .select('*');
 
-      if (insertError) {
-        console.error('[ERROR] ❌ Failed to upsert new tradelines:', insertError);
-        throw insertError;
-      }
-      
-      if (insertData) {
-        const sanitizedInserts = insertData.map(item => sanitizeDatabaseTradeline(item as DatabaseTradeline));
-        results.push(...sanitizedInserts);
-        console.log(`[SUCCESS] ✅ Successfully upserted ${insertData.length} tradelines`);
+        if (insertError) {
+          console.error('[ERROR] ❌ Failed to upsert new tradelines:', insertError);
+          throw insertError;
+        }
+        
+        if (insertData) {
+          const sanitizedInserts = insertData.map(item => sanitizeDatabaseTradeline(item as DatabaseTradeline));
+          results.push(...sanitizedInserts);
+          console.log(`[SUCCESS] ✅ Successfully upserted ${insertData.length} tradelines`);
+        }
+      } else {
+        console.log(`[INFO] ℹ️ No valid tradelines to insert after filtering`);
       }
     }
     

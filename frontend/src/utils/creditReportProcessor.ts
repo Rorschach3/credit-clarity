@@ -198,14 +198,32 @@ export const processWithAI = async (
       }
     }
     
+    // Filter out tradelines without valid account numbers
+    const validTradelines = (result.tradelines || []).filter(tradeline => {
+      // Exclude tradelines with no account number, empty account number, or default "UNKNOWN" value
+      return tradeline.account_number && 
+             tradeline.account_number.trim() !== '' && 
+             tradeline.account_number.toUpperCase() !== 'UNKNOWN';
+    });
+
+    // Log filtering results
+    const originalCount = result.tradelines?.length || 0;
+    const filteredCount = validTradelines.length;
+    const removedCount = originalCount - filteredCount;
+    
+    if (removedCount > 0) {
+      console.log(`🔍 Filtered ${removedCount} tradelines without valid account numbers`);
+      console.log(`📊 Tradelines: ${originalCount} found → ${filteredCount} valid`);
+    }
+
     return { 
-      tradelines: result.tradelines || [],
+      tradelines: validTradelines,
       processingTime: result.processing_time,
       processingMethod: result.processing_method,
       stats: {
-        found: result.tradelines_found || 0,
+        found: originalCount,
         saved: result.tradelines_saved || 0,
-        failed: result.tradelines_failed || 0
+        failed: result.tradelines_failed || removedCount
       }
     };
     
