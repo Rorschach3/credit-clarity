@@ -47,3 +47,7 @@ backend/service_account.json
 ./backend/service_account.json
 ./backend/service-account.json
 .vercel
+.env.production
+.env.local
+.env
+*.env
