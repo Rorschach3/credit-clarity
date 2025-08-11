@@ -421,7 +421,7 @@ const CreditReportUploadPage = () => {
 
         {/* Recent Jobs */}
         {user?.id && (
-          \u003cRecentJobsPanel
+          <RecentJobsPanel
             userId={user.id}
             onResume={(jobId) => {
               // Kick off polling and show banner
@@ -442,11 +442,11 @@ const CreditReportUploadPage = () => {
                 { initialInterval: 2000, maxInterval: 10000, maxDuration: 20 * 60 * 1000 }
               );
             }}
-          /\u003e
+          />
         )}
 
         {/* Processing Progress */}
-        \u003cProcessingProgress
+        <ProcessingProgress
           isProcessing={isProcessing}
           progress={processingProgress}
           processingMethod={processingMethod}
