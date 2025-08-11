@@ -446,7 +446,16 @@ class BackgroundJobProcessor:
             processor = OptimizedCreditReportProcessor()
             
             await progress_callback(30, "Extracting text and tables...")
-            result = await processor.process_credit_report_optimized(pdf_path)
+            
+            # Add a hard timeout around the heavy processing to avoid "stuck at 30%"
+            try:
+                result = await asyncio.wait_for(
+                    processor.process_credit_report_optimized(pdf_path),
+                    timeout=15 * 60  # 15 minutes
+                )
+            except asyncio.TimeoutError:
+                await progress_callback(99, "Timed out while extracting text. Please try a smaller PDF or retry later.")
+                raise Exception("Processing timed out after 15 minutes")
             
             if result.get('success'):
                 await progress_callback(80, "Saving tradelines to database...")
@@ -458,7 +467,12 @@ class BackgroundJobProcessor:
                 for tradeline in tradelines:
                     tradeline['user_id'] = user_id
                 
-                save_result = await db_optimizer.batch_insert_tradelines(tradelines)
+                try:
+                    save_result = await db_optimizer.batch_insert_tradelines(tradelines)
+                except Exception as save_err:
+                    # Don't fail the entire job if DB save fails; report in result
+                    logger.error(f"DB save failed: {save_err}")
+                    save_result = {'inserted': 0, 'errors': len(tradelines)}
                 
                 await progress_callback(100, f"Completed! Found {len(tradelines)} tradelines")
                 
