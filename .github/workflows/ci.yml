@@ -24,21 +24,18 @@ jobs:
         run: |
           npm ci --workspaces
 
-      - name: Lint
+      - name: Lint (all workspaces)
         run: |
-          npm -w frontend run lint
+          npm -ws --if-present run lint
 
-      - name: Test
+      - name: Test (all workspaces)
         run: |
-          if npm -w frontend run -s test; then
-            echo "Tests passed"
-          else
-            echo "Tests failed" && exit 1
-          fi
+          set -e
+          npm -ws --if-present run -s test
 
-      - name: Build
+      - name: Build (all workspaces)
         run: |
-          npm -w frontend run build
+          npm -ws --if-present run build
 
   python_backend:
     name: Backend (Python)

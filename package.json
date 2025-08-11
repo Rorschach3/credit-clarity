@@ -2,7 +2,8 @@
   "name": "credit-clarity",
   "private": true,
   "workspaces": [
-    "frontend"
+    "frontend",
+    "CreditClarity"
   ],
   "engines": {
     "node": ">=18"
