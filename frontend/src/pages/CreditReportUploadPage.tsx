@@ -30,6 +30,7 @@ import {
 // Job polling service
 import { jobPollingService, type JobStatus } from '@/services/jobPollingService';
 import { JobProgressBanner } from '@/components/credit-upload/JobProgressBanner';
+import { RecentJobsPanel } from '@/components/credit-upload/RecentJobsPanel';
 
 type ManualTradelineInput = Omit<ParsedTradeline, 'id' | 'user_id' | 'created_at'>;
 
@@ -418,8 +419,34 @@ const CreditReportUploadPage = () => {
           />
         )}
 
+        {/* Recent Jobs */}
+        {user?.id && (
+          \u003cRecentJobsPanel
+            userId={user.id}
+            onResume={(jobId) => {
+              // Kick off polling and show banner
+              setActiveJobId(jobId);
+              setActiveJobStatus(null);
+              jobPollingService.pollJobStatus(
+                jobId,
+                (status) => setActiveJobStatus(status),
+                async (status) => {
+                  setActiveJobStatus(status);
+                  if (status.result?.tradelines_found) {
+                    await refreshTradelines();
+                  }
+                },
+                (err) => {
+                  setActiveJobStatus((prev) => prev ? { ...prev, status: 'failed', message: err, success: false, progress: 0 } as any : prev);
+                },
+                { initialInterval: 2000, maxInterval: 10000, maxDuration: 20 * 60 * 1000 }
+              );
+            }}
+          /\u003e
+        )}
+
         {/* Processing Progress */}
-        <ProcessingProgress
+        \u003cProcessingProgress
           isProcessing={isProcessing}
           progress={processingProgress}
           processingMethod={processingMethod}
