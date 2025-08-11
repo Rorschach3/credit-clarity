@@ -2,36 +2,42 @@
 import React, { ChangeEvent } from 'react';
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
 
 interface FileUploadSectionProps {
   onFileUpload: (event: ChangeEvent<HTMLInputElement>) => void;
-  isUploading: boolean;
-  uploadProgress: number;
-  processingMethod: 'ocr' | 'ai';
+  isProcessing: boolean;
+  acceptedFileTypes: string;
+  maxFileSize: number;
 }
 
 export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   onFileUpload,
-  isUploading,
-  uploadProgress,
-  processingMethod
+  isProcessing,
+  acceptedFileTypes,
+  maxFileSize
 }) => {
+  const formatFileSize = (bytes: number) => {
+    const mb = bytes / (1024 * 1024);
+    return `${mb}MB`;
+  };
+
   return (
     <div>
       <Label htmlFor="pdf-upload">Upload Credit Report (PDF)</Label>
       <Input
         id="pdf-upload"
         type="file"
-        accept="application/pdf"
+        accept={acceptedFileTypes}
         onChange={onFileUpload}
-        disabled={isUploading}
+        disabled={isProcessing}
       />
-      {isUploading && (
+      <p className="text-sm text-muted-foreground mt-1">
+        Max file size: {formatFileSize(maxFileSize)}
+      </p>
+      {isProcessing && (
         <div className="mt-2">
-          <Progress value={uploadProgress} className="w-full" />
-          <p className="text-sm text-muted-foreground mt-1">
-            Processing with {processingMethod.toUpperCase()}... {Math.round(uploadProgress)}%
+          <p className="text-sm text-muted-foreground">
+            Processing your credit report...
           </p>
         </div>
       )}

@@ -1,0 +1,77 @@
+{
+  "environment": "production",
+  "debug": false,
+  "api": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "reload": false,
+    "workers": 4
+  },
+  "database": {
+    "pool_size": 20,
+    "max_overflow": 30,
+    "pool_timeout": 60,
+    "echo": false,
+    "pool_recycle": 3600
+  },
+  "cache": {
+    "ttl": 3600,
+    "max_size": 10000,
+    "redis_pool_size": 10
+  },
+  "processing": {
+    "max_file_size_mb": 50,
+    "timeout_seconds": 1800,
+    "concurrent_jobs": 5,
+    "queue_size": 1000
+  },
+  "security": {
+    "jwt_expire_minutes": 480,
+    "rate_limit": {
+      "requests": 100,
+      "window": 60,
+      "burst_multiplier": 2
+    },
+    "cors": {
+      "origins": [
+        "https://app.creditclarity.com",
+        "https://creditclarity.com",
+        "https://www.creditclarity.com"
+      ],
+      "allow_credentials": true
+    },
+    "headers": {
+      "force_https": true,
+      "hsts_max_age": 31536000,
+      "content_security_policy": "default-src 'self'",
+      "x_frame_options": "DENY"
+    }
+  },
+  "monitoring": {
+    "metrics_enabled": true,
+    "metrics_interval": 30,
+    "log_level": "INFO",
+    "enable_profiling": false,
+    "structured_logging": true,
+    "log_retention_days": 30
+  },
+  "features": {
+    "pdf_processing": true,
+    "ai_analysis": true,
+    "background_jobs": true,
+    "caching": true,
+    "rate_limiting": true,
+    "mock_external_services": false
+  },
+  "performance": {
+    "enable_compression": true,
+    "static_file_caching": true,
+    "connection_timeout": 30,
+    "read_timeout": 60
+  },
+  "deployment": {
+    "health_check_path": "/health",
+    "graceful_shutdown_timeout": 30,
+    "max_request_size": 52428800
+  }
+}

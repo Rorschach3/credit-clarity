@@ -1,5 +1,5 @@
 // Enhanced fuzzy matching utilities for tradeline deduplication
-import { ParsedTradeline, DatabaseTradeline } from '@/utils/tradeline-types';
+import { ParsedTradeline, DatabaseTradeline } from '@/utils/tradelineParser';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface FuzzyMatchResult {
@@ -12,6 +12,8 @@ export interface FuzzyMatchResult {
     dateOpenedMatch: boolean;
     creditBureauMatch: boolean;
     overallScore: number;
+    accountNumberMatch?: boolean;
+    creditorNameMatch?: boolean;
   };
 }
 
@@ -50,6 +52,15 @@ function calculateSimilarity(str1: string, str2: string): number {
   
   const distance = levenshteinDistance(str1, str2);
   return Math.round(((maxLength - distance) / maxLength) * 100);
+}
+
+/**
+ * Extract account number prefix for matching
+ */
+export function extractAccountPrefix(accountNumber: string, length: number = 4): string {
+  if (!accountNumber) return '';
+  const digits = accountNumber.replace(/\D/g, '');
+  return digits.substring(0, length);
 }
 
 /**
@@ -238,12 +249,12 @@ export function isTradelineMatch(
   );
   
   const accountNumberScore = compareAccountNumbers(
-    incomingTradeline.account_number,
-    existingTradeline.account_number
+    incomingTradeline.account_number || '',
+    existingTradeline.account_number || ''
   );
   
-  const incomingDate = normalizeDate(incomingTradeline.date_opened);
-  const existingDate = normalizeDate(existingTradeline.date_opened);
+  const incomingDate = normalizeDate(incomingTradeline.date_opened ?? '');
+  const existingDate = normalizeDate(existingTradeline.date_opened ?? '');
   const dateOpenedMatch = (incomingDate === existingDate && incomingDate !== '') || 
                          (!thresholds.requireDateMatch && (!incomingDate || !existingDate));
   
@@ -310,7 +321,6 @@ export function isTradelineMatch(
   
   return result;
 }
-
 
 /**
  * Sanitize Supabase data to match ParsedTradeline type
@@ -385,7 +395,7 @@ export async function findCandidateTradelines(
     }
     
     // Strategy 3: Account number prefix search (if available)
-    const accountPrefix = incomingTradeline.account_number?.replace(/\D/g, '').substring(0, 4);
+    const accountPrefix = extractAccountPrefix(incomingTradeline.account_number, 4);
     if (accountPrefix && accountPrefix.length === 4) {
       const { data: accountMatches, error: accountError } = await supabase
         .from('tradelines')
@@ -529,7 +539,10 @@ export function mergeTradelineFields(
   // Type-safe field updates
   stringFieldsToCheck.forEach(field => {
     if (isBetterValue(existingTradeline[field], incomingTradeline[field])) {
-      updates[field] = incomingTradeline[field];
+      const value = incomingTradeline[field];
+      if (value !== null) {
+        updates[field] = value as string | undefined;
+      }
     }
   });
   

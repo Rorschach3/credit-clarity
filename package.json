@@ -1,0 +1,21 @@
+{
+  "name": "credit-clarity",
+  "private": true,
+  "workspaces": [
+    "frontend"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "concurrently \"npm:dev -w frontend\" \"python -m uvicorn --app-dir backend main:app --reload --host 0.0.0.0 --port 8000\"",
+    "dev:frontend": "npm -w frontend run dev",
+    "dev:backend": "python -m uvicorn --app-dir backend main:app --reload --host 0.0.0.0 --port 8000",
+    "lint": "npm -w frontend run lint",
+    "build": "npm -w frontend run build",
+    "test": "npm -w frontend run test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "environment": "development",
+  "debug": true,
+  "api": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "reload": true,
+    "workers": 1
+  },
+  "database": {
+    "pool_size": 5,
+    "max_overflow": 10,
+    "pool_timeout": 30,
+    "echo": true
+  },
+  "cache": {
+    "ttl": 1800,
+    "max_size": 1000
+  },
+  "processing": {
+    "max_file_size_mb": 10,
+    "timeout_seconds": 300,
+    "concurrent_jobs": 2
+  },
+  "security": {
+    "jwt_expire_minutes": 1440,
+    "rate_limit": {
+      "requests": 200,
+      "window": 60
+    },
+    "cors": {
+      "origins": [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173"
+      ],
+      "allow_credentials": true
+    }
+  },
+  "monitoring": {
+    "metrics_enabled": true,
+    "metrics_interval": 60,
+    "log_level": "DEBUG",
+    "enable_profiling": true
+  },
+  "features": {
+    "pdf_processing": true,
+    "ai_analysis": true,
+    "background_jobs": true,
+    "caching": true,
+    "rate_limiting": false,
+    "mock_external_services": true
+  }
+}

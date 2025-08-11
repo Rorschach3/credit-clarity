@@ -1,8 +1,9 @@
-import React, { useEffect, useCallback, useState, Suspense } from "react";
+import React, { useEffect, useCallback, useState, Suspense, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast as sonnerToast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { saveTradelinesToDatabase, ParsedTradeline, loadAllTradelinesFromDatabase } from "@/utils/tradelineParser";
+import { updateTradelineFields } from "@/utils/fuzzyTradelineMatching";
 import { usePersistentTradelines } from "@/hooks/usePersistentTradelines";
 import { CreditNavbar } from "@/components/navbar/CreditNavbar";
 import { TradelinesStatus } from "@/components/ui/tradelines-status";
@@ -26,6 +27,9 @@ import {
   type ProcessingProgress as ProcessingProgressType 
 } from '@/utils/asyncProcessing';
 
+// Job polling service
+import { jobPollingService, type JobStatus } from '@/services/jobPollingService';
+
 type ManualTradelineInput = Omit<ParsedTradeline, 'id' | 'user_id' | 'created_at'>;
 
 const CreditReportUploadPage = () => {
@@ -45,6 +49,13 @@ const CreditReportUploadPage = () => {
   const [showManualModal, setShowManualModal] = useState(false);
   const [usePagination, setUsePagination] = useState(false);
   
+  // Save status tracking
+  const [savingTradelines, setSavingTradelines] = useState<Set<string>>(new Set());
+  const [saveErrors, setSaveErrors] = useState<Set<string>>(new Set());
+  
+  // Debounce timer for auto-save
+  const debounceTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  
   // Use persistent tradelines hook
   const {
     tradelines: persistentTradelines,
@@ -59,6 +70,13 @@ const CreditReportUploadPage = () => {
       loadExistingTradelines();
     }
   }, [user?.id]);
+
+  // Cleanup job polling on unmount
+  useEffect(() => {
+    return () => {
+      jobPollingService.stopAllPolling();
+    };
+  }, []);
 
   const loadExistingTradelines = async () => {
     if (!user?.id) return;
@@ -92,14 +110,94 @@ const CreditReportUploadPage = () => {
     setProcessingProgress({ step: 'Starting...', progress: 0, message: 'Preparing to process file' });
 
     try {
-      let tradelines: ParsedTradeline[] = [];
-
+      let result;
+      
       if (processingMethod === 'ocr') {
-        tradelines = await processFileWithOCR(file, user.id, setProcessingProgress);
+        const tradelines = await processFileWithOCR(file, user.id, setProcessingProgress);
+        result = { tradelines, isBackgroundJob: false };
       } else {
-        tradelines = await processFileWithAI(file, user.id, setProcessingProgress);
+        result = await processFileWithAI(file, user.id, setProcessingProgress);
       }
 
+      // Handle background job
+      if (result.isBackgroundJob && result.job_id) {
+        console.log('🔄 Starting background job polling for:', result.job_id);
+        
+        sonnerToast.info("🔄 Processing Started", {
+          description: "Your file is being processed in the background. You'll see progress updates here.",
+          duration: 3000,
+        });
+
+        // Start polling for job status
+        jobPollingService.pollJobStatus(
+          result.job_id,
+          // onUpdate callback
+          (status: JobStatus) => {
+            console.log('📊 Job update:', status.progress + '%', status.message);
+            setProcessingProgress({
+              step: status.status === 'running' ? 'Processing...' : 'Queued',
+              progress: status.progress,
+              message: status.message || `Processing in background... (${status.progress}%)`
+            });
+          },
+          // onComplete callback
+          async (status: JobStatus) => {
+            console.log('✅ Job completed:', status);
+            
+            if (status.result?.tradelines_found > 0) {
+              // Refresh tradelines from database since job saved them
+              await refreshTradelines();
+              
+              sonnerToast.success("🎉 Credit Report Processing Complete!", {
+                description: `Successfully extracted ${status.result.tradelines_found} tradeline(s) and saved to your account`,
+                duration: 5000,
+              });
+              
+              setProcessingProgress({
+                step: 'Complete!',
+                progress: 100,
+                message: `🎉 Successfully processed ${status.result.tradelines_found} tradelines`
+              });
+            } else {
+              sonnerToast.warning("No tradelines found in the uploaded file", {
+                description: "Try a different processing method or add tradelines manually"
+              });
+              
+              setProcessingProgress({
+                step: 'No Results',
+                progress: 100,
+                message: 'No tradelines found - try a different method'
+              });
+            }
+          },
+          // onError callback
+          (error: string) => {
+            console.error('❌ Job polling error:', error);
+            sonnerToast.error("❌ Processing Failed", {
+              description: error,
+              duration: 5000,
+            });
+            
+            setProcessingProgress({
+              step: 'Failed',
+              progress: 0,
+              message: `❌ Processing failed: ${error}`
+            });
+          },
+          // Polling options
+          {
+            initialInterval: 2000,   // Start polling every 2 seconds
+            maxInterval: 10000,     // Max 10 seconds between polls
+            maxDuration: 20 * 60 * 1000  // 20 minutes max
+          }
+        );
+        
+        return; // Exit early for background jobs
+      }
+
+      // Handle synchronous processing result
+      const tradelines = result.tradelines || [];
+      
       if (tradelines.length > 0) {
         setExtractedTradelines(prev => [...prev, ...tradelines]);
         
@@ -197,19 +295,63 @@ const CreditReportUploadPage = () => {
     sonnerToast.success("Tradeline removed");
   }, []);
 
-  // Handle save all tradelines
-  const handleSaveAll = useCallback(async () => {
-    if (!user?.id || extractedTradelines.length === 0) return;
+  // Handle tradeline updates with debounced auto-save
+  const handleTradelineUpdate = useCallback(async (tradelineId: string, updates: Partial<ParsedTradeline>) => {
+    if (!user?.id) return;
 
-    try {
-      await saveTradelinesToDatabase(extractedTradelines, user.id);
-      await refreshTradelines();
-      sonnerToast.success("All tradelines saved successfully!");
-    } catch (error) {
-      console.error('Error saving tradelines:', error);
-      sonnerToast.error("Failed to save tradelines");
+    // Update local state immediately
+    setExtractedTradelines(prev => 
+      prev.map(t => t.id === tradelineId ? { ...t, ...updates } : t)
+    );
+
+    // Clear any existing timer for this tradeline
+    const existingTimer = debounceTimers.current.get(tradelineId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
     }
-  }, [user?.id, extractedTradelines, refreshTradelines]);
+
+    // Clear any previous error for this tradeline
+    setSaveErrors(prev => {
+      const newErrors = new Set(prev);
+      newErrors.delete(tradelineId);
+      return newErrors;
+    });
+
+    // Set saving status
+    setSavingTradelines(prev => new Set(prev).add(tradelineId));
+
+    // Create new debounced timer
+    const timer = setTimeout(async () => {
+      try {
+        await updateTradelineFields(tradelineId, updates);
+        await refreshTradelines();
+        
+        // Remove from saving status
+        setSavingTradelines(prev => {
+          const newSaving = new Set(prev);
+          newSaving.delete(tradelineId);
+          return newSaving;
+        });
+
+        console.log(`Auto-saved tradeline ${tradelineId}`);
+      } catch (error) {
+        console.error('Error auto-saving tradeline:', error);
+        
+        // Mark as error and remove from saving
+        setSaveErrors(prev => new Set(prev).add(tradelineId));
+        setSavingTradelines(prev => {
+          const newSaving = new Set(prev);
+          newSaving.delete(tradelineId);
+          return newSaving;
+        });
+
+        sonnerToast.error("Failed to save changes");
+      }
+    }, 500); // 500ms debounce
+
+    debounceTimers.current.set(tradelineId, timer);
+  }, [user?.id, refreshTradelines]);
+
 
   // Auto-enable pagination for large datasets
   useEffect(() => {
@@ -270,9 +412,11 @@ const CreditReportUploadPage = () => {
             extractedTradelines.length > 0 && (
               <TradelinesList
                 tradelines={extractedTradelines}
+                onUpdate={handleTradelineUpdate}
                 onDelete={handleTradelineDelete}
-                onSaveAll={handleSaveAll}
                 onAddManual={() => setShowManualModal(true)}
+                savingTradelines={savingTradelines}
+                saveErrors={saveErrors}
               />
             )
           )}

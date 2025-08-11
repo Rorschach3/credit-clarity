@@ -34,16 +34,16 @@ const createMockTradeline = (overrides: Partial<ParsedTradeline> = {}): ParsedTr
   user_id: 'test-user',
   creditor_name: 'Chase Bank',
   account_number: '1234-5678-9012',
-  account_balance: '$1,500.00',
-  account_status: 'Open',
+  account_balance: '$1,500',
+  account_status: 'paid on time',
   account_type: 'Credit Card',
-  date_opened: '2020-01-15',
+  date_opened: '12-20-2020',
   is_negative: false,
   dispute_count: 0,
   created_at: '2024-01-01T00:00:00Z',
-  credit_limit: '$5,000.00',
+  credit_limit: '$5,000',
   credit_bureau: 'Experian',
-  monthly_payment: '$50.00',
+  monthly_payment: '$50',
   ...overrides
 });
 
@@ -458,21 +458,21 @@ describe('Fuzzy Tradeline Matching', () => {
     test('should handle multiple matching criteria combinations', () => {
       const testCases = [
         {
-          name: 'Only creditor matches',
+          creditor_name: 'Only creditor matches',
           existing: { creditor_name: 'Chase', account_number: '1234', date_opened: '2020-01-01' },
           incoming: { creditor_name: 'Chase', account_number: '5678', date_opened: '2021-01-01' },
           expectedMatch: false,
           expectedConfidence: 40
         },
         {
-          name: 'Creditor and account match',
+          creditorName: 'Creditor and account match',
           existing: { creditor_name: 'Chase', account_number: '1234', date_opened: '2020-01-01' },
           incoming: { creditor_name: 'Chase', account_number: '1234', date_opened: '2021-01-01' },
           expectedMatch: false,
           expectedConfidence: 70
         },
         {
-          name: 'Account and date match',
+          creditorName: 'Account and date match',
           existing: { creditor_name: 'Chase', account_number: '1234', date_opened: '2020-01-01' },
           incoming: { creditor_name: 'Wells Fargo', account_number: '1234', date_opened: '2020-01-01' },
           expectedMatch: false,
@@ -480,7 +480,7 @@ describe('Fuzzy Tradeline Matching', () => {
         }
       ];
 
-      testCases.forEach(({ name, existing, incoming, expectedMatch, expectedConfidence }) => {
+      testCases.forEach(({ creditorName, existing, incoming, expectedMatch, expectedConfidence }) => {
         const existingTradeline = createMockTradeline(existing);
         const incomingTradeline = createMockTradeline(incoming);
         

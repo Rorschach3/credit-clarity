@@ -1,0 +1,48 @@
+# Core FastAPI and server
+fastapi>=0.116.1
+uvicorn>=0.30.0
+python-multipart>=0.0.20
+python-dotenv>=1.0.0
+
+# PDF Processing
+pdfplumber>=0.11.7
+PyPDF2>=3.0.1
+PyMuPDF>=1.26.0
+pytesseract>=0.3.10
+
+# AI/ML Services
+google-generativeai>=0.8.3
+google-cloud-documentai>=2.30.1
+openai>=1.35.0
+
+# Database
+supabase>=2.18.0
+psycopg2-binary>=2.9.9
+
+# Async and concurrency
+asyncio-throttle
+aiofiles>=24.1.0
+aiohttp>=3.10.8
+
+# Image processing for OCR
+Pillow>=10.4.0
+
+# Data processing
+pandas>=2.2.2
+numpy>=2.0.1
+pydantic>=2.9.2
+pydantic-settings>=2.5.2
+
+# Testing
+pytest>=8.3.3
+pytest-asyncio>=0.24.0
+
+# Security and monitoring
+cryptography>=45.0.0
+prometheus-client>=0.21.0
+psutil>=6.1.0
+
+# Utility
+requests>=2.32.3
+python-json-logger>=2.0.7
+tenacity>=9.0.0

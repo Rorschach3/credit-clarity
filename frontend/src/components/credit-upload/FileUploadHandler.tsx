@@ -107,9 +107,9 @@ const processCreditReportWithAPI = async (file: File, userId: string): Promise<P
       }
     }
 
-    // Fallback to localhost
-    console.log(`🌐 Using localhost fallback`);
-    return 'http://localhost:8000/process-credit-report';
+    // Fallback to proxy endpoint
+    console.log(`🌐 Using proxy fallback`);
+    return '/api/process-credit-report';
   };
 
   const endpoint = getApiEndpoint();

@@ -121,11 +121,11 @@ class TradelineNormalizer:
     
     def _normalize_creditor_name(self, value: str) -> Optional[str]:
         """Normalize creditor name"""
-        if not value or not value.strip():
+        if not value or value is None or not str(value).strip():
             return None
             
         # Clean up common OCR errors and whitespace
-        cleaned = value.strip()
+        cleaned = str(value).strip()
         
         # Skip purely numeric values (likely reference codes, not creditor names)
         if cleaned.isdigit():
@@ -173,11 +173,11 @@ class TradelineNormalizer:
     
     def _normalize_account_number(self, value: str, creditor_context: str = "") -> Optional[str]:
         """Extract and normalize account number"""
-        if not value or not value.strip():
+        if not value or value is None or not str(value).strip():
             # Try to extract from raw text if available
             return None
         
-        value = value.strip()
+        value = str(value).strip()
         
         # Try each pattern
         for pattern in self.account_number_patterns:
@@ -202,8 +202,10 @@ class TradelineNormalizer:
     
     def _normalize_currency(self, value: str) -> Optional[str]:
         """Normalize currency values"""
-        if not value or not value.strip():
+        if not value or value is None or not str(value).strip():
             return None
+        
+        value = str(value)
         
         # Handle malformed values
         if value in ["$,", "$", ","]:
@@ -232,8 +234,10 @@ class TradelineNormalizer:
     
     def _normalize_date(self, value: str) -> Optional[str]:
         """Normalize date to YYYY-MM-DD format (ISO) for PostgreSQL compatibility"""
-        if not value or not value.strip():
+        if not value or value is None or not str(value).strip():
             return None
+        
+        value = str(value)
         
         # Handle malformed dates like "'\"xxxx/xx/xx\"'::text"
         if "xxxx" in value or "xx/xx" in value or "'\"" in value:
@@ -266,10 +270,10 @@ class TradelineNormalizer:
     
     def _normalize_account_type(self, value: str) -> Optional[str]:
         """Normalize account type to standard values"""
-        if not value or not value.strip():
+        if not value or value is None or not str(value).strip():
             return None
         
-        value_lower = value.strip().lower()
+        value_lower = str(value).strip().lower()
         
         # Direct mapping
         for verbose, standard in self.account_type_mapping.items():
@@ -286,10 +290,10 @@ class TradelineNormalizer:
     
     def _normalize_account_status(self, value: str) -> Optional[str]:
         """Normalize account status to standard values"""
-        if not value or not value.strip():
+        if not value or value is None or not str(value).strip():
             return "Current"  # Default assumption
         
-        value_lower = value.strip().lower()
+        value_lower = str(value).strip().lower()
         
         # Direct mapping
         for verbose, standard in self.account_status_mapping.items():
@@ -310,10 +314,10 @@ class TradelineNormalizer:
     
     def _normalize_credit_bureau(self, value: str) -> Optional[str]:
         """Normalize credit bureau name"""
-        if not value or not value.strip():
+        if not value or value is None or not str(value).strip():
             return None
         
-        value_lower = value.strip().lower()
+        value_lower = str(value).strip().lower()
         
         if "experian" in value_lower:
             return "Experian"
@@ -326,7 +330,7 @@ class TradelineNormalizer:
     
     def _determine_negative_status(self, tradeline: Dict[str, Any]) -> bool:
         """Determine if tradeline has negative impact"""
-        account_status = tradeline.get("account_status", "").lower()
+        account_status = str(tradeline.get("account_status", "")).lower()
         
         # Negative indicators
         negative_statuses = [

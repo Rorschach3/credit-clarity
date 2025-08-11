@@ -1,0 +1,36 @@
+[tool.ruff]
+line-length = 100
+select = [
+  "E", "F", "W",  # pycodestyle/pyflakes
+  "I",             # isort
+  "B",             # flake8-bugbear
+]
+ignore = [
+  # add any rule codes to ignore here if needed
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["backend"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+warn_unreachable = true
+no_implicit_optional = true
+check_untyped_defs = true
+ignore_missing_imports = true
+strict_optional = true
+pretty = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q"
+testpaths = ["backend/tests"]

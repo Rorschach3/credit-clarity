@@ -1,0 +1,80 @@
+{
+  "environment": "staging",
+  "debug": false,
+  "api": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "reload": false,
+    "workers": 2
+  },
+  "database": {
+    "pool_size": 10,
+    "max_overflow": 15,
+    "pool_timeout": 45,
+    "echo": false,
+    "pool_recycle": 1800
+  },
+  "cache": {
+    "ttl": 3600,
+    "max_size": 5000,
+    "redis_pool_size": 5
+  },
+  "processing": {
+    "max_file_size_mb": 25,
+    "timeout_seconds": 900,
+    "concurrent_jobs": 3,
+    "queue_size": 500
+  },
+  "security": {
+    "jwt_expire_minutes": 720,
+    "rate_limit": {
+      "requests": 150,
+      "window": 60,
+      "burst_multiplier": 1.5
+    },
+    "cors": {
+      "origins": [
+        "https://staging.creditclarity.com",
+        "https://staging-app.creditclarity.com"
+      ],
+      "allow_credentials": true
+    },
+    "headers": {
+      "force_https": true,
+      "hsts_max_age": 86400,
+      "x_frame_options": "SAMEORIGIN"
+    }
+  },
+  "monitoring": {
+    "metrics_enabled": true,
+    "metrics_interval": 45,
+    "log_level": "INFO",
+    "enable_profiling": true,
+    "structured_logging": true,
+    "log_retention_days": 7
+  },
+  "features": {
+    "pdf_processing": true,
+    "ai_analysis": true,
+    "background_jobs": true,
+    "caching": true,
+    "rate_limiting": true,
+    "mock_external_services": false
+  },
+  "performance": {
+    "enable_compression": true,
+    "static_file_caching": true,
+    "connection_timeout": 25,
+    "read_timeout": 45
+  },
+  "deployment": {
+    "health_check_path": "/health",
+    "graceful_shutdown_timeout": 20,
+    "max_request_size": 26214400
+  },
+  "testing": {
+    "enable_test_endpoints": true,
+    "mock_payment_processing": true,
+    "detailed_error_responses": true
+  }
+}

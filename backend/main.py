@@ -28,7 +28,7 @@ try:
 except ImportError:
     genai = None
     GEMINI_AVAILABLE = False
-    logger.warning("⚠️ Google Generative AI not available - install with: pip install google-generativeai")
+    # Note: logger not yet configured at this point
 
 from google.oauth2 import service_account # type: ignore
 
@@ -66,8 +66,34 @@ logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+
+# Suppress pdfminer debug logs
+logging.getLogger('pdfminer').setLevel(logging.WARNING)
+logging.getLogger('pdfminer.psparser').setLevel(logging.WARNING)
+logging.getLogger('pdfminer.pdfinterp').setLevel(logging.WARNING)
+logging.getLogger('pdfminer.converter').setLevel(logging.WARNING)
+logging.getLogger('pdfminer.pdfdocument').setLevel(logging.WARNING)
+logging.getLogger('pdfminer.pdfpage').setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 app = FastAPI(title="Credit Report Processor", debug=True)
+
+# Initialize background job processor
+from services.background_jobs import job_processor
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on startup"""
+    await job_processor.start()
+    logger.info("🚀 Background job processor started")
+
+@app.on_event("shutdown")  
+async def shutdown_event():
+    """Cleanup on shutdown"""
+    await job_processor.stop()
+    logger.info("🛑 Background job processor stopped")
+
+# Note: CORS is configured later in the file with more permissive settings for development
 
 # Environment variables with debugging
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT_ID")
@@ -83,25 +109,52 @@ def normalize_date_for_postgres(date_str: str) -> Optional[str]:
     Input: '04/18/2022' or other formats
     Output: '2022-04-18' or None for invalid dates
     """
-    if not date_str or not date_str.strip():
+    if not date_str:
         return None
+    
+    # Convert to string and strip safely
+    date_str = str(date_str).strip()
+    if not date_str:
+        return None
+    
+    # Pre-validation: Skip obviously invalid date strings
+    # Skip strings with invalid patterns that look like reference numbers
+    if re.match(r'^\d{2,}-\d+(-\d+)?$', date_str):
+        parts = date_str.split('-')
+        if len(parts) >= 2:
+            try:
+                first_part = int(parts[0])
+                second_part = int(parts[1])
+                # If first part > 12 (invalid month) or second part > 59 (likely reference), skip
+                if first_part > 12 or second_part > 59:
+                    return None
+                # Additional check for 4+ digit numbers in first position (likely years in wrong position)
+                if first_part > 31:
+                    return None
+            except ValueError:
+                return None
     
     try:
         # If already in ISO format, validate and return
-        if re.match(r'^\d{4}-\d{2}-\d{2}$', date_str.strip()):
-            datetime.strptime(date_str.strip(), '%Y-%m-%d')
-            return date_str.strip()
+        if re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
+            datetime.strptime(date_str, '%Y-%m-%d')
+            return date_str
         
         # Try MM/DD/YYYY format (most common)
-        if re.match(r'^\d{1,2}/\d{1,2}/\d{4}$', date_str.strip()):
-            parsed_date = datetime.strptime(date_str.strip(), '%m/%d/%Y').date()
+        if re.match(r'^\d{1,2}/\d{1,2}/\d{4}$', date_str):
+            parsed_date = datetime.strptime(date_str, '%m/%d/%Y').date()
+            return parsed_date.isoformat()  # Returns YYYY-MM-DD
+        
+        # Try MM/YYYY format (common in credit reports)
+        if re.match(r'^\d{1,2}/\d{4}$', date_str):
+            parsed_date = datetime.strptime(f"{date_str}/01", '%m/%Y/%d').date()  # Default to 1st of month
             return parsed_date.isoformat()  # Returns YYYY-MM-DD
         
         # Try other common formats
         formats = ['%m-%d-%Y', '%Y/%m/%d', '%d/%m/%Y']
         for fmt in formats:
             try:
-                parsed_date = datetime.strptime(date_str.strip(), fmt).date()
+                parsed_date = datetime.strptime(date_str, fmt).date()
                 return parsed_date.isoformat()
             except ValueError:
                 continue
@@ -137,7 +190,7 @@ except Exception as e:
 try:
     if GEMINI_API_KEY and GEMINI_AVAILABLE and genai:
         genai.configure(api_key=GEMINI_API_KEY)
-        gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+        gemini_model = genai.GenerativeModel('gemini-2.5-flash')
         logger.info("✅ Gemini model initialized")
     else:
         if not GEMINI_AVAILABLE:
@@ -177,12 +230,21 @@ class TradelineSchema(BaseModel):
     is_negative: bool = False
     dispute_count: int = 0
 
-# Enhanced CORS configuration
+# CORS configuration for development - allows frontend to connect
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, be more specific
+    allow_origins=[
+        "http://localhost:3000",    # React default
+        "http://127.0.0.1:3000", 
+        "http://localhost:5173",    # Vite default
+        "http://127.0.0.1:5173",
+        "http://localhost:8080",    # Other common ports
+        "http://127.0.0.1:8080",
+        "http://localhost:4173",    # Vite preview
+        "http://127.0.0.1:4173"
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"]
 )
@@ -260,7 +322,7 @@ class SupabaseService:
             print(f"Error deleting user profile: {e}")
             return None
 
-class OptimalCreditReportProcessor:
+class LegacyCreditReportProcessor:
     """
     Processes credit reports using the most cost-effective method
     """
@@ -325,6 +387,18 @@ class OptimalCreditReportProcessor:
         extraction_result = await self._try_free_extraction_methods(pdf_path)
         
         if extraction_result['success']:
+            # Quick check if this looks like a credit report
+            if not self._is_likely_credit_report(extraction_result['text']):
+                self.logger.warning("⚠️ Document doesn't appear to be a credit report, returning early")
+                return {
+                    'tradelines': [],
+                    'method_used': f"{extraction_result['method']}_non_credit",
+                    'processing_time': asyncio.get_event_loop().time() - start_time,
+                    'cost_estimate': 0.0,
+                    'success': True,
+                    'warning': 'Document does not appear to be a credit report'
+                }
+            
             # Phase 2: Structured parsing
             tradelines = await self._parse_with_structured_parser(
                 extraction_result['text'], 
@@ -352,22 +426,39 @@ class OptimalCreditReportProcessor:
         return await self._expensive_fallback(pdf_path, start_time)
 
     async def _try_free_extraction_methods(self, pdf_path: str) -> dict:
-        """Try all free extraction methods in parallel"""
+        """Try all free extraction methods in parallel with timeout"""
         import asyncio
         
-        tasks = [
-            self._extract_with_pdfplumber(pdf_path),
-            self._extract_with_pymupdf(pdf_path),
-            self._extract_with_ocr(pdf_path)
-        ]
+        # For large files, reduce OCR processing to save time
+        file_size = os.path.getsize(pdf_path) / (1024 * 1024)  # MB
         
-        # Run extraction methods concurrently
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        if file_size > 5:  # Skip OCR for files larger than 5MB to save time
+            tasks = [
+                self._extract_with_pdfplumber(pdf_path),
+                self._extract_with_pymupdf(pdf_path)
+            ]
+            method_names = ['pdfplumber', 'pymupdf']
+        else:
+            tasks = [
+                self._extract_with_pdfplumber(pdf_path),
+                self._extract_with_pymupdf(pdf_path),
+                self._extract_with_ocr(pdf_path)
+            ]
+            method_names = ['pdfplumber', 'pymupdf', 'ocr']
+        
+        # Add timeout for free extraction methods (2 minutes max)
+        try:
+            results = await asyncio.wait_for(
+                asyncio.gather(*tasks, return_exceptions=True),
+                timeout=120  # 2 minutes timeout
+            )
+        except asyncio.TimeoutError:
+            self.logger.warning("Free extraction methods timed out, proceeding to fallback")
+            return {'success': False, 'text': '', 'tables': [], 'method': 'timeout'}
         
         # Return the best result
         for i, result in enumerate(results):
             if isinstance(result, dict) and result.get('success'):
-                method_names = ['pdfplumber', 'pymupdf', 'ocr']
                 self.processing_stats[f'{method_names[i]}_success'] += 1
                 return result
         
@@ -412,7 +503,8 @@ class OptimalCreditReportProcessor:
             
             return {'success': False}
         
-        return await asyncio.get_event_loop().run_in_executor(None, _sync_extract)
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _sync_extract)
 
     async def _extract_with_pymupdf(self, pdf_path: str) -> dict:
         """Async wrapper for PyMuPDF extraction with dependency checking"""
@@ -461,14 +553,21 @@ class OptimalCreditReportProcessor:
             
             return {'success': False}
         
-        return await asyncio.get_event_loop().run_in_executor(None, _sync_extract)
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _sync_extract)
 
     async def _extract_with_ocr(self, pdf_path: str) -> dict:
         """Async wrapper for OCR extraction"""
         import asyncio
+        import shutil
         
         def _sync_extract():
             try:
+                # Check if tesseract is available first
+                if not shutil.which('tesseract'):
+                    self.logger.debug("Tesseract not available, skipping OCR")
+                    return {'success': False}
+                
                 import fitz  # PyMuPDF for PDF to image conversion
                 import pytesseract
                 from PIL import Image
@@ -477,17 +576,21 @@ class OptimalCreditReportProcessor:
                 text_content = ""
                 
                 doc = fitz.open(pdf_path)
-                for page_num in range(min(len(doc), 10)):  # Limit OCR to first 10 pages for speed
+                for page_num in range(min(len(doc), 5)):  # Limit OCR to first 5 pages for speed
                     page = doc[page_num]
                     
                     # Convert page to image
-                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # 2x scale for better OCR
+                    pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5))  # Reduced scale for speed
                     img_data = pix.tobytes("png")
                     img = Image.open(io.BytesIO(img_data))
                     
-                    # OCR the image
-                    page_text = pytesseract.image_to_string(img, config='--psm 6')
-                    text_content += f"\n--- Page {page_num + 1} (OCR) ---\n{page_text}"
+                    # OCR the image with timeout protection
+                    try:
+                        page_text = pytesseract.image_to_string(img, config='--psm 6', timeout=10)
+                        text_content += f"\n--- Page {page_num + 1} (OCR) ---\n{page_text}"
+                    except Exception as ocr_err:
+                        self.logger.debug(f"OCR failed for page {page_num + 1}: {ocr_err}")
+                        continue
                 
                 doc.close()
                 
@@ -504,7 +607,8 @@ class OptimalCreditReportProcessor:
             
             return {'success': False}
         
-        return await asyncio.get_event_loop().run_in_executor(None, _sync_extract)
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _sync_extract)
 
     def _validate_extraction_quality(self, text: str) -> bool:
         """Validate if extracted text is good enough for credit report processing"""
@@ -515,11 +619,123 @@ class OptimalCreditReportProcessor:
         text_lower = text.lower()
         credit_indicators = [
             'credit', 'account', 'balance', 'payment', 'tradeline',
-            'experian', 'equifax', 'transunion', 'creditor', 'limit'
+            'experian', 'equifax', 'transunion', 'creditor', 'limit',
+            'score', 'report', 'bureau', 'fico'
         ]
         
         found_indicators = sum(1 for indicator in credit_indicators if indicator in text_lower)
         return found_indicators >= 3  # Must have at least 3 credit-related terms
+    
+    def _is_likely_credit_report(self, text: str) -> bool:
+        """Quick check if text looks like a credit report"""
+        if not text or len(text.strip()) < 100:
+            return False
+            
+        text_lower = text.lower()
+        strong_indicators = [
+            'credit report', 'credit score', 'experian', 'equifax', 'transunion',
+            'fico score', 'tradeline', 'credit bureau', 'account history'
+        ]
+        
+        # Look for strong credit report indicators
+        found_strong = sum(1 for indicator in strong_indicators if indicator in text_lower)
+        
+        # Also check for account patterns typical in credit reports
+        account_patterns = ['account #', 'acct #', 'balance:', 'limit:', 'payment:']
+        found_patterns = sum(1 for pattern in account_patterns if pattern in text_lower)
+        
+        return found_strong >= 1 or found_patterns >= 2
+
+    def _detect_credit_report_sections(self, text: str) -> dict:
+        """Detect different sections in credit report for comprehensive processing"""
+        import re
+        
+        sections = {}
+        lines = text.split('\n')
+        current_section = "header"
+        current_content = []
+        
+        # Section markers for different credit bureaus
+        section_markers = [
+            # Negative/Derogatory sections
+            (r'(?i)(potentially negative|negative|derogatory|adverse|collections?|charge.?offs?)', 'negative_items'),
+            (r'(?i)(public records?|bankruptc|tax lien|judgment)', 'public_records'),
+            
+            # Positive sections  
+            (r'(?i)(accounts? in good standing|satisfactory|current accounts?|positive)', 'positive_accounts'),
+            (r'(?i)(revolving accounts?|credit cards?)', 'revolving_accounts'),
+            (r'(?i)(installment accounts?|installment loans?|mortgages?|auto loans?)', 'installment_accounts'),
+            (r'(?i)(closed accounts?|paid accounts?)', 'closed_accounts'),
+            
+            # General account sections
+            (r'(?i)(credit accounts?|trade lines?|tradelines?|account history)', 'all_accounts'),
+            (r'(?i)(account information|credit information)', 'account_info'),
+            
+            # Payment history
+            (r'(?i)(payment history|payment information)', 'payment_history'),
+            
+            # Credit inquiries
+            (r'(?i)(inquiries|credit inquiries)', 'inquiries'),
+            
+            # Summary sections
+            (r'(?i)(credit summary|account summary)', 'summary'),
+        ]
+        
+        for i, line in enumerate(lines):
+            line_stripped = line.strip()
+            
+            # Check if this line marks a new section
+            section_found = False
+            for pattern, section_name in section_markers:
+                if re.search(pattern, line_stripped):
+                    # Save previous section if it has content
+                    if current_content and current_section:
+                        sections[current_section] = '\n'.join(current_content)
+                    
+                    current_section = section_name
+                    current_content = [line_stripped]
+                    section_found = True
+                    break
+            
+            if not section_found:
+                current_content.append(line_stripped)
+        
+        # Save the last section
+        if current_content and current_section:
+            sections[current_section] = '\n'.join(current_content)
+        
+        # If no specific sections found, create logical sections based on content analysis
+        if len(sections) <= 1:
+            return self._create_content_based_sections(text)
+        
+        return sections
+    
+    def _create_content_based_sections(self, text: str) -> dict:
+        """Create sections based on content analysis when explicit markers aren't found"""
+        sections = {}
+        
+        # Split text into chunks and analyze content
+        chunk_size = 5000
+        chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+        
+        for i, chunk in enumerate(chunks):
+            chunk_lower = chunk.lower()
+            
+            # Classify chunk based on content
+            if any(term in chunk_lower for term in ['charge off', 'collection', 'late', 'delinquent', 'past due']):
+                section_name = f'negative_section_{i+1}'
+            elif any(term in chunk_lower for term in ['good standing', 'current', 'paid as agreed', 'satisfactory']):
+                section_name = f'positive_section_{i+1}'
+            elif any(term in chunk_lower for term in ['auto loan', 'mortgage', 'installment']):
+                section_name = f'installment_section_{i+1}'
+            elif any(term in chunk_lower for term in ['credit card', 'revolving', 'line of credit']):
+                section_name = f'revolving_section_{i+1}'
+            else:
+                section_name = f'general_section_{i+1}'
+            
+            sections[section_name] = chunk
+        
+        return sections
 
     async def _parse_with_structured_parser(self, text: str, tables: list) -> list:
         """Parse extracted text and tables into tradelines with enhanced data extraction"""
@@ -530,8 +746,13 @@ class OptimalCreditReportProcessor:
         # Detect credit bureau from text
         credit_bureau = detect_credit_bureau(text)
         
+        # Section-aware processing: Detect different credit report sections
+        sections = self._detect_credit_report_sections(text)
+        self.logger.info(f"📋 Detected {len(sections)} credit report sections: {list(sections.keys())}")
+        
         # Try table parsing first if tables are available
         if tables:
+            self.logger.info(f"📊 Processing {len(tables)} tables for tradeline extraction")
             for table in tables:
                 table_tradelines = self._extract_tradelines_from_table(table)
                 # Enhance each tradeline with credit bureau and missing data
@@ -542,9 +763,30 @@ class OptimalCreditReportProcessor:
                         tradeline["date_opened"] = self._extract_date_from_text(text, tradeline.get("creditor_name", ""))
                 tradelines.extend(table_tradelines)
         
-        # Use Gemini for text processing if no table results or as enhancement
+        # Use Gemini for text processing - process each section for comprehensive extraction
+        gemini_processor = GeminiProcessor()
+        
+        if sections:
+            # Process each section separately to ensure comprehensive coverage
+            for section_name, section_text in sections.items():
+                if len(section_text.strip()) > 200:  # Only process substantial sections
+                    self.logger.info(f"🔍 Processing section: {section_name} ({len(section_text)} chars)")
+                    section_tradelines = gemini_processor.extract_tradelines(section_text)
+                    
+                    # Enhance section results
+                    for tradeline in section_tradelines:
+                        if isinstance(tradeline, dict):
+                            tradeline["credit_bureau"] = credit_bureau
+                            tradeline["source_section"] = section_name  # Track which section it came from
+                            if not tradeline.get("date_opened"):
+                                tradeline["date_opened"] = self._extract_date_from_text(section_text, tradeline.get("creditor_name", ""))
+                    
+                    tradelines.extend(section_tradelines)
+                    self.logger.info(f"✅ Section {section_name}: extracted {len(section_tradelines)} tradelines")
+        
+        # Fallback: process entire text if no sections detected or no tradelines found
         if not tradelines and text.strip():
-            gemini_processor = GeminiProcessor()
+            self.logger.info("🔄 No sections detected or no tradelines found, processing entire text")
             gemini_tradelines = gemini_processor.extract_tradelines(text)
             # Enhance Gemini results
             for tradeline in gemini_tradelines:
@@ -554,7 +796,14 @@ class OptimalCreditReportProcessor:
                         tradeline["date_opened"] = self._extract_date_from_text(text, tradeline.get("creditor_name", ""))
             tradelines.extend(gemini_tradelines)
         
-        return tradelines
+        # Universal date recovery for missing dates (do this BEFORE deduplication)
+        tradelines = await self._recover_missing_dates(tradelines, text)
+        
+        # Smart deduplication with enhanced criteria
+        unique_tradelines = self._smart_deduplicate_tradelines(tradelines)
+        
+        self.logger.info(f"📊 Final result: {len(unique_tradelines)} unique tradelines (removed {len(tradelines) - len(unique_tradelines)} duplicates)")
+        return unique_tradelines
     
     def _extract_date_from_text(self, text: str, creditor_name: str) -> str:
         """Extract date_opened from text context around creditor name"""
@@ -564,41 +813,319 @@ class OptimalCreditReportProcessor:
             return ""
         
         try:
-            # Look for text sections containing the creditor name
+            # Multiple strategies for date extraction
+            
+            # Strategy 1: Look for text sections containing the creditor name
             lines = text.split('\n')
             creditor_lines = []
             
             for i, line in enumerate(lines):
                 if creditor_name.upper() in line.upper():
-                    # Get context around the creditor mention
-                    start_idx = max(0, i - 3)
-                    end_idx = min(len(lines), i + 10)
+                    # Get broader context around the creditor mention
+                    start_idx = max(0, i - 5)
+                    end_idx = min(len(lines), i + 15)
                     creditor_lines.extend(lines[start_idx:end_idx])
             
-            # Look for date patterns in the context
+            # Enhanced date patterns with more variations
             date_patterns = [
-                r'Date Opened[:\s]*(\d{2}/\d{4})',  # "Date Opened: 01/2014"
-                r'Date Opened[:\s]*(\d{2}/\d{2}/\d{4})',  # "Date Opened: 01/12/2014"
-                r'(\d{2}/\d{4})',  # Just "01/2014"
-                r'(\d{2}/\d{2}/\d{4})',  # Just "01/12/2014"
+                # Explicit date opened patterns
+                r'Date Opened[:\s]*(\d{1,2}/\d{1,2}/\d{4})',  # "Date Opened: 01/12/2014"
+                r'Date Opened[:\s]*(\d{1,2}/\d{4})',          # "Date Opened: 01/2014"
+                r'Date Opened[:\s]*(\d{1,2}-\d{1,2}-\d{4})',  # "Date Opened: 01-12-2014"
+                r'Date Opened[:\s]*(\d{4}-\d{1,2}-\d{1,2})',  # "Date Opened: 2014-01-12"
+                r'Opened[:\s]*(\d{1,2}/\d{1,2}/\d{4})',       # "Opened: 01/12/2014"
+                r'Opened[:\s]*(\d{1,2}/\d{4})',               # "Opened: 01/2014"
+                r'Since[:\s]*(\d{1,2}/\d{1,2}/\d{4})',        # "Since: 01/12/2014"
+                r'Since[:\s]*(\d{1,2}/\d{4})',                # "Since: 01/2014"
+                
+                # Standalone date patterns (more permissive)
+                r'(\d{1,2}/\d{1,2}/\d{4})',                   # "01/12/2014"
+                r'(\d{1,2}/\d{4})',                           # "01/2014"  
+                r'(\d{1,2}-\d{1,2}-\d{4})',                   # "01-12-2014"
+                r'(\d{4}-\d{1,2}-\d{1,2})',                   # "2014-01-12"
             ]
             
-            context_text = ' '.join(creditor_lines)
+            # Search in creditor context first
+            if creditor_lines:
+                context_text = ' '.join(creditor_lines)
+                self.logger.debug(f"Searching for dates in creditor context for {creditor_name}")
+                
+                for pattern in date_patterns:
+                    matches = re.findall(pattern, context_text, re.IGNORECASE)
+                    if matches:
+                        # Take the first valid date
+                        for match in matches:
+                            date_str = match if isinstance(match, str) else match[0]
+                            normalized_date = normalize_date_for_postgres(date_str)
+                            if normalized_date:
+                                self.logger.debug(f"Found date {normalized_date} for {creditor_name}")
+                                return normalized_date
             
-            for pattern in date_patterns:
-                matches = re.findall(pattern, context_text, re.IGNORECASE)
-                if matches:
-                    date_str = matches[0]
-                    # Normalize the date format
-                    normalized_date = normalize_date_for_postgres(date_str)
-                    if normalized_date:
-                        return normalized_date
+            # Strategy 2: Global search if creditor-specific search failed
+            self.logger.debug(f"Creditor-specific search failed, trying global search for {creditor_name}")
+            
+            # Look for dates anywhere in the text near creditor mentions
+            # Split text into smaller sections and search each
+            text_sections = [text[i:i+2000] for i in range(0, len(text), 1500)]
+            
+            for section in text_sections:
+                if creditor_name.upper() in section.upper():
+                    for pattern in date_patterns[:4]:  # Use only the most specific patterns for global search
+                        matches = re.findall(pattern, section, re.IGNORECASE)
+                        if matches:
+                            for match in matches:
+                                date_str = match if isinstance(match, str) else match[0]
+                                normalized_date = normalize_date_for_postgres(date_str)
+                                if normalized_date:
+                                    self.logger.debug(f"Found date {normalized_date} in global search for {creditor_name}")
+                                    return normalized_date
+            
+            self.logger.debug(f"No date found for {creditor_name}")
+            return ""
+            
+        except Exception as e:
+            self.logger.warning(f"Date extraction failed for {creditor_name}: {e}")
+            return ""
+
+    async def _recover_missing_dates(self, tradelines: list, full_text: str) -> list:
+        """Universal date recovery system for any creditor with missing date_opened"""
+        import re
+        import asyncio
+        
+        missing_date_tradelines = []
+        complete_tradelines = []
+        
+        # Separate tradelines with and without dates
+        for tradeline in tradelines:
+            if not tradeline.get('date_opened') and tradeline.get('creditor_name'):
+                missing_date_tradelines.append(tradeline)
+            else:
+                complete_tradelines.append(tradeline)
+        
+        if not missing_date_tradelines:
+            self.logger.info("📅 All tradelines already have date_opened - no recovery needed")
+            return tradelines
+        
+        self.logger.info(f"📅 Starting universal date recovery for {len(missing_date_tradelines)} tradelines")
+        
+        for tradeline in missing_date_tradelines:
+            creditor_name = tradeline.get('creditor_name', '')
+            account_number = tradeline.get('account_number', '')
+            
+            # Try to recover date using global search
+            recovered_date = await self._global_date_search(full_text, creditor_name, account_number)
+            
+            if recovered_date:
+                tradeline['date_opened'] = recovered_date
+                self.logger.info(f"✅ Recovered date {recovered_date} for {creditor_name} {account_number}")
+                complete_tradelines.append(tradeline)
+            else:
+                self.logger.warning(f"⚠️ Could not recover date for {creditor_name} {account_number}")
+                # Still include the tradeline, but without date
+                complete_tradelines.append(tradeline)
+        
+        recovery_success = sum(1 for t in missing_date_tradelines if t.get('date_opened'))
+        self.logger.info(f"📅 Date recovery complete: {recovery_success}/{len(missing_date_tradelines)} dates recovered "
+                        f"({recovery_success/max(len(missing_date_tradelines), 1)*100:.1f}% success rate)")
+        
+        return complete_tradelines
+
+    async def _global_date_search(self, full_text: str, creditor_name: str, account_number: str) -> str:
+        """Search entire credit report for dates near specific creditor/account"""
+        import re
+        import asyncio
+        
+        if not creditor_name:
+            return ""
+        
+        try:
+            # More restrictive date patterns to avoid matching invalid data
+            date_patterns = [
+                # MM/YYYY formats (restrict months 1-12)
+                r'((?:0[1-9]|1[0-2])/\d{4})',                # 01/2015, 12/2020
+                r'((?:0[1-9]|1[0-2])-\d{4})',                # 01-2015, 12-2020
+                r'([1-9]/\d{4})',                            # 1/2015, 9/2020
+                
+                # MM/DD/YYYY formats (restrict months 1-12, days 1-31)
+                r'((?:0[1-9]|1[0-2])/(?:0[1-9]|[12][0-9]|3[01])/\d{4})',  # 01/15/2015, 12/25/2020
+                r'((?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])-\d{4})',  # 01-15-2015, 12-25-2020
+                r'([1-9]/(?:0[1-9]|[12][0-9]|3[01])/\d{4})',              # 1/15/2015, 9/25/2020
+                r'((?:0[1-9]|1[0-2])/[1-9]/\d{4})',                       # 01/5/2015, 12/9/2020
+                r'([1-9]/[1-9]/\d{4})',                                    # 1/5/2015, 9/9/2020
+                
+                # YYYY-MM-DD formats (ISO format with validation)
+                r'(\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01]))', # 2015-01-15
+                
+                # Month name formats
+                r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})',  # Jan 2015, January 2015
+                r'((?:0[1-9]|[12][0-9]|3[01])\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})',  # 15 Jan 2015
+                
+                # Short year formats with month validation
+                r'((?:0[1-9]|1[0-2])/\d{2})',                # 01/15, 12/20 (assuming 20xx)
+                r'([1-9]/\d{2})',                            # 1/15, 9/20 (assuming 20xx)
+            ]
+            
+            # Split text into manageable chunks for searching
+            chunk_size = 2000
+            overlap_size = 500
+            text_chunks = []
+            
+            for i in range(0, len(full_text), chunk_size - overlap_size):
+                end_pos = min(i + chunk_size, len(full_text))
+                chunk = full_text[i:end_pos]
+                text_chunks.append(chunk)
+                
+                if end_pos >= len(full_text):
+                    break
+            
+            found_dates = []
+            
+            # Search each chunk for creditor mentions and nearby dates
+            for chunk_idx, chunk in enumerate(text_chunks):
+                # Look for creditor name (case insensitive)
+                creditor_positions = []
+                
+                # Try different variations of the creditor name
+                creditor_variations = [
+                    creditor_name,
+                    creditor_name.upper(),
+                    creditor_name.lower(),
+                    creditor_name.replace(' ', ''),  # Remove spaces
+                    creditor_name.split()[0] if ' ' in creditor_name else creditor_name,  # First word only
+                ]
+                
+                for variation in creditor_variations:
+                    for match in re.finditer(re.escape(variation), chunk, re.IGNORECASE):
+                        creditor_positions.append(match.start())
+                
+                # For each creditor mention, search for dates in surrounding context
+                for pos in creditor_positions:
+                    # Define search window around creditor mention
+                    context_start = max(0, pos - 1000)  # Look 1000 chars before
+                    context_end = min(len(chunk), pos + 1000)  # Look 1000 chars after
+                    context = chunk[context_start:context_end]
+                    
+                    # Search for dates in this context
+                    for pattern in date_patterns:
+                        matches = re.findall(pattern, context, re.IGNORECASE)
+                        for match in matches:
+                            # Clean up the match
+                            date_str = match if isinstance(match, str) else match[0]
+                            
+                            # Try to normalize and validate the date
+                            normalized_date = normalize_date_for_postgres(date_str)
+                            if normalized_date:
+                                # Calculate distance from creditor mention
+                                date_match = re.search(re.escape(date_str), context)
+                                if date_match:
+                                    distance = abs(date_match.start() - (pos - context_start))
+                                    found_dates.append({
+                                        'date': normalized_date,
+                                        'distance': distance,
+                                        'raw_date': date_str,
+                                        'context': context[max(0, date_match.start()-50):date_match.end()+50]
+                                    })
+            
+            # If we have dates, return the closest one to creditor mention
+            if found_dates:
+                # Sort by distance and take the closest
+                found_dates.sort(key=lambda x: x['distance'])
+                best_date = found_dates[0]
+                
+                self.logger.debug(f"Found date {best_date['date']} for {creditor_name} "
+                                f"(distance: {best_date['distance']}, context: '{best_date['context']}')")
+                
+                return best_date['date']
             
             return ""
             
         except Exception as e:
-            self.logger.debug(f"Date extraction failed for {creditor_name}: {e}")
+            self.logger.warning(f"Global date search failed for {creditor_name}: {e}")
             return ""
+
+    def _smart_deduplicate_tradelines(self, tradelines: list) -> list:
+        """Enhanced deduplication using creditor + clean account number + date + credit bureau"""
+        import re
+        
+        if not tradelines:
+            return []
+        
+        # Step 1: Filter out tradelines without account numbers (not valid tradelines)
+        valid_tradelines = []
+        invalid_count = 0
+        
+        for tradeline in tradelines:
+            account_number_raw = tradeline.get('account_number', '') or ''
+            account_number = str(account_number_raw).strip() if account_number_raw is not None else ''
+            if account_number and account_number not in ['', 'N/A', 'Unknown', 'No account']:
+                valid_tradelines.append(tradeline)
+            else:
+                invalid_count += 1
+                self.logger.debug(f"Filtered out tradeline without account number: {tradeline.get('creditor_name', 'Unknown')}")
+        
+        if invalid_count > 0:
+            self.logger.info(f"🚫 Filtered out {invalid_count} tradelines without valid account numbers")
+        
+        # Step 2: Smart deduplication
+        unique_tradelines = []
+        seen_identifiers = set()
+        
+        for tradeline in valid_tradelines:
+            # Extract and clean components for unique identifier
+            creditor_name_raw = tradeline.get('creditor_name', '') or ''
+            creditor_name = str(creditor_name_raw).strip().upper() if creditor_name_raw is not None else ''
+            
+            raw_account_number_val = tradeline.get('account_number', '') or ''
+            raw_account_number = str(raw_account_number_val).strip() if raw_account_number_val is not None else ''
+            
+            date_opened_raw = tradeline.get('date_opened', '') or ''
+            date_opened = str(date_opened_raw).strip() if date_opened_raw is not None else ''
+            
+            credit_bureau_raw = tradeline.get('credit_bureau', '') or ''
+            credit_bureau = str(credit_bureau_raw).strip().upper() if credit_bureau_raw is not None else ''
+            
+            # Clean account number by removing special characters
+            clean_account_number = re.sub(r'[*.\-\s]', '', raw_account_number).upper()
+            
+            # Create unique identifier: creditor + clean_account + date + bureau
+            unique_identifier = f"{creditor_name}|{clean_account_number}|{date_opened}|{credit_bureau}"
+            
+            if unique_identifier not in seen_identifiers:
+                seen_identifiers.add(unique_identifier)
+                unique_tradelines.append(tradeline)
+                self.logger.debug(f"✅ Added unique tradeline: {creditor_name} {raw_account_number} {date_opened} ({credit_bureau})")
+            else:
+                self.logger.debug(f"🔄 Duplicate found, skipping: {creditor_name} {raw_account_number} {date_opened} ({credit_bureau})")
+        
+        # Log deduplication statistics
+        total_removed = len(valid_tradelines) - len(unique_tradelines)
+        self.logger.info(f"🧹 Smart deduplication complete:")
+        self.logger.info(f"   📊 Started with {len(tradelines)} tradelines")
+        self.logger.info(f"   🚫 Filtered {invalid_count} without account numbers")  
+        self.logger.info(f"   🔄 Removed {total_removed} duplicates")
+        self.logger.info(f"   ✅ Final count: {len(unique_tradelines)} unique tradelines")
+        
+        # Log examples of the unique identifiers for debugging
+        if unique_tradelines:
+            self.logger.debug("Sample unique identifiers:")
+            for i, tradeline in enumerate(unique_tradelines[:3]):
+                creditor_name_raw = tradeline.get('creditor_name', '') or ''
+                creditor_name = str(creditor_name_raw).strip().upper() if creditor_name_raw is not None else ''
+                
+                raw_account_number_val = tradeline.get('account_number', '') or ''
+                raw_account_number = str(raw_account_number_val).strip() if raw_account_number_val is not None else ''
+                clean_account_number = re.sub(r'[*.\-\s]', '', raw_account_number).upper()
+                
+                date_opened_raw = tradeline.get('date_opened', '') or ''
+                date_opened = str(date_opened_raw).strip() if date_opened_raw is not None else ''
+                
+                credit_bureau_raw = tradeline.get('credit_bureau', '') or ''
+                credit_bureau = str(credit_bureau_raw).strip().upper() if credit_bureau_raw is not None else ''
+                
+                identifier = f"{creditor_name}|{clean_account_number}|{date_opened}|{credit_bureau}"
+                self.logger.debug(f"   {i+1}. {identifier}")
+        
+        return unique_tradelines
 
     async def _expensive_fallback(self, pdf_path: str, start_time: float) -> dict:
         """Expensive Document AI fallback when free methods fail"""
@@ -615,7 +1142,11 @@ class OptimalCreditReportProcessor:
             with open(pdf_path, "rb") as pdf_file:
                 pdf_content = pdf_file.read()
             
-            chunker = PDFChunker(chunk_size=30)
+            # Calculate file size for optimizations
+            file_size_mb = len(pdf_content) / (1024 * 1024)
+            
+            # Adjust chunk size based on file size for better performance
+            chunker = PDFChunker(chunk_size=20 if file_size_mb > 3 else 30)
             page_count = chunker.get_pdf_page_count(pdf_content)
             
             if chunker.needs_chunking(pdf_content):
@@ -692,24 +1223,36 @@ class OptimalCreditReportProcessor:
             
             return extracted_text, tables
         
-        return await asyncio.get_event_loop().run_in_executor(None, _sync_process)
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _sync_process)
 
     # Keep existing methods for compatibility
     def extract_text_and_tables(self, pdf_path: str) -> tuple[str, list]:
-        """Legacy method - now redirects to optimal processing"""
-        import asyncio
-        
-        # Run the async optimal processing in sync context
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        """Legacy method - simplified synchronous version"""
         try:
-            result = loop.run_until_complete(self.process_credit_report_optimal(pdf_path))
-            if result['success']:
-                return result.get('text', ''), result.get('tables', [])
-            else:
-                return '', []
-        finally:
-            loop.close()
+            # Use synchronous extraction to avoid async issues
+            import pdfplumber
+            text_content = ""
+            tables = []
+            
+            with pdfplumber.open(pdf_path) as pdf:
+                for page_num, page in enumerate(pdf.pages):
+                    page_text = page.extract_text() or ""
+                    text_content += f"\n--- Page {page_num + 1} ---\n{page_text}"
+                    
+                    page_tables = page.extract_tables()
+                    for table in page_tables or []:
+                        if table and len(table) > 0:
+                            tables.append({
+                                'headers': table[0] if table else [],
+                                'rows': table[1:] if len(table) > 1 else []
+                            })
+            
+            return text_content, tables
+            
+        except Exception as e:
+            self.logger.error(f"Legacy extraction failed: {str(e)}")
+            return '', []
 
     def extract_text(self, pdf_path: str) -> str:
         """Extract text only - legacy compatibility method"""
@@ -717,16 +1260,22 @@ class OptimalCreditReportProcessor:
         return text
 
     def extract_structured_tradelines(self, pdf_path: str) -> list:
-        """Extract tradelines - now uses optimal processing"""
-        import asyncio
-        
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        """Extract tradelines - simplified synchronous version"""
         try:
-            result = loop.run_until_complete(self.process_credit_report_optimal(pdf_path))
-            return result.get('tradelines', []) if result['success'] else []
-        finally:
-            loop.close()
+            # Extract text synchronously
+            text, tables = self.extract_text_and_tables(pdf_path)
+            
+            # Use Gemini processor for tradeline extraction
+            if text:
+                gemini_processor = GeminiProcessor()
+                tradelines = gemini_processor.extract_tradelines(text)
+                return tradelines
+            
+            return []
+            
+        except Exception as e:
+            self.logger.error(f"Legacy tradeline extraction failed: {str(e)}")
+            return []
 
     def _extract_table_data(self, table, full_text: str) -> dict:
         """Extract structured data from a Document AI table"""
@@ -814,7 +1363,11 @@ class OptimalCreditReportProcessor:
             # Normalize headers
             normalized_headers = []
             for header in headers:
-                header_lower = header.lower().strip()
+                if not header:  # Skip None or empty headers
+                    normalized_headers.append("")
+                    continue
+                    
+                header_lower = str(header).lower().strip()
                 mapped_header = None
                 for key, value in header_mapping.items():
                     if key in header_lower:
@@ -845,8 +1398,10 @@ class OptimalCreditReportProcessor:
                 for i, cell_value in enumerate(row):
                     if i < len(normalized_headers):
                         header = normalized_headers[i]
-                        if header in tradeline and cell_value.strip():
-                            tradeline[header] = cell_value.strip()
+                        if header in tradeline and cell_value is not None:
+                            cell_str = str(cell_value).strip()
+                            if cell_str:  # Only add non-empty values
+                                tradeline[header] = cell_str
                 
                 # Only add if we have essential fields
                 if tradeline["creditor_name"] and tradeline["account_number"]:
@@ -888,8 +1443,8 @@ class GeminiProcessor:
                 self.logger.error("❌ Google Generative AI module not available")
                 return self._fallback_basic_parsing(text)
             
-            # If text is too long, process in chunks
-            if len(text) > 15000:
+            # If text is too long, process in chunks (but limit total processing time)
+            if len(text) > 20000:  # Increased threshold
                 return self._extract_tradelines_chunked(text)
             else:
                 return self._extract_tradelines_single(text)
@@ -913,34 +1468,76 @@ class GeminiProcessor:
                 return self._fallback_basic_parsing(text)
             
             prompt = f"""
-            You are analyzing a credit report. Extract credit tradeline information carefully.
+            You are analyzing a credit report section. Your job is to extract ALL tradeline information comprehensively.
+            
+            CRITICAL: Extract EVERY account mentioned, including both positive and negative accounts.
             
             Extract each tradeline as a JSON object with these exact fields:
             {{
-                "creditor_name": "Bank/Company name (e.g., CHASE CARD, SCHOOLSFIRST FEDERAL CREDIT UNION)",
-                "account_number": "Account number with masking (e.g., ****1234, 755678....)",
-                "account_balance": "Current balance amount (e.g., $1,975, $808)",
+                "creditor_name": "Bank/Company name (e.g., CHASE CARD, SCHOOLSFIRST FEDERAL CREDIT UNION, CAPITAL ONE)",
+                "account_number": "Account number with masking (e.g., ****1234, 755678...., XXXX-XXXX-XXXX-1234)",
+                "account_balance": "Current balance amount (e.g., $1,975, $808, $0 for paid accounts)",
                 "credit_limit": "Credit limit or high credit amount (e.g., $2,000, $500)", 
-                "monthly_payment": "Monthly payment amount (e.g., $40, $174)",
-                "date_opened": "REQUIRED: Date account was opened (find MM/YYYY or MM/DD/YYYY format like 01/2014, 05/2014, 12/2013)",
-                "account_type": "Credit Card, Auto Loan, Mortgage, Installment, Unsecured, Secured Card",
-                "account_status": "Open, Closed, Account charged off, Paid Closed, Redeemed repossession, etc.",
-                "is_negative": true if account status indicates problems like charged off or past due
+                "monthly_payment": "Monthly payment amount (e.g., $40, $174, $0 for paid accounts)",
+                "date_opened": "CRITICAL: Date account was opened - search for patterns like 'Date Opened: 01/2014', 'Opened: 12/2013', 'Since: 05/2015', or standalone dates near creditor names",
+                "account_type": "Credit Card, Auto Loan, Mortgage, Installment, Personal Loan, Student Loan, Secured Card, Store Card",
+                "account_status": "Current, Open, Closed, Paid Closed, Account charged off, Collection, Late, Satisfactory, etc.",
+                "is_negative": true if account has problems (charged off, collection, late payments, past due), false for current/good accounts
             }}
             
-            IMPORTANT EXTRACTION RULES:
-            - Look for "Date Opened:" followed by dates (MM/YYYY or MM/DD/YYYY)
-            - Extract account numbers that may be partially masked (****1234, 755678....)
-            - Include dollar signs in amounts ($1,975 not 1975)
-            - Identify negative accounts (charged off, past due, collection, etc.)
-            - Map account types consistently (Credit Card, Auto Loan, Mortgage, etc.)
-            - SCAN ALL TEXT: Tradelines may appear in multiple sections (account summaries, payment history, potentially negative items, accounts in good standing, etc.)
-            - LOOK FOR AUTO LOANS: Pay special attention to auto loans, installment loans, and closed/paid accounts
-            - EXTRACT ALL ACCOUNT TYPES: Credit cards, auto loans, mortgages, installment loans, secured cards, unsecured loans
-            - DON'T SKIP: Process ALL creditor mentions even if formatting is different or status is complex (like "redeemed repossession")
-            - MULTIPLE SECTIONS: Same creditor may have multiple different account types
+            COMPREHENSIVE EXTRACTION RULES:
             
-            Return as JSON array. If no tradelines found, return empty array [].
+            🔍 DATE EXTRACTION (MOST IMPORTANT):
+            - Search for "Date Opened:", "Opened:", "Since:", "Date Open:", patterns
+            - Look for dates in MM/YYYY format (01/2014, 12/2013) or MM/DD/YYYY format
+            - Check text immediately before and after each creditor name
+            - Don't skip if date format is unusual - extract any reasonable date pattern
+            
+            📊 ACCOUNT TYPES TO FIND:
+            - Credit Cards: Chase, Capital One, Discover, Amex, store cards
+            - Auto Loans: Ford Credit, GM Financial, Toyota Financial, etc.
+            - Mortgages: Wells Fargo, Bank of America, Quicken Loans
+            - Personal/Installment Loans: OneMain, Avant, LendingClub
+            - Student Loans: Great Lakes, Navient, Federal loans
+            - Secured Cards: Capital One Secured, Discover Secured
+            
+            ✅ POSITIVE ACCOUNTS (Don't Skip These!):
+            - Accounts marked "Current", "Paid as Agreed", "Satisfactory"  
+            - Accounts "In Good Standing", "Open", "Never Late"
+            - Closed accounts that were "Paid in Full", "Paid Closed"
+            - Zero balance accounts that are current
+            
+            ❌ NEGATIVE ACCOUNTS:
+            - "Charge Off", "Collection", "Past Due", "Late Payment"
+            - "Delinquent", "Default", "Repossession" 
+            
+            🎯 SECTION-SPECIFIC GUIDANCE:
+            - Positive sections: Focus on current, good standing accounts
+            - Negative sections: Include all derogatory accounts
+            - Mixed sections: Extract both positive and negative
+            - Account summaries: Often contain the most complete information
+            - MULTIPLE ACCOUNTS PER CREDITOR: When you see the same creditor multiple times (e.g., SCHOOLSFIRST appears 4 times), extract EACH occurrence as a separate account
+            
+            🔧 TECHNICAL RULES:
+            - Extract partial account numbers: ****1234, XXXX-XXXX-XXXX-5678
+            - Include $0 balances for paid accounts
+            - Map store cards as "Credit Card" type
+            - Mark closed good accounts as NOT negative (is_negative: false)
+            
+            EXAMPLES OF WHAT TO EXTRACT:
+            ✅ "CHASE CARD ****1234 - Current, $500 balance, $2000 limit, Opened 01/2015"
+            ✅ "AUTO LOAN - Ford Credit, Paid Closed, $0 balance, Opened 03/2018" 
+            ✅ "DISCOVER CARD - Good Standing, $0 balance, Opened 12/2020"
+            ✅ "STUDENT LOAN - Great Lakes, Current, $15000 balance, Since 09/2016"
+            
+            🚨 CRITICAL: If you see the SAME CREDITOR multiple times with DIFFERENT account numbers or account types, they are SEPARATE ACCOUNTS:
+            ✅ "SCHOOLSFIRST - Checking Account 420973****" = Account 1
+            ✅ "SCHOOLSFIRST - Savings Account 755678****" = Account 2  
+            ✅ "SCHOOLSFIRST - Auto Loan 755678...." = Account 3
+            ✅ "SCHOOLSFIRST - Credit Card 755678...." = Account 4
+            ALL FOUR are different accounts - extract each one!
+            
+            Return as JSON array. Extract EVERYTHING - count every single account mention, even from the same creditor.
             
             TEXT TO ANALYZE:
             {text}
@@ -970,13 +1567,32 @@ class GeminiProcessor:
                 json_text = json_match.group(0)
                 try:
                     tradelines = json.loads(json_text)
-                    self.logger.info(f"✅ Parsed {len(tradelines)} tradelines from Gemini")
+                    
+                    # Log detailed statistics about extracted tradelines
+                    positive_count = sum(1 for t in tradelines if not t.get('is_negative', False))
+                    negative_count = sum(1 for t in tradelines if t.get('is_negative', False))
+                    dates_count = sum(1 for t in tradelines if t.get('date_opened'))
+                    
+                    self.logger.info(f"✅ Parsed {len(tradelines)} tradelines from Gemini:")
+                    self.logger.info(f"   📈 {positive_count} positive accounts, {negative_count} negative accounts")
+                    self.logger.info(f"   📅 {dates_count} accounts with date_opened ({dates_count/max(len(tradelines), 1)*100:.1f}%)")
+                    
+                    # Log sample tradelines for debugging
+                    for i, tradeline in enumerate(tradelines[:3]):  # Log first 3 as examples
+                        creditor = tradeline.get('creditor_name', 'Unknown')
+                        account = tradeline.get('account_number', 'No account')
+                        date_opened = tradeline.get('date_opened', 'No date')
+                        status = "NEGATIVE" if tradeline.get('is_negative') else "POSITIVE"
+                        self.logger.info(f"   📋 Sample {i+1}: {creditor} | {account} | {date_opened} | {status}")
+                    
                     return tradelines
                 except json.JSONDecodeError as e:
                     self.logger.error(f"JSON parsing failed: {e}")
+                    self.logger.error(f"Problematic JSON: {json_text[:200]}...")
                     return self._fallback_basic_parsing(text)
             else:
                 self.logger.error("No JSON array found in Gemini response")
+                self.logger.error(f"Full response: {response_text[:1000]}...")
                 return self._fallback_basic_parsing(text)
                 
         except ImportError as e:
@@ -990,8 +1606,9 @@ class GeminiProcessor:
         """Extract tradelines from large text by chunking with overlap"""
         try:
             chunks = []
-            chunk_size = 10000
-            overlap_size = 2000  # 20% overlap to prevent missing tradelines at boundaries
+            chunk_size = 20000  # Increased chunk size for better context
+            overlap_size = 3000  # Larger overlap to prevent missing tradelines
+            max_chunks = 15  # Increased limit to process more comprehensive reports
             
             # Create overlapping chunks
             for i in range(0, len(text), chunk_size - overlap_size):
@@ -1006,29 +1623,61 @@ class GeminiProcessor:
                 if end_pos >= len(text):
                     break
             
-            self.logger.info(f"🧠 Processing {len(chunks)} overlapping chunks for large document")
+            # Only limit chunks if we have an excessive number (>15)
+            if len(chunks) > max_chunks:
+                self.logger.warning(f"⚠️ Large document with {len(chunks)} chunks, processing first {max_chunks} for performance")
+                chunks = chunks[:max_chunks]
+            
+            self.logger.info(f"🧠 Processing {len(chunks)} overlapping chunks for comprehensive extraction")
             
             all_tradelines = []
             seen_tradelines = set()  # Track unique tradelines to avoid duplicates from overlap
+            positive_count = 0
+            negative_count = 0
+            dates_found = 0
             
             for i, chunk in enumerate(chunks):
                 try:
+                    self.logger.info(f"🔍 Processing chunk {i+1}/{len(chunks)} ({len(chunk)} chars)")
                     chunk_tradelines = self._extract_tradelines_single(chunk)
                     
                     # Deduplicate based on creditor_name + account_number
                     unique_tradelines = []
+                    chunk_positive = 0
+                    chunk_negative = 0
+                    chunk_dates = 0
+                    
                     for tradeline in chunk_tradelines:
                         # Create unique identifier
                         identifier = f"{tradeline.get('creditor_name', '')}-{tradeline.get('account_number', '')}"
                         if identifier not in seen_tradelines:
                             seen_tradelines.add(identifier)
                             unique_tradelines.append(tradeline)
+                            
+                            # Track statistics
+                            if tradeline.get('is_negative'):
+                                chunk_negative += 1
+                                negative_count += 1
+                            else:
+                                chunk_positive += 1
+                                positive_count += 1
+                            
+                            if tradeline.get('date_opened'):
+                                chunk_dates += 1
+                                dates_found += 1
                     
                     all_tradelines.extend(unique_tradelines)
-                    self.logger.info(f"✅ Chunk {i+1}/{len(chunks)}: {len(unique_tradelines)} unique tradelines")
+                    self.logger.info(f"✅ Chunk {i+1}/{len(chunks)}: {len(unique_tradelines)} unique tradelines "
+                                   f"({chunk_positive} positive, {chunk_negative} negative, {chunk_dates} with dates)")
                 except Exception as e:
                     self.logger.error(f"❌ Failed processing chunk {i+1}: {str(e)}")
                     continue
+            
+            # Log final statistics
+            self.logger.info(f"📊 Chunked extraction complete: {len(all_tradelines)} total tradelines")
+            self.logger.info(f"📈 Statistics: {positive_count} positive, {negative_count} negative")
+            self.logger.info(f"📅 Date extraction: {dates_found}/{len(all_tradelines)} tradelines have dates "
+                           f"({dates_found/max(len(all_tradelines), 1)*100:.1f}%)")
             
             return all_tradelines
             
@@ -1112,33 +1761,203 @@ def detect_credit_bureau(text: str) -> str:
         return 'Unknown'
 
 
-# Main processing endpoint
-@app.post("/process-credit-report")
-async def process_credit_report(
-    file: UploadFile = File(...),
-    user_id: str = Form(default="default-user")
-):
-    """Process uploaded credit report PDF using optimal hybrid strategy"""
-    start_time = datetime.now()
-    
+# Test endpoint for debugging
+@app.post("/test-pdf")
+async def test_pdf_processing(file: UploadFile = File(...)):
+    """Simple test endpoint to debug PDF processing"""
     try:
-        logger.info(f"🚀 Starting optimal credit report processing for user: {user_id}")
+        logger.info(f"🧪 Testing PDF processing: {file.filename}")
         
-        # Save uploaded file temporarily
+        # Basic file validation
+        if not file.filename.lower().endswith('.pdf'):
+            return {"success": False, "error": "Not a PDF file"}
+        
+        # Save file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
             content = await file.read()
             temp_file.write(content)
             temp_file_path = temp_file.name
         
         try:
-            # Initialize optimal processor
-            processor = OptimalCreditReportProcessor()
+            # Test basic PDF reading
+            import pdfplumber
+            with pdfplumber.open(temp_file_path) as pdf:
+                page_count = len(pdf.pages)
+                if page_count > 0:
+                    first_page_text = pdf.pages[0].extract_text()
+                    return {
+                        "success": True,
+                        "page_count": page_count,
+                        "first_page_preview": first_page_text[:200] if first_page_text else "No text found"
+                    }
+                else:
+                    return {"success": False, "error": "No pages found in PDF"}
+        
+        except Exception as e:
+            logger.error(f"❌ PDF processing test failed: {str(e)}")
+            return {"success": False, "error": f"PDF processing failed: {str(e)}"}
+        
+        finally:
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
+                
+    except Exception as e:
+        logger.error(f"❌ Test endpoint failed: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+# Main processing endpoint (legacy path)
+@app.post("/process-credit-report")
+async def process_credit_report(
+    file: UploadFile = File(...),
+    user_id: str = Form(default="default-user"),
+    use_background: bool = Form(default=False)
+):
+    """Process uploaded credit report PDF using optimal hybrid strategy"""
+    return await _process_credit_report_core(file, user_id, use_background)
+
+# Frontend API endpoint with /api prefix
+@app.post("/api/process-credit-report")  
+async def api_process_credit_report(
+    file: UploadFile = File(...),
+    user_id: str = Form(default="default-user"),
+    use_background: bool = Form(default=True)  # Default to background processing for frontend
+):
+    """API endpoint for frontend - routes to background processing by default"""
+    return await _process_credit_report_core(file, user_id, use_background)
+
+async def _process_credit_report_core(
+    file: UploadFile,
+    user_id: str,
+    use_background: bool = False
+):
+    """Process uploaded credit report PDF using optimal hybrid strategy"""
+    start_time = datetime.now()
+    
+    try:
+        logger.info(f"🚀 Starting optimal credit report processing for user: {user_id}")
+        logger.info(f"📁 Uploaded file: {file.filename}, Content-Type: {file.content_type}")
+        
+        # Validate file type
+        if not file.filename.lower().endswith('.pdf'):
+            logger.error(f"❌ Invalid file type: {file.filename}")
+            return {
+                "success": False, 
+                "error": f"Invalid file type. Please upload a PDF file. Received: {file.filename}"
+            }
+        
+        # Save uploaded file temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_file_path = temp_file.name
             
-            # Use optimal processing pipeline
-            result = await processor.process_credit_report_optimal(temp_file_path)
+        logger.info(f"📄 File saved to: {temp_file_path}, Size: {len(content)} bytes")
+        
+        # Basic PDF validation
+        if len(content) < 100:
+            logger.error("❌ File too small to be a valid PDF")
+            return {
+                "success": False, 
+                "error": "File too small to be a valid PDF. Please check your file."
+            }
+            
+        # Check PDF magic bytes
+        if not content.startswith(b'%PDF'):
+            logger.error("❌ File does not appear to be a valid PDF")
+            return {
+                "success": False, 
+                "error": "File does not appear to be a valid PDF. Please check your file format."
+            }
+        
+        # Calculate file size for routing decision
+        file_size_mb = len(content) / (1024 * 1024)
+        
+        # Route to background processing if requested or file is large
+        if use_background or file_size_mb > 2.0:
+            logger.info(f"🔄 Routing {file_size_mb:.2f}MB file to background processing")
+            
+            try:
+                from services.background_jobs import submit_pdf_processing_job, JobPriority
+                
+                # Submit background job
+                job_id = await submit_pdf_processing_job(
+                    pdf_path=temp_file_path,
+                    user_id=user_id,
+                    priority=JobPriority.NORMAL
+                )
+                
+                logger.info(f"✅ Background job submitted: {job_id}")
+                
+                return {
+                    "success": True,
+                    "job_id": job_id,
+                    "status": "queued",
+                    "message": f"File submitted for background processing. Job ID: {job_id}",
+                    "processing_method": "background_job",
+                    "file_size_mb": file_size_mb,
+                    "estimated_time": f"{max(2, int(file_size_mb * 2))} minutes"
+                }
+                
+            except Exception as bg_error:
+                logger.error(f"❌ Background job submission failed: {bg_error}")
+                # Fall through to synchronous processing
+                logger.info("🔄 Falling back to synchronous processing")
+        
+        try:
+            # Use new optimized processor with chunking support
+            logger.info("🔧 Initializing OptimizedCreditReportProcessor with chunking...")
+            from services.optimized_processor import OptimizedCreditReportProcessor
+            processor = OptimizedCreditReportProcessor()
+            logger.info("✅ OptimizedCreditReportProcessor with chunking initialized successfully")
+            
+            # Calculate file size for routing decision
+            file_size_mb = len(content) / (1024 * 1024)
+            
+            logger.info(f"📦 Processing {file_size_mb:.2f}MB file with chunking support")
+            
+            # Use optimized processing pipeline with chunking (extended timeout)
+            logger.info("🚀 Starting optimized processing pipeline with chunking...")
+            result = await processor.process_credit_report_optimized(temp_file_path)
+            logger.info(f"📊 Processing result: success={result.get('success', False)}")
             
             if result['success']:
                 logger.info(f"✅ Processing completed using {result['method_used']}")
+                
+                # Save tradelines to database if available
+                tradelines = result.get('tradelines', [])
+                if tradelines and supabase:
+                    logger.info(f"💾 Saving {len(tradelines)} tradelines to database...")
+                    try:
+                        # Add user_id to each tradeline
+                        for tradeline in tradelines:
+                            tradeline['user_id'] = user_id
+                        
+                        # Insert tradelines into database
+                        from utils.tradeline_normalizer import tradeline_normalizer
+                        normalized_tradelines = []
+                        for tradeline in tradelines:
+                            try:
+                                # Validate and normalize each tradeline
+                                normalized = tradeline_normalizer.normalize(tradeline)
+                                if normalized:
+                                    normalized_tradelines.append(normalized)
+                            except Exception as norm_error:
+                                logger.warning(f"Failed to normalize tradeline: {norm_error}")
+                                continue
+                        
+                        if normalized_tradelines:
+                            # Batch insert
+                            insert_result = supabase.table("tradelines").insert(normalized_tradelines).execute()
+                            if insert_result.data:
+                                logger.info(f"✅ Successfully saved {len(insert_result.data)} tradelines to database")
+                            else:
+                                logger.warning("⚠️ Database insert returned no data")
+                        
+                    except Exception as db_error:
+                        logger.error(f"❌ Failed to save tradelines to database: {db_error}")
+                        # Continue without failing the entire request
                 
                 return {
                     "success": True,
@@ -1152,11 +1971,26 @@ async def process_credit_report(
                         "end_time": datetime.now().isoformat(),
                         "duration_seconds": result['processing_time'],
                         "duration_formatted": f"{result['processing_time']:.2f}s"
-                    }
+                    },
+                    "chunking_enabled": True,
+                    "performance_metrics": result.get('stats', {})
                 }
             else:
                 return {"success": False, "error": result.get('error', 'Processing failed')}
                 
+        except TimeoutError as e:
+            logger.error(f"⏰ Processing timeout: {str(e)}")
+            return {
+                "success": False, 
+                "error": f"Processing timed out after {timeout_minutes} minutes. The file may be too complex or the server may be overloaded. Please try again or contact support."
+            }
+        except Exception as processing_error:
+            logger.error(f"❌ Processing error: {str(processing_error)}")
+            logger.error(f"❌ Processing error traceback:", exc_info=True)
+            return {
+                "success": False, 
+                "error": f"Processing failed: {str(processing_error)}"
+            }
         finally:
             # Clean up temp file
             try:
@@ -1168,6 +2002,84 @@ async def process_credit_report(
         logger.error(f"❌ Processing failed: {str(e)}")
         return {"success": False, "error": str(e)}
 
+
+# Job status endpoints
+@app.get("/api/job/{job_id}")
+async def get_job_status(job_id: str):
+    """Get background job status and results"""
+    try:
+        from services.background_jobs import job_processor
+        
+        job_data = await job_processor.get_job_status(job_id)
+        
+        if not job_data:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        return {
+            "success": True,
+            "job_id": job_data['job_id'],
+            "status": job_data['status'],
+            "progress": job_data.get('progress', 0),
+            "message": job_data.get('progress_message', ''),
+            "result": job_data.get('result'),
+            "error": job_data.get('error'),
+            "created_at": job_data['created_at'],
+            "started_at": job_data.get('started_at'),
+            "completed_at": job_data.get('completed_at')
+        }
+    except Exception as e:
+        logger.error(f"❌ Failed to get job status: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/jobs/{user_id}")
+async def get_user_jobs(user_id: str, limit: int = 10):
+    """Get user's recent processing jobs"""
+    try:
+        from services.background_jobs import job_processor
+        
+        jobs = job_processor.job_queue.get_user_jobs(user_id, limit)
+        
+        job_data = []
+        for job in jobs:
+            job_data.append({
+                "job_id": job.job_id,
+                "status": job.status.value,
+                "progress": job.progress,
+                "message": job.progress_message,
+                "created_at": job.created_at.isoformat(),
+                "task_name": job.task_name
+            })
+        
+        return {
+            "success": True,
+            "jobs": job_data,
+            "total": len(job_data)
+        }
+    except Exception as e:
+        logger.error(f"❌ Failed to get user jobs: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+@app.delete("/api/job/{job_id}")
+async def cancel_job(job_id: str):
+    """Cancel a background processing job"""
+    try:
+        from services.background_jobs import job_processor
+        
+        cancelled = await job_processor.cancel_job(job_id)
+        
+        if cancelled:
+            return {
+                "success": True,
+                "message": f"Job {job_id} cancelled successfully"
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Job cannot be cancelled (may be running or already completed)"
+            }
+    except Exception as e:
+        logger.error(f"❌ Failed to cancel job: {str(e)}")
+        return {"success": False, "error": str(e)}
 
 # Health check endpoint
 @app.get("/health")

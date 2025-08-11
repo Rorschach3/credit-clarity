@@ -1,0 +1,61 @@
+{
+  "environment": "testing",
+  "debug": true,
+  "api": {
+    "host": "127.0.0.1",
+    "port": 8001,
+    "reload": false,
+    "workers": 1
+  },
+  "database": {
+    "url": "sqlite:///test.db",
+    "pool_size": 1,
+    "max_overflow": 0,
+    "pool_timeout": 10,
+    "echo": false
+  },
+  "cache": {
+    "ttl": 60,
+    "max_size": 100,
+    "use_memory_only": true
+  },
+  "processing": {
+    "max_file_size_mb": 5,
+    "timeout_seconds": 30,
+    "concurrent_jobs": 1,
+    "use_mock_processor": true
+  },
+  "security": {
+    "jwt_expire_minutes": 60,
+    "rate_limit": {
+      "requests": 1000,
+      "window": 60,
+      "enabled": false
+    },
+    "cors": {
+      "origins": ["*"],
+      "allow_credentials": true
+    }
+  },
+  "monitoring": {
+    "metrics_enabled": false,
+    "log_level": "WARNING",
+    "enable_profiling": false,
+    "console_logging_only": true
+  },
+  "features": {
+    "pdf_processing": true,
+    "ai_analysis": false,
+    "background_jobs": false,
+    "caching": true,
+    "rate_limiting": false,
+    "mock_external_services": true
+  },
+  "testing": {
+    "auto_rollback": true,
+    "isolation_level": "SERIALIZABLE",
+    "cleanup_after_tests": true,
+    "mock_all_external_calls": true,
+    "fast_mode": true
+  }
+}

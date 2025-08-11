@@ -20,22 +20,36 @@
       "mcp__filesystem__write_file",
       "mcp__filesystem__read_file",
       "mcp__filesystem__read_multiple_files",
-      "mcp__sequential-thinking__sequentialthinking"
+      "mcp__sequential-thinking__sequentialthinking",
+      "Bash(timeout:*)",
+      "mcp__filesystem__create_directory",
+      "mcp__memory__search_nodes",
+      "Bash(pip install:*)",
+      "Bash(source:*)",
+      "mcp__filesystem__edit_file",
+      "mcp-puppeteer",
+      "sequential-thinking",
+      "brave-search",
+      "supabase",
+      "filesystem",
+      "sequentialthinking"
     ],
     "deny": []
   },
   "disabledMcpjsonServers": [
+    "actors-mcp-server",
+    "circleci-mcp-server",
+    "puppeteer",
+    "context7",
+    "postgrest",
+    "postgres"
+  ],
+  "enabledMcpjsonServers": [
     "mcp-puppeteer",
     "sequential-thinking",
     "brave-search",
     "supabase",
     "filesystem",
-    "actors-mcp-server",
-    "circleci-mcp-server",
-    "puppeteer",
-    "context7",
-    "sequentialthinking",
-    "postgrest",
-    "postgres"
+    "sequentialthinking"
   ]
 }

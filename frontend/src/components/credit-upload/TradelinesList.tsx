@@ -5,27 +5,27 @@ import { ParsedTradeline } from "@/utils/tradelineParser";
 
 interface TradelinesListProps {
   tradelines: ParsedTradeline[];
-  selectedTradelineIds: Set<string>;
-  onUpdate: (id: string, updated: Partial<ParsedTradeline>) => void;
+  onUpdate?: (id: string, updated: Partial<ParsedTradeline>) => void;
   onDelete: (id: string) => void;
-  onSelect: (id: string) => void;
   onAddManual: () => void;
+  savingTradelines?: Set<string>;
+  saveErrors?: Set<string>;
 }
 
 export const TradelinesList = ({
   tradelines,
-  selectedTradelineIds,
   onUpdate,
   onDelete,
-  onSelect,
   onAddManual,
+  savingTradelines = new Set(),
+  saveErrors = new Set(),
 }: TradelinesListProps) => {
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <Label className="block">Tradelines</Label>
+        <Label className="block">Tradelines ({tradelines.length}) - Auto-save enabled</Label>
         <Button size="sm" variant="outline" onClick={onAddManual}>
-          + Add Tradeline Manually
+          + Add Manually
         </Button>
       </div>
 
@@ -37,29 +37,23 @@ export const TradelinesList = ({
             key={tradeline.id || index}
             tradeline={tradeline}
             index={index}
-            isSelected={selectedTradelineIds?.has(tradeline.id || "")}
-            onUpdate={(updates) => {
+            onUpdate={onUpdate ? (updates) => {
               if (tradeline.id) {
                 onUpdate(tradeline.id, updates);
               }
-            }}
+            } : () => {}}
             onDelete={() => {
               if (tradeline.id) {
                 onDelete(tradeline.id);
               }
             }}
-            onSelect={() => {
-              if (typeof onSelect !== "function") {
-                console.warn("[TradelinesList] onSelect is not a function:", onSelect);
-                return;
-              }
-              if (tradeline.id) {
-                onSelect(tradeline.id);
-              }
-            }}
+            isSaving={tradeline.id ? savingTradelines.has(tradeline.id) : false}
+            hasError={tradeline.id ? saveErrors.has(tradeline.id) : false}
           />
         ))
       )}
     </div>
   );
 };
+
+export default TradelinesList;

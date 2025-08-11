@@ -3,44 +3,54 @@ import { ParsedTradeline } from "@/utils/tradelineParser";
 
 interface TradelineEditorProps {
   tradeline: ParsedTradeline;
-  index: number; // Keep for display purposes if needed
-  isSelected: boolean;
-  onUpdate: (updates: Partial<ParsedTradeline>) => void; // ✅ Simplified - no index needed
-  onDelete: () => void; // ✅ Simplified - no index needed
-  onSelect: (selected: boolean) => void; // ✅ Simplified - no id needed
+  index: number;
+  onUpdate: (updates: Partial<ParsedTradeline>) => void;
+  onDelete: () => void;
+  isSaving?: boolean;
+  hasError?: boolean;
 }
 
 export const TradelineEditor: React.FC<TradelineEditorProps> = ({
   tradeline,
-  isSelected,
   onUpdate,
   onDelete,
-  onSelect
+  isSaving = false,
+  hasError = false
 }) => {
   
   const handleFieldUpdate = (field: keyof ParsedTradeline, value: string | boolean) => {
-    onUpdate({ [field]: value }); // ✅ Just pass the updates, parent handles ID
+    onUpdate({ [field]: value });
   };
 
   const handleDelete = () => {
-    onDelete(); // ✅ Just call delete, parent handles ID
-  };
-
-  const handleSelect = (checked: boolean) => {
-    onSelect(checked); // ✅ Just pass selection state, parent handles ID
+    onDelete();
   };
 
   return (
     <div className="border rounded-lg p-4 mb-4">
-      {/* Selection checkbox */}
-      <div className="flex items-center mb-3">
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={(e) => handleSelect(e.target.checked)}
-          className="mr-2"
-        />
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold">{tradeline.creditor_name || 'Unknown Creditor'}</h3>
+        <div className="flex items-center text-sm">
+          {isSaving && (
+            <span className="text-blue-600 flex items-center">
+              <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full mr-1"></div>
+              Saving...
+            </span>
+          )}
+          {hasError && (
+            <span className="text-red-600 flex items-center">
+              <span className="mr-1">⚠️</span>
+              Save failed
+            </span>
+          )}
+          {!isSaving && !hasError && (
+            <span className="text-green-600 flex items-center">
+              <span className="mr-1">✓</span>
+              Saved
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Editable fields */}

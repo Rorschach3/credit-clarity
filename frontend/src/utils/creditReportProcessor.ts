@@ -1,5 +1,7 @@
 import { ParsedTradeline } from "./tradelineParser";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 // Processing progress interface
 export interface ProcessingProgress {
   step: string;
@@ -22,33 +24,55 @@ export interface ProcessingResult {
     saved: number;
     failed: number;
   };
+  // Background job fields
+  job_id?: string;
+  status?: string;
+  isBackgroundJob?: boolean;
 }
 
-// Pure utility function for OCR processing (no hooks)
-export const processWithOCR = async (file: File, userId?: string): Promise<string> => {
-  // BULLETPROOF FILE VALIDATION
+// Shared file validation utility
+const validateFile = (file: File): void => {
   if (!(file instanceof File)) {
     console.error('❌ NOT A FILE INSTANCE:', typeof file, file);
     throw new Error(`Expected File instance, got ${typeof file}`);
   }
   
-  console.log('✅ OCR File validation passed:', {
+  console.log('✅ File validation passed:', {
     name: file.name,
     type: file.type, 
     size: file.size,
     isFile: file instanceof File,
     constructor: file.constructor.name
   });
-  
-  // BULLETPROOF FORMDATA
+};
+
+// Shared FormData creation utility
+const createFormData = (file: File, userId?: string): FormData => {
   const formData = new FormData();
   formData.append('file', file); // Raw File object, no JSON, no toString()
   if (userId) {
     formData.append('user_id', userId);
   }
   
+  // Debug FormData contents
+  console.log('📦 FormData entries:');
+  for (const [key, value] of formData.entries()) {
+    console.log(`  ${key}:`, value instanceof File ? `File(${value.name})` : value);
+  }
+  
+  return formData;
+};
+
+// Pure utility function for OCR processing (no hooks)
+export const processWithOCR = async (file: File, userId?: string): Promise<string> => {
+  // BULLETPROOF FILE VALIDATION
+  validateFile(file);
+  
+  // BULLETPROOF FORMDATA
+  const formData = createFormData(file, userId);
+  
   try {
-    const response = await fetch('http://localhost:8000/process-credit-report', {
+    const response = await fetch(`${API_BASE_URL}/api/process-credit-report`, {
       method: 'POST',
       body: formData
       // NO HEADERS - Let browser set multipart/form-data with boundary
@@ -83,45 +107,25 @@ export const processWithOCR = async (file: File, userId?: string): Promise<strin
 export const processWithAI = async (
   file: File, 
   userId?: string,
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  retryCount: number = 0
 ): Promise<ProcessingResult> => {
   // BULLETPROOF FILE VALIDATION
-  if (!(file instanceof File)) {
-    console.error('❌ NOT A FILE INSTANCE:', typeof file, file);
-    throw new Error(`Expected File instance, got ${typeof file}`);
-  }
-  
-  console.log('✅ File validation passed:', {
-    name: file.name,
-    type: file.type, 
-    size: file.size,
-    isFile: file instanceof File,
-    constructor: file.constructor.name
-  });
+  validateFile(file);
   
   // BULLETPROOF FORMDATA
-  const formData = new FormData();
-  formData.append('file', file);
-  if (userId) {
-    formData.append('user_id', userId);
-  }
-  
-  // Debug FormData contents
-  console.log('📦 FormData entries:');
-  for (const [key, value] of formData.entries()) {
-    console.log(`  ${key}:`, value instanceof File ? `File(${value.name})` : value);
-  }
+  const formData = createFormData(file, userId);
   
   const controller = new AbortController();
-  let timeoutId: NodeJS.Timeout;
+  let timeoutId: NodeJS.Timeout | undefined;
   
   try {
     // Progress callback
     onProgress?.('📤 Uploading file...');
     
-    // Set timeout based on file size (1 minute per MB, minimum 2 minutes, max 15 minutes)
+    // Set timeout based on file size (1 minute per MB, minimum 2 minutes, max 8 minutes)
     const fileSizeMB = file.size / (1024 * 1024);
-    const timeoutMinutes = Math.max(2, Math.min(15, Math.ceil(fileSizeMB)));
+    const timeoutMinutes = Math.max(2, Math.min(8, Math.ceil(fileSizeMB * 1)));
     
     timeoutId = setTimeout(() => {
       console.log(`⏰ Request timeout after ${timeoutMinutes} minutes`);
@@ -133,16 +137,21 @@ export const processWithAI = async (
     onProgress?.(`🧠 Processing PDF... (may take up to ${timeoutMinutes} minutes)`);
     
     console.log('🚀 Sending request to backend...');
-    console.log('📡 URL:', 'http://localhost:8000/process-credit-report');
+    console.log('🔍 API_BASE_URL:', API_BASE_URL);
+    console.log('📡 Full URL:', `${API_BASE_URL}/api/process-credit-report`);
     console.log('📦 File size:', `${fileSizeMB.toFixed(2)} MB`);
     
     const startTime = Date.now();
     
-    const response = await fetch('http://localhost:8000/process-credit-report', {
+    console.log('🚀 Making fetch request...');
+    const response = await fetch(`${API_BASE_URL}/api/process-credit-report`, {
       method: 'POST',
       body: formData,
-      signal: controller.signal
+      signal: controller.signal,
+      // Prevent browser extensions from interfering
+      keepalive: false
     });
+    console.log('📥 Fetch response received:', response.status, response.statusText);
     
     // Clear timeout on successful response
     clearTimeout(timeoutId);
@@ -172,6 +181,21 @@ export const processWithAI = async (
     const result = await response.json();
     console.log('✅ Processing Complete!', result);
     
+    // Check if this is a background job response
+    if (result.success && result.job_id) {
+      console.log('🔄 Background job submitted, returning job info');
+      clearTimeout(timeoutId);
+      
+      return {
+        tradelines: [],
+        stats: { found: 0, saved: 0, failed: 0 },
+        job_id: result.job_id,
+        status: result.status,
+        isBackgroundJob: true,
+        processingMethod: result.processing_method
+      };
+    }
+    
     // Success handling...
     if (result.success) {
       onProgress?.(`🎉 Found ${result.tradelines_found} tradelines!`);
@@ -199,7 +223,7 @@ export const processWithAI = async (
     }
     
     // Filter out tradelines without valid account numbers
-    const validTradelines = (result.tradelines || []).filter(tradeline => {
+    const validTradelines = (result.tradelines || []).filter((tradeline: ParsedTradeline) => {
       // Exclude tradelines with no account number, empty account number, or default "UNKNOWN" value
       return tradeline.account_number && 
              tradeline.account_number.trim() !== '' && 
@@ -236,14 +260,23 @@ export const processWithAI = async (
     // Type narrowing
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
+        if (retryCount < 1) {
+          console.log(`🔄 Retrying request (attempt ${retryCount + 1}/2)...`);
+          onProgress?.('🔄 Retrying request...');
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+          return processWithAI(file, userId, onProgress, retryCount + 1);
+        }
         onProgress?.('❌ Request timed out');
         throw new Error('Processing timed out - the file may be too large or the server may be overloaded. Please try again.');
       } else if (error.message?.includes('Failed to fetch')) {
         onProgress?.('❌ Cannot connect to server');
-        throw new Error('Cannot connect to server - please ensure the backend is running on http://localhost:8000');
+        throw new Error('Cannot connect to server - please ensure the backend is running');
       } else if (error.message?.includes('NetworkError')) {
         onProgress?.('❌ Network error');
         throw new Error('Network error - please check your internet connection and try again');
+      } else if (error.message?.includes('message channel closed')) {
+        onProgress?.('❌ Browser extension conflict');
+        throw new Error('Browser extension interference detected. Please disable extensions or try in incognito mode.');
       } else {
         onProgress?.('❌ Processing failed');
         throw error;
@@ -255,14 +288,13 @@ export const processWithAI = async (
   }
 }
 
-
 // Test function for debugging backend connectivity
 export const testBackendConnection = async (): Promise<void> => {
   try {
     console.log('🧪 Testing backend connection...');
     
     // Test 1: Simple health check
-    const healthResponse = await fetch('http://localhost:8000/health');
+    const healthResponse = await fetch('/api/health');
     const healthData = await healthResponse.json();
     console.log('✅ Health check passed:', healthData);
     
@@ -270,7 +302,7 @@ export const testBackendConnection = async (): Promise<void> => {
     const emptyFormData = new FormData();
     emptyFormData.append('user_id', 'test-user');
     
-    const emptyResponse = await fetch('http://localhost:8000/process-credit-report', {
+    const emptyResponse = await fetch(`${API_BASE_URL}/api/process-credit-report`, {
       method: 'POST',
       body: emptyFormData
     });
@@ -281,7 +313,7 @@ export const testBackendConnection = async (): Promise<void> => {
     
   } catch (error) {
     console.error('❌ Backend test failed:', error);
-    throw new Error('Backend connection test failed - ensure server is running on localhost:8000');
+    throw new Error('Backend connection test failed - ensure server is running');
   }
 };
 
