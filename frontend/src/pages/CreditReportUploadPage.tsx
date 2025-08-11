@@ -118,7 +118,7 @@ const CreditReportUploadPage = () => {
       
       if (processingMethod === 'ocr') {
         const tradelines = await processFileWithOCR(file, user.id, setProcessingProgress);
-        result = { tradelines, isBackgroundJob: false };
+        result = { tradelines, isBackgroundJob: false } as any;
       } else {
         result = await processFileWithAI(file, user.id, setProcessingProgress);
       }
@@ -213,7 +213,7 @@ const CreditReportUploadPage = () => {
       }
 
       // Handle synchronous processing result
-      const tradelines = result.tradelines || [];
+      const tradelines = (result as any).tradelines || [];
       
       if (tradelines.length > 0) {
         setExtractedTradelines(prev => [...prev, ...tradelines]);

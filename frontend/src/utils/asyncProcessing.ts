@@ -5,7 +5,8 @@ import {
   processWithAI as processAI,
   extractKeywordsFromText,
   generateAIInsights,
-  type ProcessingProgress
+  type ProcessingProgress,
+  type ProcessingResult
 } from '@/utils/creditReportProcessor';
 
 // Dynamic imports for heavy processing dependencies
@@ -26,7 +27,7 @@ export const loadFileUploadHandler = async () => {
 };
 
 // Re-export the interface
-export type { ProcessingProgress };
+export type { ProcessingProgress, ProcessingResult };
 
 // Async OCR processing
 export const processFileWithOCR = async (
@@ -80,7 +81,7 @@ export const processFileWithAI = async (
   file: File,
   userId: string,
   updateProgress: (progress: ProcessingProgress) => void
-): Promise<ParsedTradeline[]> => {
+): Promise<ProcessingResult> => {
   updateProgress({
     step: 'Loading AI Models...',
     progress: 10,
@@ -99,6 +100,16 @@ export const processFileWithAI = async (
   try {
     const result = await processAI(file, userId);
 
+    // If backend responded with a background job, surface that to caller immediately
+    if (result.isBackgroundJob && result.job_id) {
+      updateProgress({
+        step: 'Queued',
+        progress: 0,
+        message: 'Processing in background...'
+      });
+      return result; // contains job_id, status, isBackgroundJob
+    }
+
     updateProgress({
       step: 'Validating Results...',
       progress: 80,
@@ -114,7 +125,7 @@ export const processFileWithAI = async (
       message: 'Processing finished'
     });
 
-    return result.tradelines;
+    return result;
   } catch (error) {
     console.error('AI processing failed:', error);
     throw error;
