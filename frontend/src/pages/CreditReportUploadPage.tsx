@@ -29,6 +29,7 @@ import {
 
 // Job polling service
 import { jobPollingService, type JobStatus } from '@/services/jobPollingService';
+import { JobProgressBanner } from '@/components/credit-upload/JobProgressBanner';
 
 type ManualTradelineInput = Omit<ParsedTradeline, 'id' | 'user_id' | 'created_at'>;
 
@@ -43,6 +44,9 @@ const CreditReportUploadPage = () => {
     progress: 0,
     message: ''
   });
+  // Background job tracking
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [activeJobStatus, setActiveJobStatus] = useState<JobStatus | null>(null);
   
   // Tradelines state
   const [extractedTradelines, setExtractedTradelines] = useState<ParsedTradeline[]>([]);
@@ -122,6 +126,16 @@ const CreditReportUploadPage = () => {
       // Handle background job
       if (result.isBackgroundJob && result.job_id) {
         console.log('🔄 Starting background job polling for:', result.job_id);
+        // Save job ID to render banner and allow cancel/copy curl
+        setActiveJobId(result.job_id);
+        setActiveJobStatus({
+          success: true,
+          job_id: result.job_id,
+          status: 'pending',
+          progress: 0,
+          message: 'Queued... ',
+          created_at: new Date().toISOString(),
+        } as JobStatus);
         
         sonnerToast.info("🔄 Processing Started", {
           description: "Your file is being processed in the background. You'll see progress updates here.",
@@ -134,6 +148,7 @@ const CreditReportUploadPage = () => {
           // onUpdate callback
           (status: JobStatus) => {
             console.log('📊 Job update:', status.progress + '%', status.message);
+            setActiveJobStatus(status);
             setProcessingProgress({
               step: status.status === 'running' ? 'Processing...' : 'Queued',
               progress: status.progress,
@@ -143,6 +158,7 @@ const CreditReportUploadPage = () => {
           // onComplete callback
           async (status: JobStatus) => {
             console.log('✅ Job completed:', status);
+            setActiveJobStatus(status);
             
             if (status.result?.tradelines_found > 0) {
               // Refresh tradelines from database since job saved them
@@ -173,6 +189,7 @@ const CreditReportUploadPage = () => {
           // onError callback
           (error: string) => {
             console.error('❌ Job polling error:', error);
+            setActiveJobStatus(prev => prev ? { ...prev, status: 'failed', message: error, success: false, progress: 0 } as JobStatus : prev);
             sonnerToast.error("❌ Processing Failed", {
               description: error,
               duration: 5000,
@@ -257,6 +274,8 @@ const CreditReportUploadPage = () => {
       setTimeout(() => {
         if (!isProcessing) {
           setProcessingProgress({ step: '', progress: 0, message: '' });
+          setActiveJobId(null);
+          setActiveJobStatus(null);
         }
       }, 3000);
     }
@@ -383,6 +402,21 @@ const CreditReportUploadPage = () => {
           onMethodChange={setProcessingMethod}
           isProcessing={isProcessing}
         />
+
+        {/* Background Job Banner (if active) */}
+        {activeJobId && (
+          <JobProgressBanner
+            jobId={activeJobId}
+            status={activeJobStatus}
+            onCancel={async (id) => {
+              await jobPollingService.cancelJob(id);
+            }}
+            onHide={() => {
+              setActiveJobId(null);
+              setActiveJobStatus(null);
+            }}
+          />
+        )}
 
         {/* Processing Progress */}
         <ProcessingProgress
