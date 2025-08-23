@@ -1,367 +1,298 @@
+"""
+LLM Parser Service
+Handles AI-powered parsing of credit reports using Gemini AI
+"""
 import json
 import asyncio
+import time
+import re
+import os
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime, date
 from decimal import Decimal
 import logging
-from dataclasses import dataclass
 
-from ..models.tradeline_models import Tradeline, CreditReport, ConsumerInfo
-from ..models.llm_models import LLMRequest, LLMResponse, NormalizationResult
-from ..config.llm_config import LLMConfig
-from ..utils.llm_helpers import TokenCounter, ResponseValidator
-from .prompt_templates import PromptTemplates
+# Gemini AI imports (with error handling)
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    genai = None
+    GEMINI_AVAILABLE = False
+
+# Local utilities
+try:
+    from utils.text_parsing import parse_tradelines_basic
+except ImportError:
+    def parse_tradelines_basic(text):
+        return []
 
 logger = logging.getLogger(__name__)
 
-@dataclass
-class ProcessingContext:
-    """Context for LLM processing operations"""
-    job_id: str
-    document_type: str
-    confidence_threshold: float = 0.7
-    max_retries: int = 3
 
-class LLMParserService:
-    """Service for parsing and normalizing document data using LLM"""
+class GeminiProcessor:
+    """Enhanced Gemini processor with comprehensive error handling"""
     
-    def __init__(self, config: LLMConfig):
-        self.config = config
-        self.client = AsyncOpenAI(api_key=config.openai_api_key) # type: ignore
-        self.token_counter = TokenCounter()
-        self.response_validator = ResponseValidator()
-        self.prompt_templates = PromptTemplates()
+    def __init__(self, api_key: str = None):
+        self.logger = logging.getLogger(__name__)
+        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         
-    async def normalize_tradeline_data(
-        self, 
-        raw_text: str, 
-        table_data: List[Dict], 
-        context: ProcessingContext
-    ) -> NormalizationResult:
+        if GEMINI_AVAILABLE and self.api_key:
+            try:
+                genai.configure(api_key=self.api_key)
+                self.model = genai.GenerativeModel('gemini-1.5-flash')
+                self.logger.info("✅ GeminiProcessor initialized successfully")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize Gemini: {e}")
+                self.model = None
+        else:
+            self.model = None
+            self.logger.warning("⚠️ GeminiProcessor initialized but Gemini AI not available")
+
+    async def extract_tradelines(self, text: str, max_retries: int = 3) -> List[Dict[str, Any]]:
         """
-        Main method to normalize tradeline data using LLM
-        
-        Args:
-            raw_text: Raw text from Document AI
-            table_data: Structured table data from Document AI
-            context: Processing context with job details
-            
-        Returns:
-            NormalizationResult with normalized data and metadata
+        Extract tradelines from credit report text using Gemini AI with comprehensive error handling
         """
+        if not self.model:
+            self.logger.warning("Gemini not available, using fallback parsing")
+            return parse_tradelines_basic(text)
+        
+        if not text or len(text.strip()) < 50:
+            self.logger.warning("Text too short for meaningful extraction")
+            return []
+
+        # Enhanced prompt for better tradeline extraction
+        prompt = f"""
+Extract tradeline information from this credit report text. Each tradeline should be a separate account/loan.
+
+TEXT:
+{text[:8000]}  
+
+Return a JSON list of tradeline objects. Each object should have these fields:
+- creditor_name: Name of the creditor/lender
+- account_number: Account number (mask sensitive digits if needed)
+- account_type: Type (Credit Card, Auto Loan, Mortgage, Personal Loan, etc.)
+- account_status: Status (Open, Closed, Charge Off, etc.)
+- account_balance: Current balance amount (as string)
+- credit_limit: Credit limit or original amount (as string)
+- monthly_payment: Monthly payment amount (as string)
+- date_opened: Date account was opened (MM/DD/YYYY format)
+- credit_bureau: Which bureau reported this (Experian, Equifax, TransUnion)
+- is_negative: true if this is a negative account (collections, charge-offs, etc.)
+- dispute_count: number of times disputed (0 if not mentioned)
+
+Only include actual account information, not personal info or credit scores. 
+Return empty list [] if no tradelines found.
+
+JSON Response:
+"""
+
+        for attempt in range(max_retries):
+            try:
+                self.logger.debug(f"Attempting Gemini extraction (attempt {attempt + 1})")
+                
+                # Generate content with timeout
+                response = await asyncio.wait_for(
+                    self._generate_content_async(prompt),
+                    timeout=30.0
+                )
+                
+                if not response or not response.text:
+                    self.logger.warning(f"Empty response from Gemini on attempt {attempt + 1}")
+                    continue
+                
+                # Clean and parse response
+                response_text = response.text.strip()
+                self.logger.debug(f"Raw Gemini response: {response_text[:200]}...")
+                
+                # Extract JSON from response
+                tradelines = self._extract_json_from_response(response_text)
+                
+                if tradelines is None:
+                    self.logger.warning(f"Failed to parse JSON on attempt {attempt + 1}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(1)
+                        continue
+                    else:
+                        return parse_tradelines_basic(text)
+                
+                # Validate and clean tradelines
+                valid_tradelines = []
+                for i, tradeline in enumerate(tradelines):
+                    if self._validate_tradeline_data(tradeline):
+                        # Clean and normalize the tradeline
+                        cleaned_tradeline = self._clean_tradeline_data(tradeline)
+                        valid_tradelines.append(cleaned_tradeline)
+                    else:
+                        self.logger.debug(f"Invalid tradeline {i}: {tradeline}")
+                
+                self.logger.info(f"✅ Gemini extracted {len(valid_tradelines)} valid tradelines")
+                return valid_tradelines
+                
+            except asyncio.TimeoutError:
+                self.logger.warning(f"Gemini request timed out on attempt {attempt + 1}")
+            except Exception as e:
+                self.logger.error(f"Gemini extraction error on attempt {attempt + 1}: {str(e)}")
+            
+            # Wait before retry
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2 ** attempt)
+        
+        # All attempts failed, use fallback
+        self.logger.warning("All Gemini attempts failed, using fallback parser")
+        return parse_tradelines_basic(text)
+
+    async def _generate_content_async(self, prompt: str):
+        """Generate content asynchronously"""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self.model.generate_content, prompt)
+
+    def _extract_json_from_response(self, response_text: str) -> Optional[List[Dict]]:
+        """Extract JSON array from Gemini response with multiple strategies"""
+        
+        # Strategy 1: Look for JSON array markers
+        json_patterns = [
+            r'\[[\s\S]*\]',  # Find content between [ and ]
+            r'```json\s*([\s\S]*?)\s*```',  # Extract from code blocks
+            r'```\s*([\s\S]*?)\s*```',  # Extract from any code blocks
+        ]
+        
+        for pattern in json_patterns:
+            matches = re.finditer(pattern, response_text, re.MULTILINE | re.DOTALL)
+            for match in matches:
+                try:
+                    json_str = match.group(1) if '```' in pattern else match.group(0)
+                    json_str = json_str.strip()
+                    
+                    if json_str.startswith('[') and json_str.endswith(']'):
+                        parsed = json.loads(json_str)
+                        if isinstance(parsed, list):
+                            return parsed
+                except json.JSONDecodeError:
+                    continue
+        
+        # Strategy 2: Try to parse the entire response as JSON
         try:
-            logger.info(f"Starting LLM normalization for job {context.job_id}")
-            
-            # Step 1: Extract structured data from raw text
-            structured_data = await self._extract_structured_data(
-                raw_text, table_data, context
-            )
-            
-            # Step 2: Normalize tradeline information
-            normalized_tradelines = await self._normalize_tradelines(
-                structured_data, context
-            )
-            
-            # Step 3: Extract consumer information
-            consumer_info = await self._extract_consumer_info(
-                raw_text, context
-            )
-            
-            # Step 4: Validate and generate confidence scores
-            validation_results = await self._validate_and_score(
-                normalized_tradelines, consumer_info, context
-            )
-            
-            # Step 5: Create final normalized result
-            result = NormalizationResult(
-                job_id=context.job_id,
-                consumer_info=consumer_info,
-                tradelines=normalized_tradelines,
-                validation_results=validation_results,
-                confidence_score=validation_results.overall_confidence,
-                processing_metadata={
-                    "processed_at": datetime.utcnow().isoformat(),
-                    "model_used": self.config.model_name,
-                    "tokens_used": self.token_counter.get_total_tokens(),
-                    "processing_duration": None  # Will be set by caller
-                }
-            )
-            
-            logger.info(f"LLM normalization completed for job {context.job_id}")
-            return result
-            
-        except Exception as e:
-            logger.error(f"Error in LLM normalization for job {context.job_id}: {str(e)}")
-            raise
-    
-    async def _extract_structured_data(
-        self, 
-        raw_text: str, 
-        table_data: List[Dict], 
-        context: ProcessingContext
-    ) -> Dict[str, Any]:
-        """Extract structured data from raw text and tables"""
+            parsed = json.loads(response_text)
+            if isinstance(parsed, list):
+                return parsed
+            elif isinstance(parsed, dict) and 'tradelines' in parsed:
+                return parsed['tradelines']
+        except json.JSONDecodeError:
+            pass
         
-        prompt = self.prompt_templates.get_extraction_prompt(
-            raw_text=raw_text,
-            table_data=table_data,
-            document_type=context.document_type
-        )
-        
-        response = await self._make_llm_request(
-            prompt=prompt,
-            context=context,
-            operation="data_extraction"
-        )
-        
-        try:
-            structured_data = json.loads(response)
-            return structured_data
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse LLM response as JSON: {str(e)}")
-            # Attempt to clean and re-parse
-            cleaned_response = self._clean_json_response(response)
-            return json.loads(cleaned_response)
-    
-    async def _normalize_tradelines(
-        self, 
-        structured_data: Dict[str, Any], 
-        context: ProcessingContext
-    ) -> List[Tradeline]:
-        """Normalize tradeline data into standard format"""
-        
+        # Strategy 3: Look for individual objects and combine
+        object_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+        objects = re.findall(object_pattern, response_text)
         tradelines = []
-        raw_tradelines = structured_data.get("tradelines", [])
         
-        for idx, raw_tradeline in enumerate(raw_tradelines):
+        for obj_str in objects:
             try:
-                # Create normalization prompt for individual tradeline
-                prompt = self.prompt_templates.get_tradeline_normalization_prompt(
-                    raw_tradeline=raw_tradeline,
-                    context=context
-                )
-                
-                response = await self._make_llm_request(
-                    prompt=prompt,
-                    context=context,
-                    operation=f"tradeline_normalization_{idx}"
-                )
-                
-                # Parse and validate tradeline
-                normalized_data = json.loads(response)
-                tradeline = self._create_tradeline_from_normalized_data(
-                    normalized_data, raw_tradeline
-                )
-                
-                tradelines.append(tradeline)
-                
-            except Exception as e:
-                logger.error(f"Error normalizing tradeline {idx}: {str(e)}")
-                # Create a basic tradeline with available data
-                fallback_tradeline = self._create_fallback_tradeline(raw_tradeline)
-                tradelines.append(fallback_tradeline)
+                obj = json.loads(obj_str)
+                if self._looks_like_tradeline(obj):
+                    tradelines.append(obj)
+            except json.JSONDecodeError:
+                continue
         
-        return tradelines
-    
-    async def _extract_consumer_info(
-        self, 
-        raw_text: str, 
-        context: ProcessingContext
-    ) -> ConsumerInfo:
-        """Extract consumer information from document"""
+        return tradelines if tradelines else None
+
+    def _looks_like_tradeline(self, obj: Dict) -> bool:
+        """Check if object looks like a tradeline"""
+        tradeline_fields = ['creditor_name', 'account_number', 'account_type', 'creditor', 'account']
+        return any(field in str(obj).lower() for field in tradeline_fields)
+
+    def _validate_tradeline_data(self, tradeline: Dict) -> bool:
+        """Validate that tradeline has required fields"""
+        if not isinstance(tradeline, dict):
+            return False
         
-        prompt = self.prompt_templates.get_consumer_info_prompt(
-            raw_text=raw_text,
-            context=context
-        )
+        # Must have creditor name
+        creditor_name = tradeline.get('creditor_name', '').strip()
+        if not creditor_name:
+            return False
         
-        response = await self._make_llm_request(
-            prompt=prompt,
-            context=context,
-            operation="consumer_info_extraction"
-        )
+        # Must have some form of account identifier
+        account_number = tradeline.get('account_number', '').strip()
+        if not account_number or account_number.lower() in ['unknown', 'n/a', 'null', 'none']:
+            return False
         
-        try:
-            consumer_data = json.loads(response)
-            return ConsumerInfo(**consumer_data)
-        except Exception as e:
-            logger.error(f"Error extracting consumer info: {str(e)}")
-            return ConsumerInfo(
-                name="Unknown",
-                ssn=None,
-                date_of_birth=None,
-                addresses=[],
-                confidence_score=0.0
-            )
-    
-    async def _validate_and_score(
-        self, 
-        tradelines: List[Tradeline], 
-        consumer_info: ConsumerInfo, 
-        context: ProcessingContext
-    ) -> Any:  # ValidationResult type
-        """Validate normalized data and generate confidence scores"""
+        return True
+
+    def _clean_tradeline_data(self, tradeline: Dict) -> Dict[str, Any]:
+        """Clean and normalize tradeline data"""
+        cleaned = {
+            'creditor_name': str(tradeline.get('creditor_name', '')).strip(),
+            'account_number': str(tradeline.get('account_number', '')).strip(),
+            'account_type': str(tradeline.get('account_type', 'Credit Card')).strip(),
+            'account_status': str(tradeline.get('account_status', 'Open')).strip(),
+            'account_balance': self._clean_amount(tradeline.get('account_balance', '')),
+            'credit_limit': self._clean_amount(tradeline.get('credit_limit', '')),
+            'monthly_payment': self._clean_amount(tradeline.get('monthly_payment', '')),
+            'date_opened': self._clean_date(tradeline.get('date_opened', '')),
+            'credit_bureau': str(tradeline.get('credit_bureau', '')).strip(),
+            'is_negative': bool(tradeline.get('is_negative', False)),
+            'dispute_count': int(tradeline.get('dispute_count', 0)) if str(tradeline.get('dispute_count', 0)).isdigit() else 0
+        }
         
-        # Create validation prompt
-        prompt = self.prompt_templates.get_validation_prompt(
-            tradelines=tradelines,
-            consumer_info=consumer_info,
-            context=context
-        )
+        return cleaned
+
+    def _clean_amount(self, amount: Any) -> str:
+        """Clean amount field"""
+        if not amount:
+            return ""
         
-        response = await self._make_llm_request(
-            prompt=prompt,
-            context=context,
-            operation="validation"
-        )
+        amount_str = str(amount).strip()
+        # Remove common prefixes/suffixes
+        amount_str = re.sub(r'^[\$\£\€]', '', amount_str)
+        amount_str = re.sub(r'[,\s]', '', amount_str)
         
-        try:
-            validation_data = json.loads(response)
-            return self._create_validation_result(validation_data)
-        except Exception as e:
-            logger.error(f"Error in validation: {str(e)}")
-            return self._create_default_validation_result()
-    
-    async def _make_llm_request(
-        self, 
-        prompt: str, 
-        context: ProcessingContext, 
-        operation: str,
-        max_tokens: int = 4000
-    ) -> str:
-        """Make request to LLM with retry logic"""
+        # Validate it's a number-like string
+        if re.match(r'^\d+\.?\d*$', amount_str):
+            return amount_str
         
-        for attempt in range(context.max_retries):
+        return ""
+
+    def _clean_date(self, date_val: Any) -> str:
+        """Clean date field"""
+        if not date_val:
+            return ""
+        
+        date_str = str(date_val).strip()
+        
+        # Try to parse and reformat common date formats
+        date_formats = ['%m/%d/%Y', '%Y-%m-%d', '%m-%d-%Y', '%d/%m/%Y']
+        
+        for fmt in date_formats:
             try:
-                # Count tokens before making request
-                token_count = self.token_counter.count_tokens(prompt)
-                
-                if token_count > self.config.max_tokens - max_tokens:
-                    # Truncate prompt if too long
-                    prompt = self.token_counter.truncate_prompt(
-                        prompt, 
-                        self.config.max_tokens - max_tokens
-                    )
-                
-                response = await self.client.chat.completions.create(
-                    model=self.config.model_name,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": self.config.system_prompt
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
-                    max_tokens=max_tokens,
-                    temperature=self.config.temperature,
-                    top_p=self.config.top_p
-                )
-                
-                content = response.choices[0].message.content
-                
-                # Track token usage
-                self.token_counter.add_tokens(
-                    prompt_tokens=response.usage.prompt_tokens,
-                    completion_tokens=response.usage.completion_tokens
-                )
-                
-                logger.info(f"LLM request successful for operation: {operation}")
-                return content
-                
-            except Exception as e:
-                logger.error(f"LLM request failed (attempt {attempt + 1}): {str(e)}")
-                if attempt == context.max_retries - 1:
-                    raise
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
-    
-    def _create_tradeline_from_normalized_data(
-        self, 
-        normalized_data: Dict[str, Any], 
-        raw_data: Dict[str, Any]
-    ) -> Tradeline:
-        """Create Tradeline object from normalized data"""
+                parsed_date = datetime.strptime(date_str, fmt)
+                return parsed_date.strftime('%m/%d/%Y')  # Standardize format
+            except ValueError:
+                continue
         
-        return Tradeline(
-            creditor_name=normalized_data.get("creditor_name", "Unknown"),
-            account_number=normalized_data.get("account_number", ""),
-            account_type=normalized_data.get("account_type", "Unknown"),
-            balance=self._safe_decimal_conversion(normalized_data.get("balance")),
-            credit_limit=self._safe_decimal_conversion(normalized_data.get("credit_limit")),
-            payment_status=normalized_data.get("payment_status", "Unknown"),
-            date_opened=self._safe_date_conversion(normalized_data.get("date_opened")),
-            date_closed=self._safe_date_conversion(normalized_data.get("date_closed")),
-            payment_history=normalized_data.get("payment_history", []),
-            confidence_score=normalized_data.get("confidence_score", 0.5),
-            original_data=raw_data  # Keep original for reference
-        )
-    
-    def _create_fallback_tradeline(self, raw_data: Dict[str, Any]) -> Tradeline:
-        """Create basic tradeline when normalization fails"""
-        return Tradeline(
-            creditor_name=raw_data.get("creditor", "Unknown"),
-            account_number=raw_data.get("account", ""),
-            account_type="Unknown",
-            balance=None,
-            credit_limit=None,
-            payment_status="Unknown",
-            date_opened=None,
-            date_closed=None,
-            payment_history=[],
-            confidence_score=0.1,
-            original_data=raw_data
-        )
-    
-    def _safe_decimal_conversion(self, value: Any) -> Optional[Decimal]:
-        """Safely convert value to Decimal"""
-        if value is None:
-            return None
+        # If no format worked, return as-is if it looks date-like
+        if re.match(r'^\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}$', date_str):
+            return date_str
+        
+        return ""
+
+    def extract_structured_data(self, text: str) -> Dict[str, Any]:
+        """Legacy sync method for backward compatibility"""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         try:
-            # Remove common currency symbols and commas
-            if isinstance(value, str):
-                cleaned = value.replace("$", "").replace(",", "").strip()
-                return Decimal(cleaned)
-            return Decimal(str(value))
-        except:
-            return None
-    
-    def _safe_date_conversion(self, value: Any) -> Optional[date]:
-        """Safely convert value to date"""
-        if value is None:
-            return None
-        try:
-            if isinstance(value, str):
-                # Handle common date formats
-                from dateutil.parser import parse # type: ignore
-                return parse(value).date()
-            return value
-        except:
-            return None
-    
-    def _clean_json_response(self, response: str) -> str:
-        """Clean LLM response to extract valid JSON"""
-        # Remove code blocks
-        response = response.replace("```json", "").replace("```", "")
-        
-        # Find JSON object boundaries
-        start_idx = response.find("{")
-        end_idx = response.rfind("}") + 1
-        
-        if start_idx >= 0 and end_idx > start_idx:
-            return response[start_idx:end_idx]
-        
-        return response
-    
-    def _create_validation_result(self, validation_data: Dict[str, Any]) -> Any:
-        """Create validation result from LLM response"""
-        # This would create a proper ValidationResult object
-        # Implementation depends on your validation model structure
-        pass
-    
-    def _create_default_validation_result(self) -> Any:
-        """Create default validation result when validation fails"""
-        # This would create a default ValidationResult object
-        # Implementation depends on your validation model structure
-        pass
+            tradelines = loop.run_until_complete(self.extract_tradelines(text))
+            return {
+                'tradelines': tradelines,
+                'extracted_with': 'gemini',
+                'success': True
+            }
+        except Exception as e:
+            self.logger.error(f"Sync extraction failed: {e}")
+            return {
+                'tradelines': [],
+                'extracted_with': 'fallback',
+                'success': False,
+                'error': str(e)
+            }
+        finally:
+            loop.close()

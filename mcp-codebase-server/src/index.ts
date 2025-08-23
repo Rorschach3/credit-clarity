@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import * as http from 'http';
 import {
   CallToolRequestSchema,
   ErrorCode,
@@ -273,26 +272,8 @@ async function searchInFile(filePath: string, query: string, options: any): Prom
   }
 }
 
-// Create and configure the server
-const server = new Server({
-  name: 'mcp-codebase-server',
-  version: '1.0.0',
-  capabilities: {
-    tools: {},
-  },
-});
-
-// List available tools
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: TOOLS,
-  };
-});
-
-// Handle tool calls
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-
+// Tool handler functions
+async function handleToolCall(name: string, args: any) {
   try {
     switch (name) {
       case 'read_file': {
@@ -300,12 +281,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const content = await readFileContent(filePath);
         
         return {
-          content: [
-            {
-              type: 'text',
-              text: `File: ${filePath}\n${'='.repeat(50)}\n${content}`,
-            },
-          ],
+          result: `File: ${filePath}\n${'='.repeat(50)}\n${content}`,
         };
       }
 
@@ -517,10 +493,27 @@ async function main() {
     
     console.error(`🏗️  MCP Codebase Server starting for: ${CODEBASE_ROOT}`);
     
-    // Start the server
-    const transport = new StdioServerTransport();
+    // Create HTTP server
+    const httpServer = http.createServer();
+    const PORT = process.env.PORT || 3100;
+    
+    // Start HTTP server
+    httpServer.listen(PORT, () => {
+      console.error(`🚀 MCP Codebase Server started successfully on port ${PORT}`);
+    });
+    
+    // Create SSE transport  
+    const transport = new SSEServerTransport('/message', { response: null, request: null } as any);
     await server.connect(transport);
-    console.error('🚀 MCP Codebase Server started successfully');
+    
+    // Health check endpoint
+    httpServer.on('request', (req, res) => {
+      if (req.url === '/health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'healthy', codebase: CODEBASE_ROOT }));
+      }
+    });
+    
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     process.exit(1);

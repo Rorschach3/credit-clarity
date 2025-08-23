@@ -1,44 +1,131 @@
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    working_dir: /backend
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
-      - /app/__pycache__
+      - ./backend:/backend
+      - /backend/__pycache__
+      - /backend/venv
+      - /backend/.venv
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      - PYTHONPATH=/backend
+      - REDIS_URL=redis://redis:6379/0
     env_file:
       - ./backend/.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     depends_on:
-      - redis
+      redis:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
 
   worker:
-    build: ./backend
-    command: python app/worker.py
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: python worker.py
+    working_dir: /backend
     volumes:
-      - ./backend:/app
-      - /app/__pycache__
+      - ./backend:/backend
+      - /backend/__pycache__
+      - /backend/venv
+      - /backend/.venv
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      - PYTHONPATH=/backend
+      - REDIS_URL=redis://redis:6379/0
     env_file:
       - ./backend/.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     depends_on:
-      - redis
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
 
   frontend:
-    build: ./frontend
-    ports:
-      - "5173:5173"
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    working_dir: /app
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    ports:
+      - "8080:8080"
     environment:
-      - VITE_API_URL=http://localhost:8000
+      - VITE_API_URL=http://backend:8000
+      - VITE_MCP_URL=http://mcp:3100
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+    env_file:
+      - ./frontend/.env.docker
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+  mcp:
+    build:
+      context: ./mcp-codebase-server
+      dockerfile: Dockerfile
+    working_dir: /app
+    ports:
+      - "3100:3100"
+    environment:
+      - NODE_ENV=development
+      - PORT=3100
+      # CRITICAL FIX: Set the codebase root to match the mounted volume
+      - CODEBASE_ROOT=/codebase
+    env_file:
+      - ./mcp-codebase-server/.env
+    volumes:
+      - ./mcp-codebase-server:/app
+      - /app/node_modules
+      # Mount the entire project codebase to /codebase (this matches your current setup)
+      - .:/codebase:ro  # Added :ro for read-only access which is safer
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+    depends_on:
+      backend:
+        condition: service_healthy
 
   redis:
     image: redis:7-alpine
@@ -46,6 +133,18 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+networks:
+  default:
+    name: app-network
+    driver: bridge
 
 volumes:
   redis_data:

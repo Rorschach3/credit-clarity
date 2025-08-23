@@ -1,31 +1,75 @@
 {
   "name": "credit-clarity",
+  "version": "1.0.0",
+  "description": "Credit report processing and tradeline extraction platform",
   "private": true,
+  "type": "module",
   "workspaces": [
     "frontend",
-    "CreditClarity"
+    "clerk-react",
+    "mcp-clerk-backend",
+    "mcp-codebase-server"
   ],
-  "engines": {
-    "node": ">=18"
-  },
   "scripts": {
-    "dev": "concurrently \"npm:dev -w frontend\" \"python -m uvicorn --app-dir backend main:app --reload --host 0.0.0.0 --port 8000\"",
-    "dev:frontend": "npm -w frontend run dev",
-    "dev:backend": "python -m uvicorn --app-dir backend main:app --reload --host 0.0.0.0 --port 8000",
-    "lint": "npm -w frontend run lint",
-    "build": "npm -w frontend run build",
-    "test": "npm -w frontend run test"
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000",
+    "dev:fullstack": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "build": "npm run build:frontend",
+    "build:frontend": "cd frontend && npm run build",
+    "build:all": "npm run build:frontend && npm run build:mcp",
+    "build:mcp": "cd mcp-clerk-backend && npm run build && cd ../mcp-codebase-server && npm run build",
+    "test": "npm run test:frontend",
+    "test:frontend": "cd frontend && npm run test",
+    "test:backend": "cd backend && python -m pytest",
+    "lint": "npm run lint:frontend",
+    "lint:frontend": "cd frontend && npm run lint",
+    "clean": "npm run clean:frontend && npm run clean:backend",
+    "clean:frontend": "cd frontend && rimraf dist node_modules/.vite",
+    "clean:backend": "cd backend && find . -name '__pycache__' -type d -exec rm -rf {} + && find . -name '*.pyc' -delete",
+    "install:all": "npm install && npm run install:backend",
+    "install:backend": "cd backend && pip install -r requirements.txt",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "supabase:start": "cd supabase && supabase start",
+    "supabase:stop": "cd supabase && supabase stop",
+    "supabase:reset": "cd supabase && supabase db reset",
+    "deploy": "npm run build:all && npm run docker:build",
+    "check:health": "curl -f http://localhost:8000/health && curl -f http://localhost:3000",
+    "setup": "npm run install:all && npm run supabase:start",
+    "postinstall": "echo 'Installing dependencies for all workspaces...'",
+    "validate": "npm run lint && npm run test"
   },
   "devDependencies": {
-    "concurrently": "^9.2.0"
+    "concurrently": "^9.2.0",
+    "rimraf": "^6.0.1",
+    "@types/node": "^22.16.0"
   },
-  "dependencies": {
-    "@clerk/backend": "^2.7.1",
-    "@clerk/clerk-react": "^5.41.0",
-    "@clerk/mcp-tools": "^0.3.1",
-    "@vercel/mcp-adapter": "^1.0.0",
-    "react-dom": "^18.2.0",
-    "react": "^18.2.0",
-    "zod": "^3.25.76"
-  }
+  "dependencies": {},
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0",
+    "python": ">=3.11.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/credit-clarity.git"
+  },
+  "keywords": [
+    "credit-report",
+    "tradeline-extraction",
+    "pdf-processing",
+    "supabase",
+    "fastapi",
+    "react",
+    "typescript"
+  ],
+  "author": "Credit Clarity Team",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/yourusername/credit-clarity/issues"
+  },
+  "homepage": "https://github.com/yourusername/credit-clarity#readme"
 }

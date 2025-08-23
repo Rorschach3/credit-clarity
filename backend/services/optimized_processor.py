@@ -2,11 +2,13 @@
 Optimized Credit Report Processor with enhanced performance
 Implements concurrent processing, memory management, and caching
 """
+import re
 import asyncio
 import os
 import logging
 import tempfile
 import hashlib
+import io
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
@@ -17,6 +19,28 @@ import time
 
 from core.config import get_settings
 from services.pdf_chunker import PDFChunker
+
+# Optional imports for OCR functionality
+try:
+    import fitz  # PyMuPDF
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    fitz = None
+    PYMUPDF_AVAILABLE = False
+
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    Image = None
+    PIL_AVAILABLE = False
+
+try:
+    import pytesseract
+    PYTESSERACT_AVAILABLE = True
+except ImportError:
+    pytesseract = None
+    PYTESSERACT_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -431,14 +455,17 @@ class OptimizedCreditReportProcessor:
         """
         file_size_mb = os.path.getsize(pdf_path) / (1024 * 1024)
         
-        # Adjust timeout based on file size - more generous for large files
-        base_timeout = 60  # 60 seconds base timeout
-        timeout_per_mb = 10  # 10 seconds per MB
-        max_timeout = 600  # Maximum 10 minutes for very large files
+        # More conservative timeouts to prevent hanging
+        base_timeout = 30  # 30 seconds base timeout
+        timeout_per_mb = 5   # 5 seconds per MB
+        max_timeout = 120   # Maximum 2 minutes
         
         timeout = min(max_timeout, base_timeout + (file_size_mb * timeout_per_mb))
         
-        logger.info(f"Processing {file_size_mb:.2f}MB file with {timeout}s timeout")
+        logger.info(f"🔄 Processing {file_size_mb:.2f}MB file with {timeout}s timeout")
+        
+        # Add progress tracking
+        start_time = time.time()
         
         # Create tasks for different extraction methods
         tasks = []
@@ -463,6 +490,8 @@ class OptimizedCreditReportProcessor:
             ))
         
         try:
+            logger.info(f"🚀 Starting {len(tasks)} extraction tasks")
+            
             # Use asyncio.wait with timeout and return when first succeeds
             done, pending = await asyncio.wait(
                 tasks,
@@ -470,49 +499,119 @@ class OptimizedCreditReportProcessor:
                 return_when=asyncio.FIRST_COMPLETED
             )
             
+            logger.info(f"⏱️ First task completed after {time.time() - start_time:.2f}s")
+            
             # Cancel pending tasks to save resources
+            cancelled_count = 0
             for task in pending:
-                task.cancel()
+                if not task.done():
+                    task.cancel()
+                    cancelled_count += 1
+            
+            if cancelled_count > 0:
+                logger.info(f"🛑 Cancelled {cancelled_count} pending tasks")
             
             # Get the first successful result
+            successful_results = []
+            failed_results = []
+            
             for task in done:
                 try:
                     result = await task
                     if result.get('success'):
-                        logger.info(f"✅ {task.get_name()} extraction succeeded")
-                        return result
+                        logger.info(f"✅ {task.get_name()} extraction succeeded - {len(result.get('text', ''))} chars")
+                        successful_results.append(result)
+                    else:
+                        failed_results.append((task.get_name(), result.get('error', 'Unknown error')))
                 except Exception as e:
-                    logger.warning(f"Task {task.get_name()} failed: {e}")
+                    logger.warning(f"❌ Task {task.get_name()} failed: {e}")
+                    failed_results.append((task.get_name(), str(e)))
             
-            # If no successful results, wait for all and return best effort
-            remaining_results = []
-            for task in pending:
-                try:
-                    result = await asyncio.wait_for(task, timeout=10)
-                    remaining_results.append(result)
-                except Exception:
-                    pass
-            
-            # Return the result with the most text
-            all_results = [await task for task in done if not task.cancelled()] + remaining_results
-            valid_results = [r for r in all_results if r.get('success')]
-            
-            if valid_results:
-                best_result = max(valid_results, key=lambda r: len(r.get('text', '')))
+            # Return first successful result immediately
+            if successful_results:
+                best_result = successful_results[0]
+                best_result['extraction_time'] = time.time() - start_time
                 return best_result
             
-            return {'success': False, 'text': '', 'tables': [], 'method': 'all_failed'}
+            # Log failed attempts
+            for method, error in failed_results:
+                logger.warning(f"⚠️ {method} failed: {error}")
+            
+            # If no immediate success, try to wait for pending tasks briefly
+            if pending:
+                logger.info(f"⏳ Waiting briefly for {len(pending)} remaining tasks...")
+                
+                try:
+                    # Wait max 10 more seconds for remaining tasks
+                    done2, pending2 = await asyncio.wait(
+                        pending,
+                        timeout=10,
+                        return_when=asyncio.FIRST_COMPLETED
+                    )
+                    
+                    # Cancel any still pending
+                    for task in pending2:
+                        if not task.done():
+                            task.cancel()
+                    
+                    # Check if we got any successes
+                    for task in done2:
+                        try:
+                            result = await task
+                            if result.get('success'):
+                                logger.info(f"✅ Late success from {task.get_name()}")
+                                result['extraction_time'] = time.time() - start_time
+                                return result
+                        except Exception as e:
+                            logger.debug(f"Late task {task.get_name()} failed: {e}")
+                            
+                except asyncio.TimeoutError:
+                    logger.warning("⏰ Additional wait timed out")
+            
+            return {'success': False, 'text': '', 'tables': [], 'method': 'all_failed', 'extraction_time': time.time() - start_time}
             
         except asyncio.TimeoutError:
             # Cancel all tasks on timeout
+            cancelled_count = 0
             for task in tasks:
-                task.cancel()
+                if not task.done():
+                    task.cancel()
+                    cancelled_count += 1
             
-            logger.warning(f"All extraction methods timed out after {timeout}s")
-            return {'success': False, 'text': '', 'tables': [], 'method': 'timeout'}
+            extraction_time = time.time() - start_time
+            logger.error(f"⏰ All extraction methods timed out after {timeout}s (actual: {extraction_time:.2f}s)")
+            logger.error(f"🛑 Cancelled {cancelled_count} tasks")
+            
+            return {
+                'success': False, 
+                'text': '', 
+                'tables': [], 
+                'method': 'timeout',
+                'extraction_time': extraction_time,
+                'timeout_duration': timeout
+            }
+        
+        except Exception as e:
+            # Cancel all tasks on error
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            
+            extraction_time = time.time() - start_time
+            logger.error(f"❌ Extraction failed with error after {extraction_time:.2f}s: {e}")
+            
+            return {
+                'success': False,
+                'text': '',
+                'tables': [],
+                'method': 'error',
+                'error': str(e),
+                'extraction_time': extraction_time
+            }
     
     async def _extract_with_pdfplumber_async(self, pdf_path: str) -> Dict[str, Any]:
         """Async wrapper for pdfplumber with optimizations."""
+        logger.debug(f"📄 Starting pdfplumber extraction for {os.path.basename(pdf_path)}")
         loop = asyncio.get_running_loop()
         
         def _sync_extract():
@@ -551,9 +650,13 @@ class OptimizedCreditReportProcessor:
                             except Exception as e:
                                 logger.debug(f"Table extraction failed for page {page_num + 1}: {e}")
                         
-                        # Allow other tasks to run
+                        # Allow other tasks to run and check for cancellation
                         if chunk_end < total_pages:
                             time.sleep(0.01)  # Small yield
+                            
+                            # Add progress logging for large files
+                            if total_pages > 20 and (chunk_end % 20 == 0):
+                                logger.debug(f"📄 pdfplumber progress: {chunk_end}/{total_pages} pages")
                 
                 if self._validate_extraction_quality(text_content):
                     return {
@@ -578,16 +681,20 @@ class OptimizedCreditReportProcessor:
         
         def _sync_extract():
             try:
-                import fitz  # PyMuPDF
+                if not PYMUPDF_AVAILABLE:
+                    return {'success': False}
                 
                 text_content = ""
                 tables = []
                 
                 doc = fitz.open(pdf_path)
                 
-                # Process pages in parallel chunks
+                # Process pages with progress tracking
                 total_pages = len(doc)
-                for page_num in range(min(total_pages, 50)):  # Limit to first 50 pages for speed
+                # More conservative page limit to prevent hanging
+                max_pages = min(total_pages, 30)  # Reduced from 50 to 30
+                
+                for page_num in range(max_pages):
                     page = doc[page_num]
                     page_text = page.get_text()
                     text_content += f"\n--- Page {page_num + 1} ---\n{page_text}"
@@ -633,14 +740,13 @@ class OptimizedCreditReportProcessor:
             try:
                 import shutil
                 
+                # Check if all required OCR dependencies are available
+                if not (PYMUPDF_AVAILABLE and PIL_AVAILABLE and PYTESSERACT_AVAILABLE):
+                    return {'success': False}
+                
                 # Check if tesseract is available
                 if not shutil.which('tesseract'):
                     return {'success': False}
-                
-                import fitz
-                import pytesseract
-                from PIL import Image
-                import io
                 
                 text_content = ""
                 
@@ -659,12 +765,15 @@ class OptimizedCreditReportProcessor:
                         page_text = pytesseract.image_to_string(
                             img, 
                             config='--psm 6 --oem 3',  # Optimized config
-                            timeout=15  # 15 second timeout per page
+                            timeout= 7 if page_num < 2 else 10 # timeout per page
                         )
                         text_content += f"\n--- Page {page_num + 1} (OCR) ---\n{page_text}"
-                    except Exception:
-                        continue
-                
+                    except Exception as e:
+                        self.logger.debug(f"OCR failed: {e}", exc_info=True)
+                        return {
+                            'success': False, 'error': str(e)
+                        }
+
                 doc.close()
                 
                 if self._validate_extraction_quality(text_content):
@@ -737,20 +846,22 @@ class OptimizedCreditReportProcessor:
     async def _parse_text_with_gemini_async(self, text: str) -> List[Dict]:
         """Parse text with Gemini asynchronously."""
         try:
-            # Import locally to avoid import issues
-            from main import GeminiProcessor
+            # Import Gemini processor without circular dependency
+            import importlib
             
-            processor = GeminiProcessor()
-            
-            # Run Gemini processing in thread pool to avoid blocking
-            loop = asyncio.get_running_loop()
-            tradelines = await loop.run_in_executor(
-                self.cpu_executor,
-                processor.extract_tradelines,
-                text
-            )
-            
-            return tradelines if isinstance(tradelines, list) else []
+            # Import GeminiProcessor from the service module
+            try:
+                from services.llm_parser_service import GeminiProcessor
+                processor = GeminiProcessor()
+                
+                # Run Gemini processing
+                tradelines = await processor.extract_tradelines(text)
+                
+                return tradelines if isinstance(tradelines, list) else []
+                
+            except (ImportError, AttributeError) as import_error:
+                logger.warning(f"Could not import GeminiProcessor: {import_error}")
+                return []
             
         except Exception as e:
             logger.warning(f"Gemini parsing failed: {e}")
@@ -864,101 +975,221 @@ class OptimizedCreditReportProcessor:
     
     def _deduplicate_tradelines(self, tradelines: List[Dict]) -> List[Dict]:
         """Enhanced deduplication using creditor + clean account number + date + credit bureau."""
-        import re
-        
+
         if not tradelines:
             return []
-        
-        # Filter out tradelines without valid account numbers
-        valid_tradelines = []
+
+        valid_tradelines: List[Dict] = []
         invalid_count = 0
-        
+
+        # Step 1: filter out corrupted / invalid account numbers
         for tradeline in tradelines:
-            account_number_raw = tradeline.get('account_number', '') or ''
-            account_number = str(account_number_raw).strip() if account_number_raw is not None else ''
-            if account_number and account_number not in ['', 'N/A', 'Unknown', 'No account']:
+            account_number_raw = tradeline.get("account_number", "") or ""
+            account_number = str(account_number_raw).strip()
+
+            is_valid = (
+                account_number
+                and account_number not in ["", "N/A", "Unknown", "No account", "None"]
+                and len(account_number) >= 4  # must be reasonably long
+                and not self._is_corrupted_account_number(account_number)
+            )
+
+            if is_valid:
                 valid_tradelines.append(tradeline)
             else:
                 invalid_count += 1
-        
+                if account_number:
+                    logger.debug(f"🚫 Filtered corrupted account: {account_number}")
+
         if invalid_count > 0:
             logger.info(f"🚫 Filtered out {invalid_count} tradelines without valid account numbers")
-        
-        # Enhanced deduplication with proper key generation
-        unique_tradelines = []
-        seen_identifiers = set()
-        
+
+        # Step 2: deduplicate by unique identifier
+        unique_tradelines: List[Dict] = []
+        seen_identifiers: set[str] = set()
+
         for tradeline in valid_tradelines:
-            # Extract and normalize components
-            creditor_name_raw = tradeline.get('creditor_name', '') or ''
-            creditor_name = str(creditor_name_raw).strip().upper() if creditor_name_raw is not None else ''
-            
-            raw_account_number_val = tradeline.get('account_number', '') or ''
-            raw_account_number = str(raw_account_number_val).strip() if raw_account_number_val is not None else ''
-            
-            date_opened_raw = tradeline.get('date_opened', '') or ''
-            date_opened = str(date_opened_raw).strip() if date_opened_raw is not None else ''
-            
-            credit_bureau_raw = tradeline.get('credit_bureau', '') or ''
-            credit_bureau = str(credit_bureau_raw).strip().upper() if credit_bureau_raw is not None else ''
-            
-            # Clean account number by removing special characters and normalizing
-            clean_account_number = re.sub(r'[*.\-\s]', '', raw_account_number).upper()
-            
-            # Create robust unique identifier that matches database constraint
+            creditor_name = str(tradeline.get("creditor_name", "") or "").strip().upper()
+            raw_account_number = str(tradeline.get("account_number", "") or "").strip()
+            date_opened = str(tradeline.get("date_opened", "") or "").strip()
+            credit_bureau = str(tradeline.get("credit_bureau", "") or "").strip().upper()
+
+            # Clean account number: remove noise like *.- and whitespace
+            clean_account_number = re.sub(r"[*.\-\s]", "", raw_account_number).upper()
+
+            # Composite key for deduplication
             unique_identifier = f"{creditor_name}|{clean_account_number}|{date_opened}|{credit_bureau}"
-            
+
             if unique_identifier not in seen_identifiers:
                 seen_identifiers.add(unique_identifier)
                 unique_tradelines.append(tradeline)
                 logger.debug(f"✅ Added unique tradeline: {creditor_name} {raw_account_number}")
             else:
                 logger.debug(f"🔄 Duplicate found, skipping: {creditor_name} {raw_account_number}")
-        
+
         total_removed = len(valid_tradelines) - len(unique_tradelines)
-        logger.info(f"🧹 Enhanced deduplication: removed {total_removed} duplicates from {len(valid_tradelines)} valid tradelines")
-        
+        logger.info(
+            f"🧹 Enhanced deduplication: removed {total_removed} duplicates "
+            f"from {len(valid_tradelines)} valid tradelines"
+        )
+
         return unique_tradelines
+
+
+    def _is_corrupted_account_number(self, account_number: str) -> bool:
+        """Detect corrupted/garbage account numbers (e.g., OCR noise)."""
+        if not account_number:
+            return True
+
+        # Excessive special characters (>50%)
+        special_char_count = sum(1 for c in account_number if not c.isalnum())
+        if special_char_count > len(account_number) * 0.5:
+            return True
+
+        # OCR corruption patterns
+        corruption_patterns = [
+            r"[&<>@)(}{\\]+",      # garbage symbol sequences
+            r"^[^a-zA-Z0-9*]{3,}", # starts with 3+ junk chars
+            r"[^a-zA-Z0-9*\-]{3,}" # 3+ junk chars in middle
+        ]
+
+        return any(re.search(pattern, account_number) for pattern in corruption_patterns)
     
     def _update_avg_processing_time(self, processing_time: float):
-        """Update average processing time with exponential moving average."""
-        alpha = 0.1  # Smoothing factor
-        if self.processing_stats['average_processing_time'] == 0:
-            self.processing_stats['average_processing_time'] = processing_time
-        else:
-            self.processing_stats['average_processing_time'] = (
-                alpha * processing_time + 
-                (1 - alpha) * self.processing_stats['average_processing_time']
-            )
+        """Update the running average processing time."""
+        total_processed = self.processing_stats['total_processed']
+        current_avg = self.processing_stats['average_processing_time']
+        
+        # Calculate new running average
+        new_avg = ((current_avg * (total_processed - 1)) + processing_time) / total_processed
+        self.processing_stats['average_processing_time'] = new_avg
+        
+        logger.debug(f"📊 Updated avg processing time: {new_avg:.2f}s (current: {processing_time:.2f}s)")
     
     async def _expensive_fallback(self, pdf_path: str, start_time: float) -> Dict[str, Any]:
-        """Fallback to Document AI when free methods fail."""
-        # Implementation would go here
-        return {
-            'success': False,
-            'error': 'Document AI fallback not implemented in optimized processor',
-            'processing_time': time.time() - start_time
-        }
+        """Fallback to more expensive processing methods when free methods fail."""
+        try:
+            logger.warning("🔄 Free extraction methods failed, trying expensive fallback...")
+            
+            # Could implement paid OCR services here (Google Document AI, Azure, etc.)
+            # For now, return a basic text extraction attempt
+            
+            processing_time = time.time() - start_time
+            
+            # Try one more basic text extraction
+            try:
+                if PYMUPDF_AVAILABLE:
+                    doc = fitz.open(pdf_path)
+                    text_content = ""
+                    for page_num in range(min(len(doc), 10)):  # Limit to 10 pages
+                        page = doc[page_num]
+                        page_text = page.get_text()
+                        text_content += f"\n--- Page {page_num + 1} ---\n{page_text}"
+                    doc.close()
+                    
+                    if text_content.strip():
+                        # Simple pattern-based tradeline extraction as fallback
+                        tradelines = self._extract_tradelines_basic_pattern(text_content)
+                        
+                        return {
+                            'success': True,
+                            'tradelines': tradelines,
+                            'method_used': 'fallback_basic_pattern',
+                            'processing_time': processing_time,
+                            'cost_estimate': 0.0,
+                            'cache_hit': False,
+                            'stats': {
+                                'text_length': len(text_content),
+                                'tables_found': 0,
+                                'tradelines_extracted': len(tradelines)
+                            }
+                        }
+            except Exception as e:
+                logger.error(f"Fallback extraction failed: {e}")
+            
+            return {
+                'success': False,
+                'error': 'All extraction methods failed including fallback',
+                'processing_time': processing_time,
+                'cost_estimate': 0.0
+            }
+            
+        except Exception as e:
+            logger.error(f"Expensive fallback failed: {e}")
+            return {
+                'success': False,
+                'error': f'Fallback failed: {str(e)}',
+                'processing_time': time.time() - start_time
+            }
     
-    def get_performance_stats(self) -> Dict[str, Any]:
-        """Get current performance statistics."""
+    def _extract_tradelines_basic_pattern(self, text: str) -> List[Dict]:
+        """Basic pattern-based tradeline extraction as a last resort."""
+        try:
+            tradelines = []
+            lines = text.split('\n')
+            
+            # Simple patterns to look for credit-related information
+            credit_keywords = ['credit', 'card', 'loan', 'account', 'balance', 'limit']
+            
+            for line in lines:
+                line_lower = line.lower().strip()
+                
+                # Skip short lines or lines without credit indicators
+                if len(line_lower) < 10 or not any(keyword in line_lower for keyword in credit_keywords):
+                    continue
+                
+                # Try to extract basic information using regex patterns
+                # This is a very basic fallback - production systems would use more sophisticated NLP
+                
+                # Look for account numbers (sequences of digits, possibly with dashes)
+                account_matches = re.findall(r'\b\d{4,16}\b|\b\d{4}-\d{4}-\d{4}-\d{4}\b', line)
+                
+                # Look for dollar amounts
+                amount_matches = re.findall(r'\$[\d,]+\.?\d*', line)
+                
+                # If we found both account and amount info, create a basic tradeline
+                if account_matches and amount_matches:
+                    tradeline = {
+                        "creditor_name": line[:50].strip(),  # Use first part of line as creditor name
+                        "account_number": account_matches[0],
+                        "account_balance": amount_matches[0] if amount_matches else "",
+                        "credit_limit": amount_matches[1] if len(amount_matches) > 1 else "",
+                        "monthly_payment": "",
+                        "date_opened": "",
+                        "account_type": "Credit Card",
+                        "account_status": "Open", 
+                        "credit_bureau": detect_credit_bureau(text),
+                        "is_negative": False,
+                        "dispute_count": 0
+                    }
+                    tradelines.append(tradeline)
+            
+            logger.info(f"📝 Basic pattern extraction found {len(tradelines)} potential tradelines")
+            return tradelines[:10]  # Limit to 10 to avoid too much noise
+            
+        except Exception as e:
+            logger.error(f"Basic pattern extraction failed: {e}")
+            return []
+    
+    def get_processing_stats(self) -> Dict[str, Any]:
+        """Get current processing statistics."""
         return self.processing_stats.copy()
     
     def cleanup(self):
-        """Clean up resources."""
-        self.memory_manager.cleanup_temp_files()
-        
-        # Shutdown executors
-        if hasattr(self, 'io_executor'):
-            self.io_executor.shutdown(wait=False)
-        if hasattr(self, 'cpu_executor'):
-            self.cpu_executor.shutdown(wait=False)
-        if hasattr(self, 'process_executor') and self.process_executor:
-            self.process_executor.shutdown(wait=False)
+        """Cleanup resources and executors."""
+        try:
+            self.io_executor.shutdown(wait=True)
+            self.cpu_executor.shutdown(wait=True)
+            if self.process_executor:
+                self.process_executor.shutdown(wait=True)
+            self.memory_manager.cleanup_temp_files()
+            logger.info("🧹 OptimizedCreditReportProcessor cleanup completed")
+        except Exception as e:
+            logger.warning(f"Cleanup warning: {e}")
     
     def __del__(self):
-        """Destructor to ensure cleanup."""
+        """Ensure cleanup on destruction."""
         try:
             self.cleanup()
         except Exception:
-            pass
+            pass  # Ignore errors during cleanup

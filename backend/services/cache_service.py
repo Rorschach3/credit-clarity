@@ -1,7 +1,5 @@
-"""
-Advanced caching service for Credit Clarity
-Provides multi-level caching with Redis support and in-memory fallback
-"""
+# backend/services/cache_service.py
+
 import asyncio
 import json
 import logging
@@ -11,6 +9,7 @@ from typing import Any, Optional, Dict, List, Union, Callable
 from datetime import datetime, timedelta
 from functools import wraps
 import weakref
+import os
 
 from core.config import get_settings
 
@@ -108,49 +107,76 @@ class InMemoryCache:
 
 
 class RedisCache:
-    """Redis-based cache implementation."""
+    """Redis-based cache implementation with robust error handling."""
     
     def __init__(self, redis_url: Optional[str] = None, default_ttl: int = 3600):
         self.redis_url = redis_url
         self.default_ttl = default_ttl
         self._client = None
         self._available = False
-        
-        # Try to initialize Redis
-        asyncio.create_task(self._initialize())
+        self._initialization_attempted = False
     
     async def _initialize(self):
-        """Initialize Redis connection."""
+        """Initialize Redis connection with robust error handling."""
+        if self._initialization_attempted:
+            return
+            
+        self._initialization_attempted = True
+        
         try:
-            # Only import redis if we're going to use it
-            import redis.asyncio as redis
+            # Try to import redis
+            try:
+                import redis.asyncio as redis
+            except ImportError:
+                logger.info("📦 Redis not installed - install with: pip install redis")
+                self._available = False
+                return
             
+            # Set up Redis connection
             if self.redis_url:
-                self._client = redis.from_url(self.redis_url)
+                self._client = redis.from_url(
+                    self.redis_url,
+                    socket_connect_timeout=5,
+                    socket_timeout=5,
+                    retry_on_timeout=True,
+                    health_check_interval=30
+                )
             else:
-                self._client = redis.Redis()
+                logger.warning("⚠️ No REDIS_URL provided, using localhost")
+                self._client = redis.Redis(
+                    host='localhost',
+                    port=6379,
+                    socket_connect_timeout=5,
+                    socket_timeout=5,
+                    retry_on_timeout=True
+                )
             
-            # Test connection
-            await self._client.ping()
+            # Test connection with timeout
+            await asyncio.wait_for(self._client.ping(), timeout=5.0)
             self._available = True
-            logger.info("✅ Redis cache initialized")
+            logger.info("✅ Redis cache initialized successfully")
             
-        except ImportError:
-            logger.info("Redis not available - install with: pip install redis")
+        except asyncio.TimeoutError:
+            logger.warning("⏰ Redis connection timeout - falling back to memory cache")
             self._available = False
         except Exception as e:
-            logger.warning(f"Redis initialization failed: {e}")
+            logger.warning(f"🔴 Redis initialization failed: {e} - falling back to memory cache")
             self._available = False
     
     async def get(self, key: str) -> Optional[Any]:
         """Get value from Redis cache."""
+        if not self._available:
+            await self._initialize()
+            
         if not self._available or not self._client:
             return None
         
         try:
-            data = await self._client.get(key)
+            data = await asyncio.wait_for(self._client.get(key), timeout=1.0)
             if data:
                 return pickle.loads(data)
+        except asyncio.TimeoutError:
+            logger.debug(f"Redis get timeout for key {key}")
         except Exception as e:
             logger.debug(f"Redis get failed for key {key}: {e}")
         
@@ -158,25 +184,34 @@ class RedisCache:
     
     async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
         """Set value in Redis cache."""
+        if not self._available:
+            await self._initialize()
+            
         if not self._available or not self._client:
             return False
         
         try:
             ttl = ttl or self.default_ttl
             data = pickle.dumps(value)
-            await self._client.setex(key, ttl, data)
+            await asyncio.wait_for(self._client.setex(key, ttl, data), timeout=1.0)
             return True
+        except asyncio.TimeoutError:
+            logger.debug(f"Redis set timeout for key {key}")
         except Exception as e:
             logger.debug(f"Redis set failed for key {key}: {e}")
-            return False
+            
+        return False
     
     async def delete(self, key: str) -> bool:
         """Delete key from Redis cache."""
+        if not self._available:
+            await self._initialize()
+            
         if not self._available or not self._client:
             return False
         
         try:
-            result = await self._client.delete(key)
+            result = await asyncio.wait_for(self._client.delete(key), timeout=1.0)
             return result > 0
         except Exception as e:
             logger.debug(f"Redis delete failed for key {key}: {e}")
@@ -184,11 +219,14 @@ class RedisCache:
     
     async def clear(self) -> bool:
         """Clear all Redis cache entries."""
+        if not self._available:
+            await self._initialize()
+            
         if not self._available or not self._client:
             return False
         
         try:
-            await self._client.flushall()
+            await asyncio.wait_for(self._client.flushall(), timeout=5.0)
             return True
         except Exception as e:
             logger.error(f"Redis clear failed: {e}")
@@ -202,6 +240,7 @@ class RedisCache:
 class MultiLevelCache:
     """
     Multi-level cache with Redis (L1) and in-memory (L2) fallback.
+    Automatically handles Redis unavailability gracefully.
     """
     
     def __init__(
@@ -222,6 +261,15 @@ class MultiLevelCache:
             'misses': 0,
             'sets': 0
         }
+        
+        # Lazy initialization flag
+        self._initialized = False
+    
+    async def _ensure_initialized(self):
+        """Ensure cache is initialized."""
+        if not self._initialized:
+            await self.redis_cache._initialize()
+            self._initialized = True
     
     def _generate_key(self, prefix: str, *args, **kwargs) -> str:
         """Generate cache key from arguments."""
@@ -230,11 +278,13 @@ class MultiLevelCache:
             'args': args,
             'kwargs': sorted(kwargs.items())
         }
-        key_string = json.dumps(key_data, sort_keys=True)
+        key_string = json.dumps(key_data, sort_keys=True, default=str)
         return hashlib.md5(key_string.encode()).hexdigest()
     
     async def get(self, key: str) -> Optional[Any]:
         """Get value from multi-level cache."""
+        await self._ensure_initialized()
+        
         # Try Redis first (L1)
         if self.redis_cache.is_available():
             value = await self.redis_cache.get(key)
@@ -255,6 +305,8 @@ class MultiLevelCache:
     
     async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
         """Set value in multi-level cache."""
+        await self._ensure_initialized()
+        
         ttl = ttl or self.default_ttl
         
         # Set in memory cache first (always works)
@@ -268,6 +320,8 @@ class MultiLevelCache:
     
     async def delete(self, key: str) -> bool:
         """Delete from all cache levels."""
+        await self._ensure_initialized()
+        
         redis_deleted = False
         memory_deleted = False
         
@@ -280,6 +334,8 @@ class MultiLevelCache:
     
     async def clear(self) -> None:
         """Clear all cache levels."""
+        await self._ensure_initialized()
+        
         if self.redis_cache.is_available():
             await self.redis_cache.clear()
         
@@ -313,8 +369,28 @@ class MultiLevelCache:
         }
 
 
-# Global cache instance
-cache = MultiLevelCache()
+# Global cache instance - lazy initialization
+_cache_instance = None
+
+def get_cache() -> MultiLevelCache:
+    """Get or create global cache instance."""
+    global _cache_instance
+    if _cache_instance is None:
+        redis_url = os.getenv("REDIS_URL")
+        _cache_instance = MultiLevelCache(redis_url=redis_url)
+    return _cache_instance
+
+# Convenience accessor
+cache = get_cache()
+
+# Application startup hook - call this in your FastAPI startup
+async def initialize_cache():
+    """Initialize cache during application startup."""
+    try:
+        await cache._ensure_initialized()
+        logger.info("🚀 Cache service initialized")
+    except Exception as e:
+        logger.error(f"❌ Cache initialization failed: {e}")
 
 
 def cached(
@@ -361,12 +437,16 @@ def cached(
         
         @wraps(func)
         def sync_wrapper(*args, **kwargs):
-            # For synchronous functions, we'll use a basic approach
-            # In a real implementation, you might want to use threading
+            # For synchronous functions, use memory cache only
+            filtered_kwargs = kwargs.copy()
+            if exclude_args:
+                for arg in exclude_args:
+                    filtered_kwargs.pop(arg, None)
+                    
             cache_key = cache._generate_key(
                 key_prefix or func.__name__,
                 *args,
-                **kwargs
+                **filtered_kwargs
             )
             
             # Use memory cache only for sync functions
@@ -381,62 +461,6 @@ def cached(
         return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
     
     return decorator
-
-
-class CacheWarmer:
-    """Service to pre-warm cache with frequently accessed data."""
-    
-    def __init__(self, cache_instance: MultiLevelCache):
-        self.cache = cache_instance
-        self.warming_tasks = []
-    
-    async def warm_user_data(self, user_id: str):
-        """Pre-warm cache with user's frequently accessed data."""
-        try:
-            from services.database_optimizer import db_optimizer
-            
-            # Warm user tradelines
-            user_tradelines = await db_optimizer.get_user_tradelines_optimized(
-                user_id=user_id,
-                limit=50
-            )
-            
-            cache_key = f"user_tradelines_{user_id}"
-            await self.cache.set(cache_key, user_tradelines, ttl=1800)  # 30 minutes
-            
-            logger.debug(f"Warmed cache for user {user_id}")
-            
-        except Exception as e:
-            logger.error(f"Cache warming failed for user {user_id}: {e}")
-    
-    async def warm_common_data(self):
-        """Pre-warm cache with commonly accessed data."""
-        try:
-            # You can add common data warming here
-            # For example: creditor names, account types, etc.
-            pass
-            
-        except Exception as e:
-            logger.error(f"Common data cache warming failed: {e}")
-    
-    def schedule_warming(self, interval: int = 3600):
-        """Schedule periodic cache warming."""
-        async def warming_task():
-            while True:
-                try:
-                    await self.warm_common_data()
-                    await asyncio.sleep(interval)
-                except Exception as e:
-                    logger.error(f"Scheduled cache warming failed: {e}")
-                    await asyncio.sleep(60)  # Retry after 1 minute
-        
-        task = asyncio.create_task(warming_task())
-        self.warming_tasks.append(task)
-        return task
-
-
-# Global cache warmer
-cache_warmer = CacheWarmer(cache)
 
 
 # Utility functions for common caching patterns
@@ -464,39 +488,40 @@ async def invalidate_user_cache(user_id: str):
         await cache.delete(pattern)
 
 
-# Example usage and performance testing
-async def cache_performance_test():
-    """Test cache performance."""
-    import time
-    
-    logger.info("Running cache performance test...")
-    
-    # Test data
-    test_data = {f"key_{i}": f"value_{i}" * 100 for i in range(1000)}
-    
-    # Test writes
-    start_time = time.time()
-    for key, value in test_data.items():
-        await cache.set(key, value)
-    write_time = time.time() - start_time
-    
-    # Test reads (should hit cache)
-    start_time = time.time()
-    for key in test_data.keys():
-        await cache.get(key)
-    read_time = time.time() - start_time
-    
-    stats = cache.stats()
-    
-    logger.info(f"Cache performance test results:")
-    logger.info(f"  Write time: {write_time:.3f}s ({len(test_data)/write_time:.0f} ops/s)")
-    logger.info(f"  Read time: {read_time:.3f}s ({len(test_data)/read_time:.0f} ops/s)")
-    logger.info(f"  Cache stats: {stats}")
-    
-    # Cleanup
-    await cache.clear()
-
-
 if __name__ == "__main__":
     # Run performance test
+    async def cache_performance_test():
+        """Test cache performance."""
+        import time
+        
+        print("Running cache performance test...")
+        
+        # Initialize cache
+        await initialize_cache()
+        
+        # Test data
+        test_data = {f"key_{i}": f"value_{i}" * 100 for i in range(100)}
+        
+        # Test writes
+        start_time = time.time()
+        for key, value in test_data.items():
+            await cache.set(key, value)
+        write_time = time.time() - start_time
+        
+        # Test reads (should hit cache)
+        start_time = time.time()
+        for key in test_data.keys():
+            await cache.get(key)
+        read_time = time.time() - start_time
+        
+        stats = cache.stats()
+        
+        print(f"Cache performance test results:")
+        print(f"  Write time: {write_time:.3f}s ({len(test_data)/write_time:.0f} ops/s)")
+        print(f"  Read time: {read_time:.3f}s ({len(test_data)/read_time:.0f} ops/s)")
+        print(f"  Cache stats: {stats}")
+        
+        # Cleanup
+        await cache.clear()
+    
     asyncio.run(cache_performance_test())

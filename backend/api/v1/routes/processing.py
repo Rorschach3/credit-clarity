@@ -8,7 +8,7 @@ import tempfile
 import logging
 from typing import Dict, Any, List
 
-from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, BackgroundTasks, Request
+from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, BackgroundTasks, Request, Form
 from fastapi.responses import JSONResponse
 
 from core.security import get_supabase_user, check_rate_limit
@@ -125,7 +125,13 @@ async def _process_synchronously(
         if options.save_to_database and tradelines:
             try:
                 for tradeline in tradelines:
-                    tradeline['user_id'] = user_id
+                    # For development, use a valid UUID or None if user_id is invalid
+                    if user_id and user_id != "anonymous" and len(str(user_id)) > 10:
+                        tradeline['user_id'] = user_id
+                    else:
+                        # For development/testing, allow null user_id (Supabase supports this)
+                        tradeline['user_id'] = None
+                        logger.debug(f"🔧 Using null user_id for development (original: {user_id})")
                 
                 with track_performance(f"batch_save_{user_id}"):
                     save_result = await db_optimizer.batch_insert_tradelines(tradelines)
@@ -460,4 +466,214 @@ async def get_ab_test_status(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get A/B test status: {str(e)}")
+
+
+# Job Management Endpoints
+
+@router.get("/job/{job_id}", response_model=APIResponse[JobStatusResponse])
+@monitor_api_call
+async def get_job_status(
+    job_id: str,
+    current_user: Dict[str, Any] = Depends(get_supabase_user)
+):
+    """Get background job status and results"""
+    try:
+        job_data = await job_processor.get_job_status(job_id)
+        
+        if not job_data:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        # Verify user owns this job
+        if job_data.get('user_id') != current_user.get('id'):
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        job_response = JobStatusResponse(
+            job_id=job_data['job_id'],
+            status=job_data['status'],
+            progress=job_data.get('progress', 0),
+            message=job_data.get('progress_message', ''),
+            result=job_data.get('result'),
+            error=job_data.get('error'),
+            created_at=job_data['created_at'],
+            started_at=job_data.get('started_at'),
+            completed_at=job_data.get('completed_at')
+        )
+        
+        return APIResponse[JobStatusResponse](
+            success=True,
+            data=job_response,
+            message="Job status retrieved"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to get job status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get job status: {str(e)}")
+
+
+@router.get("/jobs/{user_id}")
+@monitor_api_call
+async def get_user_jobs(
+    user_id: str,
+    limit: int = 10,
+    current_user: Dict[str, Any] = Depends(get_supabase_user)
+):
+    """Get user's recent processing jobs"""
+    try:
+        # Verify user can access these jobs
+        if user_id != current_user.get('id'):
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        jobs = job_processor.job_queue.get_user_jobs(user_id, limit)
+        
+        job_data = []
+        for job in jobs:
+            job_data.append({
+                "job_id": job.job_id,
+                "status": job.status.value,
+                "progress": job.progress,
+                "message": job.progress_message,
+                "created_at": job.created_at.isoformat(),
+                "task_name": job.task_name
+            })
+        
+        return APIResponse[Dict[str, Any]](
+            success=True,
+            data={
+                "jobs": job_data,
+                "total": len(job_data)
+            },
+            message="User jobs retrieved"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to get user jobs: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get user jobs: {str(e)}")
+
+
+@router.delete("/job/{job_id}")
+@monitor_api_call
+async def cancel_job(
+    job_id: str,
+    current_user: Dict[str, Any] = Depends(get_supabase_user)
+):
+    """Cancel a background processing job"""
+    try:
+        # Get job to verify ownership
+        job_data = await job_processor.get_job_status(job_id)
+        if not job_data:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        # Verify user owns this job
+        if job_data.get('user_id') != current_user.get('id'):
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        cancelled = await job_processor.cancel_job(job_id)
+        
+        if cancelled:
+            return APIResponse[Dict[str, str]](
+                success=True,
+                data={"message": f"Job {job_id} cancelled successfully"},
+                message="Job cancelled"
+            )
+        else:
+            raise HTTPException(
+                status_code=400, 
+                detail="Job cannot be cancelled (may be running or already completed)"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to cancel job: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to cancel job: {str(e)}")
+
+
+# Test and Debug Endpoints
+
+@router.post("/test-pdf")
+@monitor_api_call
+async def test_pdf_processing(
+    file: UploadFile = File(...),
+    current_user: Dict[str, Any] = Depends(get_supabase_user)
+):
+    """Simple test endpoint to debug PDF processing"""
+    try:
+        logger.info(f"🧪 Testing PDF processing: {file.filename}")
+        
+        # Basic file validation
+        if not file.filename.lower().endswith('.pdf'):
+            raise HTTPException(status_code=400, detail="Not a PDF file")
+        
+        # Save file temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_file_path = temp_file.name
+        
+        try:
+            # Test basic PDF reading
+            import pdfplumber
+            with pdfplumber.open(temp_file_path) as pdf:
+                page_count = len(pdf.pages)
+                if page_count > 0:
+                    first_page_text = pdf.pages[0].extract_text()
+                    return APIResponse[Dict[str, Any]](
+                        success=True,
+                        data={
+                            "page_count": page_count,
+                            "first_page_preview": first_page_text[:200] if first_page_text else "No text found",
+                            "file_size": len(content)
+                        },
+                        message="PDF test successful"
+                    )
+                else:
+                    raise HTTPException(status_code=400, detail="No pages found in PDF")
+        
+        except Exception as e:
+            logger.error(f"❌ PDF processing test failed: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"PDF processing failed: {str(e)}")
+        
+        finally:
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Test endpoint failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Test failed: {str(e)}")
+
+
+# Legacy Endpoints for Backward Compatibility
+
+@router.post("/legacy/process-credit-report", response_model=APIResponse[ProcessingResponse])
+@monitor_api_call
+async def legacy_process_credit_report(
+    file: UploadFile = File(...),
+    user_id: str = Form(default="default-user"),
+    use_background: bool = Form(default=False),
+    current_user: Dict[str, Any] = Depends(get_supabase_user)
+):
+    """Legacy processing endpoint for backward compatibility"""
+    # Use the current user ID instead of form parameter for security
+    actual_user_id = current_user.get('id', user_id)
+    
+    # Route to the main processing endpoint
+    options = ProcessingOptions(
+        use_ocr=True,
+        use_ai_parsing=True,
+        priority="normal",
+        background_processing=use_background
+    )
+    
+    return await process_credit_report(
+        request=None,  # Not used in this context
+        file=file,
+        options=options,
+        current_user=current_user,
+        _=None  # Rate limit dependency
+    )
 

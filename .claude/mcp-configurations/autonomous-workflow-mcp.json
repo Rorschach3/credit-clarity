@@ -1,0 +1,150 @@
+{
+  "mcpServers": {
+    "codebase": {
+      "command": "node",
+      "args": ["/mnt/c/projects/credit-clarity/mcp-codebase-server/dist/index.js"],
+      "env": {
+        "CODEBASE_ROOT": "/mnt/c/projects/credit-clarity"
+      },
+      "description": "Provides comprehensive codebase analysis and manipulation capabilities for autonomous development",
+      "capabilities": [
+        "code_search",
+        "file_modification", 
+        "dependency_analysis",
+        "code_quality_metrics"
+      ]
+    },
+    "clerk-backend": {
+      "command": "node", 
+      "args": ["/mnt/c/projects/credit-clarity/mcp-clerk-backend/dist/index.js"],
+      "env": {
+        "CLERK_SECRET_KEY": "sk_test_sOjaWCpqwtzI5yCrcDvP4l5H8VsxvTmEN0b5muUXp0",
+        "CLERK_PUBLISHABLE_KEY": "pk_test_bXVzaWNhbC13YWxsYWJ5LTgyLmNsZXJrLmFjY291bnRzLmRldiQ"
+      },
+      "description": "Authentication and user management integration for autonomous user feature development",
+      "capabilities": [
+        "user_management",
+        "authentication_flows",
+        "session_management"
+      ]
+    },
+    "github-integration": {
+      "command": "mcp-github",
+      "args": [],
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}",
+        "GITHUB_REPO": "credit-clarity",
+        "GITHUB_OWNER": "${GITHUB_OWNER}"
+      },
+      "description": "GitHub integration for autonomous issue tracking, PR management, and code collaboration",
+      "capabilities": [
+        "issue_management",
+        "pull_request_automation",
+        "code_review_coordination",
+        "project_tracking"
+      ]
+    },
+    "database-management": {
+      "command": "mcp-database",
+      "args": [],
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL}",
+        "SUPABASE_URL": "${SUPABASE_URL}",
+        "SUPABASE_ANON_KEY": "${SUPABASE_ANON_KEY}"
+      },
+      "description": "Database management and migration automation for autonomous backend development",
+      "capabilities": [
+        "schema_migrations",
+        "data_seeding",
+        "query_optimization",
+        "backup_management"
+      ]
+    },
+    "deployment-automation": {
+      "command": "mcp-deployment",
+      "args": [],
+      "env": {
+        "DOCKER_REGISTRY": "${DOCKER_REGISTRY}",
+        "KUBERNETES_CONFIG": "${KUBERNETES_CONFIG}",
+        "AWS_ACCESS_KEY_ID": "${AWS_ACCESS_KEY_ID}",
+        "AWS_SECRET_ACCESS_KEY": "${AWS_SECRET_ACCESS_KEY}"
+      },
+      "description": "Deployment and infrastructure automation for autonomous DevOps operations",
+      "capabilities": [
+        "container_deployment",
+        "infrastructure_provisioning",
+        "monitoring_setup",
+        "scaling_automation"
+      ]
+    },
+    "testing-automation": {
+      "command": "mcp-testing",
+      "args": [],
+      "env": {
+        "TEST_ENVIRONMENT": "autonomous",
+        "BROWSER_TESTING": "true",
+        "PERFORMANCE_TESTING": "true"
+      },
+      "description": "Comprehensive testing automation for autonomous quality assurance",
+      "capabilities": [
+        "test_generation",
+        "test_execution",
+        "coverage_analysis",
+        "performance_testing"
+      ]
+    },
+    "monitoring-observability": {
+      "command": "mcp-monitoring",
+      "args": [],
+      "env": {
+        "PROMETHEUS_URL": "${PROMETHEUS_URL}",
+        "GRAFANA_URL": "${GRAFANA_URL}",
+        "ALERTMANAGER_URL": "${ALERTMANAGER_URL}"
+      },
+      "description": "Monitoring and observability setup for autonomous system management",
+      "capabilities": [
+        "metrics_collection",
+        "alert_configuration",
+        "dashboard_creation",
+        "log_analysis"
+      ]
+    },
+    "project-management": {
+      "command": "mcp-project",
+      "args": [],
+      "env": {
+        "JIRA_URL": "${JIRA_URL}",
+        "JIRA_TOKEN": "${JIRA_TOKEN}",
+        "SLACK_TOKEN": "${SLACK_TOKEN}",
+        "NOTION_TOKEN": "${NOTION_TOKEN}"
+      },
+      "description": "Project management integration for autonomous workflow coordination",
+      "capabilities": [
+        "task_tracking",
+        "progress_reporting",
+        "team_communication",
+        "documentation_management"
+      ]
+    }
+  },
+  "autonomous_workflow_config": {
+    "default_agents": [
+      "project-coordinator",
+      "backend-architect", 
+      "frontend-specialist",
+      "qa-automation",
+      "devops-orchestrator"
+    ],
+    "quality_gates": {
+      "code_coverage_threshold": 90,
+      "performance_threshold": "2s",
+      "security_scan_required": true,
+      "documentation_required": true
+    },
+    "communication_channels": {
+      "progress_updates": "slack",
+      "error_notifications": "email",
+      "completion_reports": "github_pr"
+    }
+  }
+}

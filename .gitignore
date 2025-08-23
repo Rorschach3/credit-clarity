@@ -257,3 +257,6 @@ test_*.pdf
 *_test.pdf
 sample_*.pdf
 replacements.txt
+mcp-clerk-backend/examples/mcp-config.json
+mcp-config.json
+DOCKER_README.md

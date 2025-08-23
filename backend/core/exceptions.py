@@ -272,3 +272,170 @@ def external_service_error(service: str, message: str) -> ExternalServiceError:
 def business_error(message: str, rule: Optional[str] = None) -> BusinessLogicError:
     """Create business logic error."""
     return BusinessLogicError(message, rule)
+
+# Enhanced error handler middleware
+async def log_and_format_error(
+    exc: CreditClarityException, 
+    request_id: Optional[str] = None,
+    user_id: Optional[str] = None
+) -> HTTPException:
+    """
+    Enhanced error logging and formatting.
+    Logs errors with context and formats for API response.
+    """
+    import logging
+    from datetime import datetime
+    
+    logger = logging.getLogger("credit_clarity.errors")
+    
+    # Create error context
+    error_context = {
+        "error_code": exc.error_code,
+        "status_code": exc.status_code,
+        "message": exc.message,
+        "request_id": request_id,
+        "user_id": user_id,
+        "timestamp": datetime.now().isoformat(),
+        "details": exc.details
+    }
+    
+    # Log based on severity
+    if exc.status_code >= 500:
+        logger.error(f"Server error: {exc.error_code}", extra=error_context)
+    elif exc.status_code >= 400:
+        logger.warning(f"Client error: {exc.error_code}", extra=error_context)
+    else:
+        logger.info(f"Error handled: {exc.error_code}", extra=error_context)
+    
+    return to_http_exception(exc, request_id)
+
+# Rate limiting specific errors
+class RateLimitError(CreditClarityException):
+    """Enhanced rate limiting error with detailed information."""
+    
+    def __init__(
+        self,
+        message: str = "Rate limit exceeded",
+        rate_limit_type: str = "general",
+        current_usage: Optional[int] = None,
+        limit: Optional[int] = None,
+        reset_time: Optional[int] = None,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        enhanced_details = {
+            **(details or {}),
+            "rate_limit_type": rate_limit_type,
+            "current_usage": current_usage,
+            "limit": limit,
+            "reset_time": reset_time
+        }
+        
+        super().__init__(
+            message=message,
+            error_code="RATE_LIMIT_EXCEEDED",
+            details=enhanced_details,
+            status_code=429
+        )
+
+# JWT specific errors
+class JWTError(AuthenticationError):
+    """JWT-specific authentication errors."""
+    
+    def __init__(
+        self,
+        message: str = "JWT authentication failed",
+        token_error: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        enhanced_details = {
+            **(details or {}),
+            "token_error": token_error,
+            "auth_type": "jwt"
+        }
+        
+        super().__init__(
+            message=message,
+            details=enhanced_details
+        )
+        self.error_code = "JWT_AUTHENTICATION_ERROR"
+
+# File upload specific errors
+class FileUploadError(CreditClarityException):
+    """File upload and processing errors."""
+    
+    def __init__(
+        self,
+        message: str,
+        file_name: Optional[str] = None,
+        file_size: Optional[int] = None,
+        file_type: Optional[str] = None,
+        upload_stage: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        enhanced_details = {
+            **(details or {}),
+            "file_name": file_name,
+            "file_size": file_size,
+            "file_type": file_type,
+            "upload_stage": upload_stage
+        }
+        
+        super().__init__(
+            message=message,
+            error_code="FILE_UPLOAD_ERROR",
+            details=enhanced_details,
+            status_code=400
+        )
+
+# Background job specific errors
+class JobError(CreditClarityException):
+    """Background job processing errors."""
+    
+    def __init__(
+        self,
+        message: str,
+        job_id: Optional[str] = None,
+        job_type: Optional[str] = None,
+        job_stage: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        enhanced_details = {
+            **(details or {}),
+            "job_id": job_id,
+            "job_type": job_type,
+            "job_stage": job_stage
+        }
+        
+        super().__init__(
+            message=message,
+            error_code="BACKGROUND_JOB_ERROR",
+            details=enhanced_details,
+            status_code=500
+        )
+
+# Factory functions for new error types
+def jwt_error(message: str = "JWT authentication failed", token_error: Optional[str] = None) -> JWTError:
+    """Create JWT authentication error."""
+    return JWTError(message, token_error)
+
+def file_upload_error(message: str, file_name: Optional[str] = None, upload_stage: Optional[str] = None) -> FileUploadError:
+    """Create file upload error."""
+    return FileUploadError(message, file_name=file_name, upload_stage=upload_stage)
+
+def job_error(message: str, job_id: Optional[str] = None, job_type: Optional[str] = None) -> JobError:
+    """Create background job error."""
+    return JobError(message, job_id=job_id, job_type=job_type)
+
+def enhanced_rate_limit_error(
+    rate_limit_type: str = "general",
+    current_usage: Optional[int] = None,
+    limit: Optional[int] = None,
+    reset_time: Optional[int] = None
+) -> RateLimitError:
+    """Create enhanced rate limit error."""
+    return RateLimitError(
+        rate_limit_type=rate_limit_type,
+        current_usage=current_usage,
+        limit=limit,
+        reset_time=reset_time
+    )

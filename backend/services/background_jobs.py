@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 import traceback
 import weakref
-
+import re
 from core.config import get_settings
 from services.cache_service import cache
 
@@ -439,13 +439,30 @@ class BackgroundJobProcessor:
     # Built-in task handlers
     async def _process_large_pdf_task(self, pdf_path: str, user_id: str, progress_callback, **kwargs) -> Dict[str, Any]:
         """Process large PDF in background."""
+        processor = None
         try:
             await progress_callback(10, "Starting PDF processing...")
+            
+            # Import real-time service for WebSocket updates
+            from services.realtime_service import notify_job_progress
+            
+            # Send real-time update
+            await notify_job_progress(user_id, kwargs.get('job_id', 'unknown'), 10, 
+                                    "Starting PDF processing...", stage="initialization")
+            
+            # Import and force garbage collection before heavy processing
+            import gc
+            gc.collect()
             
             from services.optimized_processor import OptimizedCreditReportProcessor
             processor = OptimizedCreditReportProcessor()
             
             await progress_callback(30, "Extracting text and tables...")
+            await notify_job_progress(user_id, kwargs.get('job_id', 'unknown'), 30, 
+                                    "Extracting text and tables...", stage="extraction")
+            
+            # Add periodic heartbeat during processing
+            heartbeat_task = asyncio.create_task(self._heartbeat_logger(progress_callback, user_id, kwargs.get('job_id')))
             
             # Add a hard timeout around the heavy processing to avoid "stuck at 30%"
             try:
@@ -453,33 +470,95 @@ class BackgroundJobProcessor:
                     processor.process_credit_report_optimized(pdf_path),
                     timeout=15 * 60  # 15 minutes
                 )
+                heartbeat_task.cancel()  # Stop heartbeat when processing completes
             except asyncio.TimeoutError:
+                heartbeat_task.cancel()
                 await progress_callback(99, "Timed out while extracting text. Please try a smaller PDF or retry later.")
                 raise Exception("Processing timed out after 15 minutes")
             
             if result.get('success'):
                 await progress_callback(80, "Saving tradelines to database...")
+                await notify_job_progress(user_id, kwargs.get('job_id', 'unknown'), 80, 
+                                        "Saving tradelines to database...", stage="saving", 
+                                        tradelines_found=len(result.get('tradelines', [])))
                 
                 # Save tradelines to database
                 from services.database_optimizer import db_optimizer
                 
                 tradelines = result.get('tradelines', [])
-                for tradeline in tradelines:
-                    tradeline['user_id'] = user_id
+                if not tradelines:
+                    logger.warning("⚠️ No tradelines found to save")
+                    save_result = {'inserted': 0, 'errors': 0}
+                else:
+                    # Add user_id and validate tradelines before saving
+                    valid_tradelines = []
+                    for tradeline in tradelines:
+                        # For development, use a valid UUID or None if user_id is invalid
+                        if user_id and user_id != "anonymous" and len(str(user_id)) > 10:
+                            tradeline['user_id'] = user_id
+                        else:
+                            # For development/testing, allow null user_id (Supabase supports this)
+                            tradeline['user_id'] = None
+                            logger.debug(f"🔧 Using null user_id for development (original: {user_id})")
+                        
+                        # Basic validation
+                        if (tradeline.get('creditor_name') and 
+                            tradeline.get('account_number') and 
+                            len(str(tradeline.get('account_number', ''))) >= 4):
+                            valid_tradelines.append(tradeline)
+                        else:
+                            logger.debug(f"🚫 Skipping invalid tradeline: {tradeline}")
+                    
+                    logger.info(f"📋 Validated {len(valid_tradelines)}/{len(tradelines)} tradelines for database save")
+                    
+                    if not valid_tradelines:
+                        logger.warning("⚠️ No valid tradelines to save after validation")
+                        save_result = {'inserted': 0, 'errors': len(tradelines)}
+                    else:
+                        try:
+                            # Ensure database optimizer is initialized
+                            await db_optimizer.ensure_initialized()
+                            save_result = await db_optimizer.batch_insert_tradelines(valid_tradelines)
+                            logger.info(f"✅ Successfully saved {save_result.get('inserted', 0)} tradelines to database")
+                        except Exception as save_err:
+                            # Log detailed error and still report it properly
+                            logger.error(f"❌ DB save failed: {save_err}")
+                            logger.error(f"   User ID: {user_id}")
+                            logger.error(f"   Valid tradelines count: {len(valid_tradelines)}")
+                            if valid_tradelines:
+                                logger.error(f"   Sample tradeline: {valid_tradelines[0]}")
+                            
+                            # Try to save at least some tradelines individually
+                            individual_saved = 0
+                            for i, tradeline in enumerate(valid_tradelines[:5]):  # Try first 5
+                                try:
+                                    individual_result = await db_optimizer.batch_insert_tradelines([tradeline])
+                                    individual_saved += individual_result.get('inserted', 0)
+                                except Exception as individual_err:
+                                    logger.error(f"❌ Individual save failed for tradeline {i}: {individual_err}")
+                            
+                            save_result = {'inserted': individual_saved, 'errors': len(valid_tradelines) - individual_saved}
+                            if individual_saved > 0:
+                                logger.info(f"⚠️ Partial save successful: {individual_saved} tradelines saved individually")
                 
-                try:
-                    save_result = await db_optimizer.batch_insert_tradelines(tradelines)
-                except Exception as save_err:
-                    # Don't fail the entire job if DB save fails; report in result
-                    logger.error(f"DB save failed: {save_err}")
-                    save_result = {'inserted': 0, 'errors': len(tradelines)}
-                
-                await progress_callback(100, f"Completed! Found {len(tradelines)} tradelines")
+                saved_count = save_result.get('inserted', 0)
+                if saved_count == 0 and len(tradelines) > 0:
+                    await progress_callback(100, f"⚠️ Found {len(tradelines)} tradelines but none were saved to database!")
+                    await notify_job_progress(user_id, kwargs.get('job_id', 'unknown'), 100, 
+                                            f"Found {len(tradelines)} tradelines but none were saved!", 
+                                            stage="warning", tradelines_found=len(tradelines))
+                else:
+                    await progress_callback(100, f"✅ Found {len(tradelines)} tradelines, saved {saved_count} to database")
+                    await notify_job_progress(user_id, kwargs.get('job_id', 'unknown'), 100, 
+                                            f"Successfully processed {len(tradelines)} tradelines, saved {saved_count} to database", 
+                                            stage="completed", tradelines_found=len(tradelines))
                 
                 return {
                     'success': True,
                     'tradelines_found': len(tradelines),
-                    'tradelines_saved': save_result.get('inserted', 0),
+                    'tradelines_saved': saved_count,
+                    'save_errors': save_result.get('errors', 0),
+                    'database_save_success': saved_count > 0 if len(tradelines) > 0 else True,
                     'processing_time': result.get('processing_time', 0),
                     'method_used': result.get('method_used', 'unknown')
                 }
@@ -489,6 +568,35 @@ class BackgroundJobProcessor:
         except Exception as e:
             logger.error(f"Large PDF processing failed: {e}")
             raise
+        finally:
+            # Cleanup resources
+            if processor:
+                try:
+                    processor.cleanup()
+                except Exception as cleanup_err:
+                    logger.warning(f"⚠️ Processor cleanup failed: {cleanup_err}")
+            
+            # Force garbage collection after processing
+            import gc
+            gc.collect()
+    
+    async def _heartbeat_logger(self, progress_callback, user_id=None, job_id=None):
+        """Periodic heartbeat to show processing is still active."""
+        try:
+            beat_count = 0
+            while True:
+                await asyncio.sleep(30)  # Heartbeat every 30 seconds
+                beat_count += 1
+                logger.info(f"💓 Processing heartbeat {beat_count} - still working on PDF extraction...")
+                
+                # Send real-time heartbeat to user
+                if user_id and job_id:
+                    from services.realtime_service import notify_job_progress
+                    await notify_job_progress(user_id, job_id, 30 + (beat_count * 2), 
+                                            f"Still processing... (heartbeat {beat_count})", 
+                                            stage="processing")
+        except asyncio.CancelledError:
+            logger.debug("Heartbeat cancelled - processing completed")
     
     async def _batch_update_tradelines_task(self, updates: List[Dict], progress_callback, **kwargs) -> Dict[str, Any]:
         """Batch update tradelines in background."""

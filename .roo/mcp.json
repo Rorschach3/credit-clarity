@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "sequentialthinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "postgres": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://postgres:BWahtjkyyvwDupAi@db.gywohmbqohytziwsjrps.supabase.co:5432/postgres"
+      ]
+    },
+    "redis": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-redis",
+        "--url",
+        "redis-17442.c60.us-west-1-2.ec2.redns.redis-cloud.com"
+      ]
+    }
+  }
+}

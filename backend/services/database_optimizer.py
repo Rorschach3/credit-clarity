@@ -42,11 +42,17 @@ class DatabaseOptimizer:
         self._cache_expiry = {}
         self.cache_ttl = 300  # 5 minutes default TTL
         
-        # Initialize connections
-        asyncio.create_task(self._initialize_pool())
+        # Initialize connections (will be done on first use)
+        self._initialized = False
+        
+        # Track test user for development
+        self._test_user_id = "11111111-1111-1111-1111-111111111111"
     
     async def _initialize_pool(self):
         """Initialize connection pool."""
+        if self._initialized:
+            return
+            
         if not settings.supabase_url or not settings.supabase_anon_key:
             logger.warning("Supabase credentials not available")
             return
@@ -57,13 +63,67 @@ class DatabaseOptimizer:
                 await self._connection_pool.put(client)
                 self._active_connections += 1
             
+            # Ensure test user exists for development
+            await self._ensure_test_user_exists()
+            
+            self._initialized = True
             logger.info(f"✅ Database connection pool initialized with {self.max_connections} connections")
         except Exception as e:
             logger.error(f"❌ Failed to initialize connection pool: {e}")
+            
+    async def ensure_initialized(self):
+        """Ensure the database optimizer is initialized."""
+        if not self._initialized:
+            await self._initialize_pool()
+    
+    async def _ensure_test_user_exists(self):
+        """Ensure test user exists in the database for development."""
+        import os
+        
+        # Only in development mode
+        if not settings.is_development():
+            return
+            
+        try:
+            # Use service role key to create user if needed
+            service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            if not service_role_key:
+                logger.warning("⚠️ SUPABASE_SERVICE_ROLE_KEY not found, skipping test user creation")
+                return
+            
+            # Create admin client with service role
+            admin_client = create_client(settings.supabase_url, service_role_key)
+            
+            # Try to create a user profile record (which is safer than modifying auth.users)
+            test_profile = {
+                "id": self._test_user_id,
+                "email": "test@creditclarity.com", 
+                "created_at": "2025-01-01T00:00:00Z",
+                "updated_at": "2025-01-01T00:00:00Z"
+            }
+            
+            # Insert or update user profile
+            try:
+                result = admin_client.table("user_profiles").upsert(test_profile).execute()
+                logger.info(f"✅ Test user profile ensured: {self._test_user_id}")
+            except Exception as profile_err:
+                # If user_profiles table doesn't exist, try auth.users (less safe)
+                logger.debug(f"User profiles table not accessible: {profile_err}")
+                logger.info(f"ℹ️ Test user {self._test_user_id} - assuming exists or will be created manually")
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Could not ensure test user exists: {e}")
+            logger.info(f"ℹ️ Manual user creation may be required for user ID: {self._test_user_id}")
     
     @asynccontextmanager
     async def get_connection(self):
         """Get a connection from the pool."""
+        # Ensure pool is initialized
+        await self.ensure_initialized()
+        
+        if not self._initialized:
+            raise Exception("Database connection pool failed to initialize")
+            
         try:
             # Wait for available connection with timeout
             client = await asyncio.wait_for(self._connection_pool.get(), timeout=30.0)
@@ -198,10 +258,18 @@ class DatabaseOptimizer:
                     
                     try:
                         # Use upsert to handle duplicates
-                        response = client.table("tradelines").upsert(
-                            batch,
-                            on_conflict="user_id,creditor_name,account_number"
-                        ).execute()
+                        # For null user_id, we use a different conflict resolution
+                        if any(tradeline.get('user_id') is None for tradeline in batch):
+                            # When user_id is null, use a simpler conflict resolution
+                            response = client.table("tradelines").upsert(
+                                batch,
+                                on_conflict="creditor_name,account_number"
+                            ).execute()
+                        else:
+                            response = client.table("tradelines").upsert(
+                                batch,
+                                on_conflict="user_id,creditor_name,account_number"
+                            ).execute()
                         
                         batch_inserted = len(response.data) if response.data else 0
                         total_inserted += batch_inserted

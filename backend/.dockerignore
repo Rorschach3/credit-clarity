@@ -1,3 +1,4 @@
+# Python
 __pycache__
 *.pyc
 *.pyo
@@ -16,7 +17,6 @@ nosetests.xml
 coverage.xml
 *.cover
 *.log
-.git
 .mypy_cache
 .pytest_cache
 .hypothesis
@@ -24,6 +24,8 @@ coverage.xml
 # IDE
 .vscode
 .idea
+*.swp
+*.swo
 
 # OS
 .DS_Store
@@ -32,3 +34,32 @@ Thumbs.db
 # Local development files
 *.local
 .env.local
+
+# Large files and directories
+tests/
+test_*.py
+*_test.py
+*.pdf
+*.log
+server.log
+venv_server.log
+cost/
+workflow
+workflow.txt
+test_content.txt
+test_field_extraction.py
+tradeline_test_rows.sql
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Git
+.git
+.gitignore
+
+# Temporary files
+tmp/
+temp/
+*.tmp

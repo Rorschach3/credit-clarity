@@ -28,14 +28,23 @@ class Settings(BaseSettings):
     # Security
     jwt_secret: Optional[str] = Field(default=None, env="JWT_SECRET")
     encryption_key: Optional[str] = Field(default=None, env="ENCRYPTION_KEY")
-    admin_emails: List[str] = Field(default_factory=list, env="ADMIN_EMAILS")
+    admin_emails: Optional[str] = Field(default="", env="ADMIN_EMAILS")
+    admin_email_domains: Optional[str] = Field(default="@creditclarity.com", env="ADMIN_EMAIL_DOMAINS")
     
     # CORS
-    cors_origins: List[str] = Field(
-        default=["http://localhost:3000", "http://localhost:5173"],
+    cors_origins: Optional[str] = Field(
+        default="http://localhost:8080,http://localhost:3000",
         env="CORS_ORIGINS"
     )
     cors_allow_credentials: bool = Field(default=True, env="CORS_ALLOW_CREDENTIALS")
+    cors_methods: Optional[str] = Field(
+        default="GET,POST,PUT,DELETE,OPTIONS,PATCH",
+        env="CORS_METHODS"
+    )
+    cors_headers: Optional[str] = Field(
+        default="Accept,Content-Type,Authorization",
+        env="CORS_HEADERS"
+    )
     
     # Rate Limiting
     rate_limit_requests: int = Field(default=100, env="RATE_LIMIT_REQUESTS")
@@ -55,27 +64,49 @@ class Settings(BaseSettings):
     max_file_size_mb: int = Field(default=50, env="MAX_FILE_SIZE_MB")
     temp_dir: str = Field(default="/tmp", env="TEMP_DIR")
     
+    # Background Jobs
+    background_job_timeout: int = Field(default=3600, env="BACKGROUND_JOB_TIMEOUT")
+    
     # Monitoring
     enable_metrics: bool = Field(default=True, env="ENABLE_METRICS")
     metrics_interval: int = Field(default=60, env="METRICS_INTERVAL")
+    metrics_port: int = Field(default=9090, env="METRICS_PORT")
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
+    log_format: str = Field(default="structured", env="LOG_FORMAT")
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
-        extra = "allow"  # Allow extra fields from .env
+    # Database Pool
+    database_pool_size: int = Field(default=10, env="DATABASE_POOL_SIZE")
+    
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": False,
+        "extra": "allow",  # Allow extra fields from .env
+    }
     
     @validator('cors_origins', pre=True)
     def parse_cors_origins(cls, v):
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(',')]
-        return v
+        # Keep as string for storage, parse in property method
+        return v if isinstance(v, str) else str(v)
     
     @validator('admin_emails', pre=True)
     def parse_admin_emails(cls, v):
-        if isinstance(v, str):
-            return [email.strip() for email in v.split(',')]
-        return v
+        # Keep as string for storage, parse in property method
+        return v if isinstance(v, str) else str(v)
+    
+    @validator('admin_email_domains', pre=True)
+    def parse_admin_email_domains(cls, v):
+        # Keep as string for storage, parse in property method
+        return v if isinstance(v, str) else str(v)
+    
+    @validator('cors_methods', pre=True)
+    def parse_cors_methods(cls, v):
+        # Keep as string for storage, parse in property method
+        return v if isinstance(v, str) else str(v)
+    
+    @validator('cors_headers', pre=True)
+    def parse_cors_headers(cls, v):
+        # Keep as string for storage, parse in property method
+        return v if isinstance(v, str) else str(v)
     
     @validator('environment')
     def validate_environment(cls, v):
@@ -105,14 +136,15 @@ class Settings(BaseSettings):
     
     def get_cors_origins(self) -> List[str]:
         """Get CORS origins based on environment."""
+        origins = self.get_cors_origins_list()
         if self.is_production():
             # In production, only allow specific origins
             production_origins = [
-                origin for origin in self.cors_origins 
+                origin for origin in origins 
                 if not origin.startswith('http://localhost')
             ]
             return production_origins or ["https://app.creditclarity.com"]
-        return self.cors_origins
+        return origins
     
     def get_database_config(self) -> Dict[str, Any]:
         """Get database configuration."""
@@ -146,12 +178,83 @@ class Settings(BaseSettings):
         return {
             "jwt_secret": self.jwt_secret,
             "encryption_key": self.encryption_key,
-            "admin_emails": self.admin_emails,
+            "admin_emails": self.get_admin_emails_list(),
+            "admin_email_domains": self.get_admin_email_domains_list(),
             "rate_limit": {
                 "requests": self.rate_limit_requests,
                 "window": self.rate_limit_window
             }
         }
+    
+    def get_cors_config(self) -> Dict[str, Any]:
+        """Get CORS configuration."""
+        return {
+            "origins": self.get_cors_origins(),
+            "allow_credentials": self.cors_allow_credentials,
+            "methods": self.get_cors_methods_list(),
+            "headers": self.get_cors_headers_list()
+        }
+    
+    def get_monitoring_config(self) -> Dict[str, Any]:
+        """Get monitoring configuration."""
+        return {
+            "enable_metrics": self.enable_metrics,
+            "metrics_port": self.metrics_port,
+            "metrics_interval": self.metrics_interval,
+            "log_level": self.log_level,
+            "log_format": self.log_format
+        }
+    
+    # Helper methods to parse string fields into lists
+    def get_admin_emails_list(self) -> List[str]:
+        """Parse admin emails from string to list."""
+        if not self.admin_emails or self.admin_emails.strip() == "":
+            return []
+        try:
+            import json
+            return json.loads(self.admin_emails)
+        except (json.JSONDecodeError, ImportError):
+            return [email.strip() for email in self.admin_emails.split(',') if email.strip()]
+    
+    def get_admin_email_domains_list(self) -> List[str]:
+        """Parse admin email domains from string to list."""
+        if not self.admin_email_domains or self.admin_email_domains.strip() == "":
+            return ["@creditclarity.com"]
+        try:
+            import json
+            return json.loads(self.admin_email_domains)
+        except (json.JSONDecodeError, ImportError):
+            return [domain.strip() for domain in self.admin_email_domains.split(',') if domain.strip()]
+    
+    def get_cors_origins_list(self) -> List[str]:
+        """Parse CORS origins from string to list."""
+        if not self.cors_origins or self.cors_origins.strip() == "":
+            return ["http://localhost:8080", "http://localhost:3000"]
+        try:
+            import json
+            return json.loads(self.cors_origins)
+        except (json.JSONDecodeError, ImportError):
+            return [origin.strip() for origin in self.cors_origins.split(',') if origin.strip()]
+    
+    def get_cors_methods_list(self) -> List[str]:
+        """Parse CORS methods from string to list."""
+        if not self.cors_methods or self.cors_methods.strip() == "":
+            return ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
+        try:
+            import json
+            return [method.upper() for method in json.loads(self.cors_methods)]
+        except (json.JSONDecodeError, ImportError):
+            return [method.strip().upper() for method in self.cors_methods.split(',') if method.strip()]
+    
+    def get_cors_headers_list(self) -> List[str]:
+        """Parse CORS headers from string to list."""
+        if not self.cors_headers or self.cors_headers.strip() == "":
+            return ["Accept", "Content-Type", "Authorization"]
+        try:
+            import json
+            return json.loads(self.cors_headers)
+        except (json.JSONDecodeError, ImportError):
+            return [header.strip() for header in self.cors_headers.split(',') if header.strip()]
 
 # Environment-specific configuration classes
 class DevelopmentSettings(Settings):
@@ -159,22 +262,12 @@ class DevelopmentSettings(Settings):
     environment: str = "development"
     debug: bool = True
     log_level: str = "DEBUG"
-    cors_origins: List[str] = [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173"
-    ]
 
 class ProductionSettings(Settings):
     """Production environment settings."""
     environment: str = "production"
     debug: bool = False
     log_level: str = "INFO"
-    cors_origins: List[str] = [
-        "https://app.creditclarity.com",
-        "https://creditclarity.com"
-    ]
 
 class TestingSettings(Settings):
     """Testing environment settings."""
@@ -186,15 +279,33 @@ class TestingSettings(Settings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    """Get application settings (cached)."""
+    """Get application settings (cached) with error handling."""
     env = os.getenv("ENVIRONMENT", "development").lower()
     
-    if env == "production":
-        return ProductionSettings()
-    elif env == "testing":
-        return TestingSettings()
-    else:
-        return DevelopmentSettings()
+    try:
+        if env == "production":
+            return ProductionSettings()
+        elif env == "testing":
+            return TestingSettings()
+        else:
+            return DevelopmentSettings()
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error loading settings: {e}")
+        
+        # Return basic fallback settings
+        return Settings(
+            environment="development",
+            debug=True,
+            supabase_url=os.getenv("SUPABASE_URL", ""),
+            supabase_anon_key=os.getenv("SUPABASE_ANON_KEY", ""),
+            admin_emails="",
+            admin_email_domains="@creditclarity.com",
+            cors_origins="http://localhost:8080,http://localhost:3000",
+            cors_methods="GET,POST,PUT,DELETE,OPTIONS,PATCH",
+            cors_headers="Accept,Content-Type,Authorization"
+        )
 
 def validate_required_settings():
     """Validate that required settings are present."""

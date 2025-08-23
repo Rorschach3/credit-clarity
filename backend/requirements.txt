@@ -44,6 +44,10 @@ pytest-asyncio>=0.24.0
 cryptography>=45.0.0
 prometheus-client>=0.21.0
 psutil>=6.1.0
+PyJWT>=2.9.0
+jwcrypto>=1.5.6
+python-jose[cryptography]>=3.3.0
+httpx>=0.24.0
 
 # Utility
 requests>=2.32.3

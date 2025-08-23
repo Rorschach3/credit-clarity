@@ -72,7 +72,7 @@ class TradelineAnalysis(BaseModel):
 
 class BulkTradelineOperation(BaseModel):
     """Bulk operations on tradelines."""
-    operation: str = Field(..., regex="^(update|delete|dispute)$", description="Operation to perform")
+    operation: str = Field(..., pattern="^(update|delete|dispute)$", description="Operation to perform")
     tradeline_ids: List[int] = Field(..., min_items=1, description="Tradeline IDs to operate on")
     update_data: Optional[Dict[str, Any]] = Field(None, description="Data for update operations")
     batch_size: int = Field(50, ge=1, le=100, description="Batch size for processing")
