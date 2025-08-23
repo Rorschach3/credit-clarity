@@ -1,12 +1,12 @@
-
 import React, { useEffect, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { AnimatePresence } from 'framer-motion';
+import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-react';
 import { useTheme } from './hooks/use-theme';
 import { Navbar } from './components/layout/Navbar';
-import { ErrorBoundary } from './components/ErrorBoundary';
+import { GlobalErrorProvider } from './components/error/GlobalErrorHandler';
 import { queryClient } from './lib/react-query';
 import { 
   PageLoading, 
@@ -16,7 +16,7 @@ import {
   ProfileLoading,
   DashboardLoading 
 } from './components/ui/loading';
-import { Analytics } from "@vercel/analytics/next"
+import { Analytics } from "@vercel/analytics/react"
 
 // Eager load lightweight pages
 import HomePage from "@/pages/HomePage";
@@ -48,9 +48,8 @@ import { AuthProvider, useAuth } from './hooks/use-auth';
 
 function App() {
   return (
-    <ErrorBoundary>
+    <GlobalErrorProvider enableReporting={true} enableToasts={true}>
       <QueryClientProvider client={queryClient}>
-        <Analytics />
         <AuthProvider>
           <Router>
             <AppContent />
@@ -58,9 +57,8 @@ function App() {
         </AuthProvider>
         {/* React Query DevTools - only shows in development */}
         <ReactQueryDevtools initialIsOpen={false} />
-        < Analytics />
       </QueryClientProvider>
-    </ErrorBoundary>
+    </GlobalErrorProvider>
   );
 }
 

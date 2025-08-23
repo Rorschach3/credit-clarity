@@ -21,6 +21,36 @@ from services.pdf_chunker import PDFChunker
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# Import bureau detection function
+def detect_credit_bureau(text_content: str) -> str:
+    """
+    Detect credit bureau from PDF text content.
+    Searches for: Equifax, Experian, TransUnion
+    Returns the first bureau found, or "Unknown" if none detected.
+    """
+    if not text_content:
+        return "Unknown"
+    
+    # Convert to lowercase for case-insensitive matching
+    text_lower = text_content.lower()
+    
+    # Credit bureau names to search for (in order of priority)
+    bureaus = [
+        ("equifax", "Equifax"),
+        ("experian", "Experian"), 
+        ("transunion", "TransUnion"),
+        ("trans union", "TransUnion")  # Handle space variation
+    ]
+    
+    # Search for each bureau name
+    for search_term, bureau_name in bureaus:
+        if search_term in text_lower:
+            logger.info(f"🔍 Credit bureau detected: {bureau_name}")
+            return bureau_name
+    
+    logger.info("🔍 No credit bureau detected, using 'Unknown'")
+    return "Unknown"
+
 
 class MemoryManager:
     """Manages memory usage and resource cleanup."""
@@ -108,11 +138,12 @@ class OptimizedCreditReportProcessor:
     - Performance monitoring
     """
     
-    def __init__(self):
+    def __init__(self, deterministic_mode: bool = True):
         self.logger = logging.getLogger(__name__)
         self.memory_manager = MemoryManager()
         self.cache = ProcessingCache()
         self.chunker = PDFChunker(chunk_size=20)  # 20 pages per chunk for better performance
+        self.deterministic_mode = deterministic_mode  # NEW: Control for consistent results
         
         # Performance tracking
         self.processing_stats = {
@@ -133,6 +164,10 @@ class OptimizedCreditReportProcessor:
         except Exception as e:
             logger.warning(f"ProcessPoolExecutor not available: {e}")
             self.process_executor = None
+        
+        # Log deterministic mode setting
+        mode_status = "ENABLED" if self.deterministic_mode else "DISABLED"
+        logger.info(f"🎯 OptimizedCreditReportProcessor initialized with deterministic mode: {mode_status}")
     
     def _generate_cache_key(self, pdf_path: str) -> str:
         """Generate cache key from PDF file."""
@@ -651,6 +686,10 @@ class OptimizedCreditReportProcessor:
         """Parse text and tables concurrently."""
         tasks = []
         
+        # Detect credit bureau from text
+        credit_bureau = detect_credit_bureau(text)
+        logger.info(f"🏛️ Credit bureau detected for tradelines: {credit_bureau}")
+        
         # Parse tables in parallel
         if tables:
             table_task = asyncio.create_task(
@@ -673,6 +712,11 @@ class OptimizedCreditReportProcessor:
         for result in results:
             if isinstance(result, list):
                 all_tradelines.extend(result)
+        
+        # Assign credit bureau to all tradelines
+        for tradeline in all_tradelines:
+            if isinstance(tradeline, dict):
+                tradeline["credit_bureau"] = credit_bureau
         
         # Deduplicate tradelines
         return self._deduplicate_tradelines(all_tradelines)
@@ -793,7 +837,7 @@ class OptimizedCreditReportProcessor:
                     "date_opened": "",
                     "account_type": "Credit Card",
                     "account_status": "Open",
-                    "credit_bureau": "",
+                    "credit_bureau": "",  # Will be assigned later in _concurrent_parsing
                     "is_negative": False,
                     "dispute_count": 0
                 }
@@ -819,19 +863,60 @@ class OptimizedCreditReportProcessor:
             return []
     
     def _deduplicate_tradelines(self, tradelines: List[Dict]) -> List[Dict]:
-        """Remove duplicate tradelines based on creditor name and account number."""
-        seen = set()
-        unique_tradelines = []
+        """Enhanced deduplication using creditor + clean account number + date + credit bureau."""
+        import re
+        
+        if not tradelines:
+            return []
+        
+        # Filter out tradelines without valid account numbers
+        valid_tradelines = []
+        invalid_count = 0
         
         for tradeline in tradelines:
-            key = (
-                tradeline.get('creditor_name', ''),
-                tradeline.get('account_number', '')
-            )
+            account_number_raw = tradeline.get('account_number', '') or ''
+            account_number = str(account_number_raw).strip() if account_number_raw is not None else ''
+            if account_number and account_number not in ['', 'N/A', 'Unknown', 'No account']:
+                valid_tradelines.append(tradeline)
+            else:
+                invalid_count += 1
+        
+        if invalid_count > 0:
+            logger.info(f"🚫 Filtered out {invalid_count} tradelines without valid account numbers")
+        
+        # Enhanced deduplication with proper key generation
+        unique_tradelines = []
+        seen_identifiers = set()
+        
+        for tradeline in valid_tradelines:
+            # Extract and normalize components
+            creditor_name_raw = tradeline.get('creditor_name', '') or ''
+            creditor_name = str(creditor_name_raw).strip().upper() if creditor_name_raw is not None else ''
             
-            if key not in seen and key != ('', ''):
-                seen.add(key)
+            raw_account_number_val = tradeline.get('account_number', '') or ''
+            raw_account_number = str(raw_account_number_val).strip() if raw_account_number_val is not None else ''
+            
+            date_opened_raw = tradeline.get('date_opened', '') or ''
+            date_opened = str(date_opened_raw).strip() if date_opened_raw is not None else ''
+            
+            credit_bureau_raw = tradeline.get('credit_bureau', '') or ''
+            credit_bureau = str(credit_bureau_raw).strip().upper() if credit_bureau_raw is not None else ''
+            
+            # Clean account number by removing special characters and normalizing
+            clean_account_number = re.sub(r'[*.\-\s]', '', raw_account_number).upper()
+            
+            # Create robust unique identifier that matches database constraint
+            unique_identifier = f"{creditor_name}|{clean_account_number}|{date_opened}|{credit_bureau}"
+            
+            if unique_identifier not in seen_identifiers:
+                seen_identifiers.add(unique_identifier)
                 unique_tradelines.append(tradeline)
+                logger.debug(f"✅ Added unique tradeline: {creditor_name} {raw_account_number}")
+            else:
+                logger.debug(f"🔄 Duplicate found, skipping: {creditor_name} {raw_account_number}")
+        
+        total_removed = len(valid_tradelines) - len(unique_tradelines)
+        logger.info(f"🧹 Enhanced deduplication: removed {total_removed} duplicates from {len(valid_tradelines)} valid tradelines")
         
         return unique_tradelines
     

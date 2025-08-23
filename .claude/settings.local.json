@@ -32,18 +32,11 @@
       "brave-search",
       "supabase",
       "filesystem",
-      "sequentialthinking"
+      "sequentialthinking",
+      "mcp__filesystem__directory_tree"
     ],
     "deny": []
   },
-  "disabledMcpjsonServers": [
-    "actors-mcp-server",
-    "circleci-mcp-server",
-    "puppeteer",
-    "context7",
-    "postgrest",
-    "postgres"
-  ],
   "enabledMcpjsonServers": [
     "mcp-puppeteer",
     "sequential-thinking",
@@ -51,5 +44,13 @@
     "supabase",
     "filesystem",
     "sequentialthinking"
+  ],
+  "disabledMcpjsonServers": [
+    "actors-mcp-server",
+    "circleci-mcp-server",
+    "puppeteer",
+    "context7",
+    "postgrest",
+    "postgres"
   ]
 }

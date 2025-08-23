@@ -16,6 +16,8 @@
     "test:coverage": "jest --coverage"
   },
   "dependencies": {
+    "@clerk/backend": "^2.9.3",
+    "@clerk/clerk-react": "^5.42.1",
     "@google-cloud/aiplatform": "^4.2.0",
     "@google-cloud/vertexai": "^1.10.0",
     "@google/genai": "^1.5.1",
@@ -53,6 +55,7 @@
     "@supabase/supabase-js": "^2.50.5",
     "@tanstack/react-query": "^5.56.2",
     "@tanstack/react-query-devtools": "^5.83.0",
+    "@testing-library/dom": "^10.4.1",
     "@types/express": "^5.0.3",
     "@types/formidable": "^3.4.5",
     "@types/multer": "^2.0.0",
@@ -101,6 +104,7 @@
     "stripe": "^18.1.1",
     "supabase": "^2.26.9",
     "supabase-cli": "^0.0.21",
+    "swr": "^2.3.6",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
     "tesseract.js": "^6.0.1",
@@ -109,7 +113,7 @@
     "uuid": "^11.1.0",
     "vaul": "^0.9.3",
     "vercel": "^42.3.0",
-    "zod": "^3.25.67"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
@@ -120,14 +124,14 @@
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
     "@types/jest": "^29.5.14",
-    "@types/node": "^22.16.0",
+    "@types/node": "^22.17.2",
     "@types/pdfjs-dist": "^2.10.377",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
     "@types/stripe": "^8.0.416",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^4.6.0",
-    "@vitejs/plugin-react-swc": "^3.10.2",
+    "@vitejs/plugin-react-swc": "^3.11.0",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.2.0",
     "eslint": "^9.9.0",

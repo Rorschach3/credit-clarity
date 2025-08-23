@@ -206,7 +206,7 @@ const CreditReportUploadPage = () => {
           {
             initialInterval: 2000,   // Start polling every 2 seconds
             maxInterval: 10000,     // Max 10 seconds between polls
-            maxDuration: 20 * 60 * 1000  // 20 minutes max
+            maxDuration: 35 * 60 * 1000  // 35 minutes max (longer than backend timeout)
           }
         );
         
@@ -439,7 +439,7 @@ const CreditReportUploadPage = () => {
                 (err) => {
                   setActiveJobStatus((prev) => prev ? { ...prev, status: 'failed', message: err, success: false, progress: 0 } as any : prev);
                 },
-                { initialInterval: 2000, maxInterval: 10000, maxDuration: 20 * 60 * 1000 }
+                { initialInterval: 2000, maxInterval: 10000, maxDuration: 35 * 60 * 1000 }
               );
             }}
           />

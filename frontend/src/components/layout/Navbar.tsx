@@ -13,6 +13,7 @@ import {
 import { Menu } from "lucide-react";
 import { ModeToggle } from "@/components/layout/ModeToggle";
 import { CurrentUserAvatar } from "@/components/current-user-avatar";
+import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-react';
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -119,9 +120,13 @@ export function Navbar() {
                   <Link to="/login" className="block text-sm font-medium transition-colors hover:text-primary">
                     Sign In
                   </Link>
+                  <SignInButton />
                   <Link to="/signup" className="block text-sm font-medium transition-colors hover:text-primary">
                     Sign Up
                   </Link>
+                  <SignedIn>
+                    <UserButton />
+                  </SignedIn>
                 </>
               ) : (
                 <div className="flex flex-col gap-2">

@@ -26,6 +26,10 @@ export const useDashboardMetrics = () => {
   // Enhanced metrics computation
   const enhancedMetrics = data ? {
     ...data.metrics,
+    // Backward compatibility aliases
+    totalNegativeItems: data.metrics.negativeTradelines || 0,
+    itemsDisputed: data.metrics.totalDisputes || 0,
+    itemsResolved: data.metrics.resolvedDisputes || 0,
     // Computed percentages
     negativePercentage: data.metrics.totalTradelines > 0 
       ? Math.round((data.metrics.negativeTradelines / data.metrics.totalTradelines) * 100)

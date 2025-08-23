@@ -15,7 +15,7 @@ export type ParsedTradeline = {
 };
 
 export async function processAndSaveTradelines(file: File): Promise<ParsedTradeline[]> {
-  const backend = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+  const backend = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
   // Step 1: Upload the file
   const formData = new FormData();

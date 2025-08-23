@@ -4,18 +4,18 @@ import { z } from "zod";
 export const ParsedTradelineSchema = z.object({
   id: z.string().optional(), // ✅ Removed .uuid() to allow any string format
   user_id: z.string().optional(), // ✅ Removed .uuid() for flexibility 
-  creditor_name: z.string().default('NULL'),
-  account_balance: z.string().default(''),
+  creditor_name: z.string().regex(/^[a-zA-Z0-9\s&'-]+$/, "Creditor name cannot contain special characters").default('NULL'),
+  account_balance: z.string().regex(/^\$\d+$/, "Account balance must be in $XX format with no decimals").default(''),
   created_at: z.string(), // Required field to match component expectations
   dispute_count: z.number().int().default(0),
-  credit_limit: z.string().default(''),
-  monthly_payment: z.string().default(''),
-  account_number: z.string().min(1, "Account number is required"),
-  date_opened: z.string().default('xx/xx/xxxx'),
+  credit_limit: z.string().regex(/^\$\d+$/, "Credit limit must be in $XX format with no decimals").default(''),
+  monthly_payment: z.string().regex(/^\$\d+$/, "Monthly payment must be in $XX format with no decimals").default(''),
+  account_number: z.string().min(1, "Account number is required").regex(/^[\d*x.]+$/, "Account number can only contain numbers, 'x', '*', or '.'"),
+  date_opened: z.string().regex(/^\d{1,2}\/\d{1,2}\/\d{4}$/, "Date opened must be a valid date in MM/DD/YYYY format").default('xx/xx/xxxx'),
   is_negative: z.boolean().default(false),
   account_type: z.string().default(''),
   account_status: z.string().default(''),
-  credit_bureau: z.string().default(''),
+  credit_bureau: z.enum(["TransUnion", "Experian", "Equifax"]).optional(),
 });
 
 // Export the inferred type
@@ -56,7 +56,7 @@ export const createTradelineWithDefaults = (partial: Partial<ParsedTradeline>): 
     is_negative: partial.is_negative || false,
     account_type: partial.account_type || '',
     account_status: partial.account_status || '',
-    credit_bureau: partial.credit_bureau || '',
+    credit_bureau: partial.credit_bureau,
   };
 };
 

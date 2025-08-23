@@ -1,6 +1,6 @@
 import { ChangeEvent, useCallback } from 'react';
 import { toast as sonnerToast } from "sonner";
-import { ParsedTradeline, ParsedTradelineSchema } from "@/utils/tradeline-types";
+import { ParsedTradeline, ParsedTradelineSchema } from "@/utils/tradelineParser";
 import { v4 as uuidv4 } from 'uuid';
 
 
@@ -98,18 +98,18 @@ const processCreditReportWithAPI = async (file: File, userId: string): Promise<P
       console.log(`🌐 Using VITE_API_URL: ${envUrl}`);
       
       // Check if the URL already includes the endpoint
-      if (envUrl.includes('/process-credit-report')) {
+      if (envUrl.includes('/api/v1/processing/upload')) {
         // URL already has the endpoint, use as-is
         return envUrl;
       } else {
         // Add the endpoint to the base URL
-        return `${envUrl}/process-credit-report`;
+        return `${envUrl}/api/v1/processing/upload`;
       }
     }
 
     // Fallback to proxy endpoint
     console.log(`🌐 Using proxy fallback`);
-    return '/api/process-credit-report';
+    return '/api/v1/processing/upload';
   };
 
   const endpoint = getApiEndpoint();
@@ -286,9 +286,10 @@ const processCreditReportWithAPI = async (file: File, userId: string): Promise<P
 
 // Test API connectivity
 const testApiConnectivity = async (): Promise<boolean> => {
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
   const testUrls = [
     { 
-      url: 'http://localhost:8000/health',
+      url: `${apiUrl}/health`,
       needsAuth: false 
     },
     { 

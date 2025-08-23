@@ -71,9 +71,9 @@ export function normalizeCreditorName(name: string): string {
   
   let normalized = name
     .trim()
-    .toUpperCase() // Keep uppercase to preserve abbreviations
+    .toLowerCase()
     .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-    .replace(/[^\w\s\\/]/g, ''); // Remove special chars except / and spaces
+    .replace(/[^\w\s&'-]/g, ''); // Remove special chars except &'-
   
   // Preserve important abbreviations and identifiers
   const preservedTerms = [

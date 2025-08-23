@@ -58,7 +58,8 @@ const PDFDebugger: React.FC = () => {
       formData.append('file', file);
       formData.append('method', method);
 
-      const response = await fetch('http://localhost:8000/debug-parsing', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${apiUrl}/debug-parsing`, {
         method: 'POST',
         body: formData,
       });

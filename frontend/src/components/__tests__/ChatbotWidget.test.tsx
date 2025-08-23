@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import ChatbotWidget from '../ChatbotWidget';
+import re
 
 // Mock the auth hook
 const mockUser = {
@@ -26,7 +27,7 @@ jest.mock('sonner', () => ({
 }));
 
 // Mock fetch for API calls
-global.fetch = jest.fn();
+global.fetch = jest.fn() as jest.Mock;
 
 describe('ChatbotWidget', () => {
   beforeEach(() => {
@@ -39,7 +40,7 @@ describe('ChatbotWidget', () => {
     
     const chatButton = screen.getByRole('button');
     expect(chatButton).toBeInTheDocument();
-    expect(chatButton).toHaveAttribute('disabled', 'false');
+    expect(chatButton).not.toBeDisabled();
   });
 
   it('opens chat window when button is clicked', async () => {

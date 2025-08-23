@@ -1,6 +1,7 @@
 
 import { useState, useEffect, createContext, useContext } from 'react';
 import { supabase } from "@/integrations/supabase/client";
+import { useUser, useAuth as useClerkAuth } from '@clerk/clerk-react';
 import type { User } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -25,30 +26,73 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
+  const { getToken, signOut: clerkSignOut } = useClerkAuth();
 
   useEffect(() => {
     let mounted = true;
 
-    // Check for existing session
-    const getUser = async () => {
+    const syncClerkToSupabase = async () => {
+      if (!clerkLoaded) return;
+      
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-
-        if (error) {
-          console.error("Error getting session:", error);
+        if (clerkUser) {
+          console.log('🔄 Syncing Clerk user to Supabase...', clerkUser.id);
+          
+          // Get Clerk JWT token
+          const clerkToken = await getToken();
+          if (!clerkToken) {
+            console.error('❌ Failed to get Clerk token');
+            return;
+          }
+          
+          // Try to get existing Supabase session first
+          const { data: { session: existingSession } } = await supabase.auth.getSession();
+          
+          // If we already have a valid session, use it
+          if (existingSession?.user) {
+            console.log('✅ Using existing Supabase session');
+            if (mounted) {
+              setUser(existingSession.user);
+              setIsLoading(false);
+            }
+            return;
+          }
+          
+          // Create a synthetic Supabase user based on Clerk data
+          const syntheticUser = {
+            id: clerkUser.id,
+            email: clerkUser.emailAddresses[0]?.emailAddress || '',
+            user_metadata: {
+              full_name: clerkUser.fullName,
+              avatar_url: clerkUser.imageUrl,
+              clerk_user_id: clerkUser.id
+            },
+            app_metadata: {},
+            aud: 'authenticated',
+            created_at: clerkUser.createdAt ? new Date(clerkUser.createdAt).toISOString() : new Date().toISOString(),
+            updated_at: clerkUser.updatedAt ? new Date(clerkUser.updatedAt).toISOString() : new Date().toISOString(),
+            email_confirmed_at: new Date().toISOString(),
+            last_sign_in_at: new Date().toISOString(),
+            role: 'authenticated'
+          } as User;
+          
+          console.log('✅ Created synthetic Supabase user from Clerk data');
+          
+          if (mounted) {
+            setUser(syntheticUser);
+            setIsLoading(false);
+          }
+        } else {
+          // No Clerk user, clear Supabase session
+          console.log('🔄 No Clerk user, clearing auth state');
           if (mounted) {
             setUser(null);
             setIsLoading(false);
           }
-          return;
-        }
-
-        if (mounted) {
-          setUser(session ? session.user : null);
-          setIsLoading(false);
         }
       } catch (error) {
-        console.error("Unexpected error:", error);
+        console.error("❌ Error syncing Clerk to Supabase:", error);
         if (mounted) {
           setUser(null);
           setIsLoading(false);
@@ -56,75 +100,35 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     };
 
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.id);
-        
-        if (mounted) {
-          setUser(session?.user || null);
-          setIsLoading(false);
-        }
-      }
-    );
-
-    getUser();
+    syncClerkToSupabase();
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
     };
-  }, []);
+  }, [clerkUser, clerkLoaded, getToken]);
 
   const login = async (email: string, password: string) => {
-    try {
-      setIsLoading(true);
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        setIsLoading(false);
-        return { error: error as Error };
-      }
-
-      // Auth state listener will handle setting the user
-      return {};
-    } catch (error) {
-      console.error("Login error:", error);
-      setIsLoading(false);
-      return { error: error as Error };
-    }
+    // Redirect to Clerk sign-in instead
+    console.log('🔄 Redirecting to Clerk sign-in...');
+    window.location.href = '/login'; // This will show Clerk's sign-in UI
+    return {};
   };
 
   const signup = async (email: string, password: string) => {
-    try {
-      setIsLoading(true);
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      if (error) {
-        setIsLoading(false);
-        return { error: error as Error };
-      }
-
-      setIsLoading(false);
-      return {};
-    } catch (error) {
-      console.error("Signup error:", error);
-      setIsLoading(false);
-      return { error: error as Error };
-    }
+    // Redirect to Clerk sign-up instead
+    console.log('🔄 Redirecting to Clerk sign-up...');
+    window.location.href = '/signup'; // This will show Clerk's sign-up UI
+    return {};
   };
 
   const logout = async () => {
     try {
       setIsLoading(true);
-      await supabase.auth.signOut();
-      // Auth state listener will handle clearing the user
+      // Use Clerk's signOut method
+      await clerkSignOut();
+      // Clear local state
+      setUser(null);
+      setIsLoading(false);
     } catch (error) {
       console.error("Logout error:", error);
       setIsLoading(false);

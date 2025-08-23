@@ -48,7 +48,7 @@
     "src/**/*.tsx",
     "tests/**/*.ts",
     "tests/**/*.tsx",
-    "vite.config.ts"
+    "../mcp-clerk-backend/vite.config.ts"
   ],
   "exclude": [
     "node_modules",

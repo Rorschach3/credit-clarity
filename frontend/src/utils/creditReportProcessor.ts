@@ -1,6 +1,59 @@
 import { ParsedTradeline } from "./tradelineParser";
+import { supabase } from "@/integrations/supabase/client";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Extend window object to include Clerk
+declare global {
+  interface Window {
+    Clerk?: {
+      user?: any;
+      session?: {
+        getToken: () => Promise<string | null>;
+      };
+    };
+  }
+}
+
+// Get API base URL
+const getApiBaseUrl = () => {
+  return import.meta.env.VITE_API_URL || 'http://localhost:8000';
+};
+
+// Utility function to get auth headers using Clerk token
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    // Try to get Clerk token from window.Clerk if available
+    if (window.Clerk?.user) {
+      const token = await window.Clerk.session?.getToken();
+      if (token) {
+        console.log('✅ Using Clerk token for authentication');
+        return {
+          'Authorization': `Bearer ${token}`
+        };
+      }
+    }
+    
+    // Fallback to Supabase session if available
+    const { data: { session }, error } = await supabase.auth.getSession();
+    
+    if (error) {
+      console.error('❌ Error getting auth session:', error);
+      return {};
+    }
+    
+    if (session?.access_token) {
+      console.log('✅ Using Supabase token for authentication');
+      return {
+        'Authorization': `Bearer ${session.access_token}`
+      };
+    }
+    
+    console.warn('⚠️ No auth session found from Clerk or Supabase');
+    return {};
+  } catch (error) {
+    console.error('❌ Error getting auth headers:', error);
+    return {};
+  }
+}
 
 // Processing progress interface
 export interface ProcessingProgress {
@@ -72,10 +125,13 @@ export const processWithOCR = async (file: File, userId?: string): Promise<strin
   const formData = createFormData(file, userId);
   
   try {
-    const response = await fetch(`${API_BASE_URL}/api/process-credit-report`, {
+    const authHeaders = await getAuthHeaders();
+    // Use relative URL to go through Vite proxy
+    const response = await fetch('/api/v1/processing/upload', {
       method: 'POST',
-      body: formData
-      // NO HEADERS - Let browser set multipart/form-data with boundary
+      body: formData,
+      headers: authHeaders
+      // Let browser set multipart/form-data with boundary, just add auth
     });
     
     if (!response.ok) {
@@ -137,17 +193,21 @@ export const processWithAI = async (
     onProgress?.(`🧠 Processing PDF... (may take up to ${timeoutMinutes} minutes)`);
     
     console.log('🚀 Sending request to backend...');
-    console.log('🔍 API_BASE_URL:', API_BASE_URL);
-    console.log('📡 Full URL:', `${API_BASE_URL}/api/process-credit-report`);
+    console.log('📡 Full URL: /api/v1/processing/upload (via Vite proxy)');
     console.log('📦 File size:', `${fileSizeMB.toFixed(2)} MB`);
     
     const startTime = Date.now();
     
     console.log('🚀 Making fetch request...');
-    const response = await fetch(`${API_BASE_URL}/api/process-credit-report`, {
+    const authHeaders = await getAuthHeaders();
+    // Use full API URL
+    const apiUrl = getApiBaseUrl();
+    console.log('🌐 Using API URL:', apiUrl);
+    const response = await fetch(`${apiUrl}/api/v1/processing/upload`, {
       method: 'POST',
       body: formData,
       signal: controller.signal,
+      headers: authHeaders,
       // Prevent browser extensions from interfering
       keepalive: false
     });
@@ -302,9 +362,12 @@ export const testBackendConnection = async (): Promise<void> => {
     const emptyFormData = new FormData();
     emptyFormData.append('user_id', 'test-user');
     
-    const emptyResponse = await fetch(`${API_BASE_URL}/api/process-credit-report`, {
+    const authHeaders = await getAuthHeaders();
+    // Use relative URL to go through Vite proxy
+    const emptyResponse = await fetch('/api/v1/processing/upload', {
       method: 'POST',
-      body: emptyFormData
+      body: emptyFormData,
+      headers: authHeaders
     });
     
     console.log('📨 Empty request response:', emptyResponse.status);

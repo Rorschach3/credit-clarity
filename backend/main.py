@@ -43,7 +43,11 @@ from services.pdf_chunker import PDFChunker
 import asyncio
 
 from dotenv import load_dotenv # type: ignore
-load_dotenv()
+
+# Load environment variables from backend/.env file specifically
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(backend_dir, '.env')
+load_dotenv(env_path)
 
 # Add current directory to Python path for local imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -204,8 +208,9 @@ except Exception as e:
 
 # Initialize Document AI client
 try:
-    if os.path.exists('./service-account.json'):
-        credentials = service_account.Credentials.from_service_account_file('./service-account.json')
+    service_account_path = os.path.join(backend_dir, 'service-account.json')
+    if os.path.exists(service_account_path):
+        credentials = service_account.Credentials.from_service_account_file(service_account_path)
         client = documentai.DocumentProcessorServiceClient(credentials=credentials)
         logger.info("✅ Document AI client initialized with service account")
     else:
@@ -1746,19 +1751,7 @@ def parse_tradelines_basic(text: str) -> list:
         return []
 
 
-# Credit bureau detection function
-def detect_credit_bureau(text: str) -> str:
-    """Detect credit bureau from extracted text"""
-    text_lower = text.lower()
-    
-    if 'experian' in text_lower or 'experion' in text_lower:
-        return 'Experian'
-    elif 'equifax' in text_lower or 'equifx' in text_lower:
-        return 'Equifax'
-    elif 'transunion' in text_lower or 'trans union' in text_lower:
-        return 'TransUnion'
-    else:
-        return 'Unknown'
+# Duplicate function removed - using the better version at line 252
 
 
 # Test endpoint for debugging

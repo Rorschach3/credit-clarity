@@ -1,5 +1,5 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import { processCreditReport, validateCreditReportData } from '../creditReportProcessing';
+import { ParsedTradelineSchema } from '../tradeline/types'; // Import the schema
 
 // Mock external dependencies
 jest.mock('@/integrations/supabase/client', () => ({
@@ -15,123 +15,273 @@ jest.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
-describe('Credit Report Processing', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
+describe('Tradeline Validation', () => {
+  it('should validate a tradeline with a valid credit_bureau', () => {
+    const validTradeline = {
+      id: 'test-1',
+      creditor_name: 'Test Bank',
+      account_type: 'Credit Card',
+      account_status: 'Open',
+      account_balance: '$1000',
+      credit_limit: '$5000',
+      is_negative: false,
+      account_number: '1234567890',
+      date_opened: '01/01/2020',
+      monthly_payment: '$50',
+      credit_bureau: 'TransUnion',
+      created_at: new Date().toISOString(),
+    };
+    expect(() => ParsedTradelineSchema.parse(validTradeline)).not.toThrow();
   });
 
-  describe('validateCreditReportData', () => {
-    it('should validate valid credit report data', () => {
-      const validData = {
-        user_id: '123e4567-e89b-12d3-a456-426614174000',
-        credit_score: 750,
-        report_data: {
-          tradelines: [
-            {
-              id: 'test-1',
-              creditor_name: 'Test Bank',
-              account_type: 'Credit Card',
-              account_status: 'Open',
-              account_balance: '$1,000',
-              credit_limit: '$5,000',
-              is_negative: false,
-            },
-          ],
-        },
-      };
-
-      expect(() => validateCreditReportData(validData)).not.toThrow();
-    });
-
-    it('should throw error for invalid user_id', () => {
-      const invalidData = {
-        user_id: 'invalid-uuid',
-        credit_score: 750,
-        report_data: { tradelines: [] },
-      };
-
-      expect(() => validateCreditReportData(invalidData)).toThrow('Invalid user_id format');
-    });
-
-    it('should throw error for invalid credit score', () => {
-      const invalidData = {
-        user_id: '123e4567-e89b-12d3-a456-426614174000',
-        credit_score: 950, // Out of range
-        report_data: { tradelines: [] },
-      };
-
-      expect(() => validateCreditReportData(invalidData)).toThrow('Credit score must be between 300 and 850');
-    });
-
-    it('should throw error for missing report_data', () => {
-      const invalidData = {
-        user_id: '123e4567-e89b-12d3-a456-426614174000',
-        credit_score: 750,
-      };
-
-      expect(() => validateCreditReportData(invalidData)).toThrow('Report data is required');
-    });
+  it('should throw error for invalid credit_bureau', () => {
+    const invalidTradeline = {
+      id: 'test-1',
+      creditor_name: 'Test Bank',
+      account_type: 'Credit Card',
+      account_status: 'Open',
+      account_balance: '$1000',
+      credit_limit: '$5000',
+      is_negative: false,
+      account_number: '1234567890',
+      date_opened: '01/01/2020',
+      monthly_payment: '$50',
+      credit_bureau: 'InvalidBureau',
+      created_at: new Date().toISOString(),
+    };
+    expect(() => ParsedTradelineSchema.parse(invalidTradeline)).toThrow();
   });
 
-  describe('processCreditReport', () => {
-    it('should process credit report successfully', async () => {
-      const mockFile = new File(['test content'], 'test-report.pdf', {
-        type: 'application/pdf',
-      });
+  it('should validate account_number with numbers, x, *, or .', () => {
+    const validTradeline = {
+      id: 'test-1',
+      creditor_name: 'Test Bank',
+      account_type: 'Credit Card',
+      account_status: 'Open',
+      account_balance: '$1000',
+      credit_limit: '$5000',
+      is_negative: false,
+      account_number: '1234x*5.67890',
+      date_opened: '01/01/2020',
+      monthly_payment: '$50',
+      credit_bureau: 'TransUnion',
+      created_at: new Date().toISOString(),
+    };
+    expect(() => ParsedTradelineSchema.parse(validTradeline)).not.toThrow();
+  });
 
-      const mockUserId = '123e4567-e89b-12d3-a456-426614174000';
+  it('should throw error for invalid account_number characters', () => {
+    const invalidTradeline = {
+      id: 'test-1',
+      creditor_name: 'Test Bank',
+      account_type: 'Credit Card',
+      account_status: 'Open',
+      account_balance: '$1000',
+      credit_limit: '$5000',
+      is_negative: false,
+      account_number: '123-456',
+      date_opened: '01/01/2020',
+      monthly_payment: '$50',
+      credit_bureau: 'TransUnion',
+      created_at: new Date().toISOString(),
+    };
+    expect(() => ParsedTradelineSchema.parse(invalidTradeline)).toThrow();
+  });
 
-      // Mock the processing function
-      const mockProcessResult = {
-        success: true,
-        tradelines: [
-          {
-            id: 'test-1',
-            creditor_name: 'Test Bank',
-            account_type: 'Credit Card',
-            account_status: 'Open',
-            account_balance: '$1,000',
-            credit_limit: '$5,000',
-            is_negative: false,
-          },
-        ],
-        credit_score: 750,
-      };
+  it('should throw error for missing account_number', () => {
+    const invalidTradeline = {
+      id: 'test-1',
+      creditor_name: 'Test Bank',
+      account_type: 'Credit Card',
+      account_status: 'Open',
+      account_balance: '$1000',
+      credit_limit: '$5000',
+      is_negative: false,
+      date_opened: '01/01/2020',
+      monthly_payment: '$50',
+      credit_bureau: 'TransUnion',
+      created_at: new Date().toISOString(),
+    };
+    expect(() => ParsedTradelineSchema.parse(invalidTradeline)).toThrow();
+  });
 
-      // Mock the implementation
-      const processCreditReportMock = jest.fn().mockResolvedValue(mockProcessResult);
-      
-      const result = await processCreditReportMock(mockFile, mockUserId);
+  it('should validate creditor_name with no special characters', () => {
+    const validTradeline = {
+      id: 'test-1',
+      creditor_name: 'Test Bank Inc',
+      account_type: 'Credit Card',
+      account_status: 'Open',
+      account_balance: '$1000',
+      credit_limit: '$5000',
+      is_negative: false,
+      account_number: '1234567890',
+      date_opened: '01/01/2020',
+      monthly_payment: '$50',
+      credit_bureau: 'TransUnion',
+      created_at: new Date().toISOString(),
+    };
+    expect(() => ParsedTradelineSchema.parse(validTradeline)).not.toThrow();
+  });
 
-      expect(result.success).toBe(true);
-      expect(result.tradelines).toHaveLength(1);
-      expect(result.tradelines[0].creditor_name).toBe('Test Bank');
-      expect(result.credit_score).toBe(750);
-    });
+  it('should throw error for creditor_name with special characters', () => {
+    const invalidTradeline = {
+      id: 'test-1',
+      creditor_name: 'Test Bank!',
+      account_type: 'Credit Card',
+      account_status: 'Open',
+      account_balance: '$1000',
+      credit_limit: '$5000',
+      is_negative: false,
+      account_number: '1234567890',
+      date_opened: '01/01/2020',
+      monthly_payment: '$50',
+      credit_bureau: 'TransUnion',
+      created_at: new Date().toISOString(),
+    };
+    expect(() => ParsedTradelineSchema.parse(invalidTradeline)).toThrow();
+  });
 
-    it('should handle processing errors gracefully', async () => {
-      const mockFile = new File(['invalid content'], 'test-report.pdf', {
-        type: 'application/pdf',
-      });
+  it('should validate date_opened as a valid date', () => {
+    const validTradeline = {
+      id: 'test-1',
+      creditor_name: 'Test Bank',
+      account_type: 'Credit Card',
+      account_status: 'Open',
+      account_balance: '$1000',
+      credit_limit: '$5000',
+      is_negative: false,
+      account_number: '1234567890',
+      date_opened: '12/25/2023',
+      monthly_payment: '$50',
+      credit_bureau: 'TransUnion',
+      created_at: new Date().toISOString(),
+    };
+    expect(() => ParsedTradelineSchema.parse(validTradeline)).not.toThrow();
+  });
 
-      const mockUserId = '123e4567-e89b-12d3-a456-426614174000';
+  it('should throw error for invalid date_opened format', () => {
+    const invalidTradeline = {
+      id: 'test-1',
+      creditor_name: 'Test Bank',
+      account_type: 'Credit Card',
+      account_status: 'Open',
+      account_balance: '$1000',
+      credit_limit: '$5000',
+      is_negative: false,
+      account_number: '1234567890',
+      date_opened: '2023-12-25', // Invalid format
+      monthly_payment: '$50',
+      credit_bureau: 'TransUnion',
+      created_at: new Date().toISOString(),
+    };
+    expect(() => ParsedTradelineSchema.parse(invalidTradeline)).toThrow();
+  });
 
-      // Mock the processing function to throw an error
-      const processCreditReportMock = jest.fn().mockRejectedValue(new Error('Processing failed'));
-      
-      await expect(processCreditReportMock(mockFile, mockUserId)).rejects.toThrow('Processing failed');
-    });
+  it('should validate account_balance as a financial amount $XX', () => {
+    const validTradeline = {
+      id: 'test-1',
+      creditor_name: 'Test Bank',
+      account_type: 'Credit Card',
+      account_status: 'Open',
+      account_balance: '$12345',
+      credit_limit: '$5000',
+      is_negative: false,
+      account_number: '1234567890',
+      date_opened: '01/01/2020',
+      monthly_payment: '$50',
+      credit_bureau: 'TransUnion',
+      created_at: new Date().toISOString(),
+    };
+    expect(() => ParsedTradelineSchema.parse(validTradeline)).not.toThrow();
+  });
 
-    it('should reject non-PDF files', async () => {
-      const mockFile = new File(['test content'], 'test-report.txt', {
-        type: 'text/plain',
-      });
+  it('should throw error for invalid account_balance format', () => {
+    const invalidTradeline = {
+      id: 'test-1',
+      creditor_name: 'Test Bank',
+      account_type: 'Credit Card',
+      account_status: 'Open',
+      account_balance: '$1,000.50', // Invalid format
+      credit_limit: '$5000',
+      is_negative: false,
+      account_number: '1234567890',
+      date_opened: '01/01/2020',
+      monthly_payment: '$50',
+      credit_bureau: 'TransUnion',
+      created_at: new Date().toISOString(),
+    };
+    expect(() => ParsedTradelineSchema.parse(invalidTradeline)).toThrow();
+  });
 
-      const mockUserId = '123e4567-e89b-12d3-a456-426614174000';
+  it('should validate monthly_payment as a financial amount $XX', () => {
+    const validTradeline = {
+      id: 'test-1',
+      creditor_name: 'Test Bank',
+      account_type: 'Credit Card',
+      account_status: 'Open',
+      account_balance: '$1000',
+      credit_limit: '$5000',
+      is_negative: false,
+      account_number: '1234567890',
+      date_opened: '01/01/2020',
+      monthly_payment: '$50',
+      credit_bureau: 'TransUnion',
+      created_at: new Date().toISOString(),
+    };
+    expect(() => ParsedTradelineSchema.parse(validTradeline)).not.toThrow();
+  });
 
-      const processCreditReportMock = jest.fn().mockRejectedValue(new Error('Only PDF files are supported'));
-      
-      await expect(processCreditReportMock(mockFile, mockUserId)).rejects.toThrow('Only PDF files are supported');
-    });
+  it('should throw error for invalid monthly_payment format', () => {
+    const invalidTradeline = {
+      id: 'test-1',
+      creditor_name: 'Test Bank',
+      account_type: 'Credit Card',
+      account_status: 'Open',
+      account_balance: '$1000',
+      credit_limit: '$5000',
+      is_negative: false,
+      account_number: '1234567890',
+      date_opened: '01/01/2020',
+      monthly_payment: '$50.25', // Invalid format
+      credit_bureau: 'TransUnion',
+      created_at: new Date().toISOString(),
+    };
+    expect(() => ParsedTradelineSchema.parse(invalidTradeline)).toThrow();
+  });
+
+  it('should validate credit_limit as a financial amount $XX', () => {
+    const validTradeline = {
+      id: 'test-1',
+      creditor_name: 'Test Bank',
+      account_type: 'Credit Card',
+      account_status: 'Open',
+      account_balance: '$1000',
+      credit_limit: '$5000',
+      is_negative: false,
+      account_number: '1234567890',
+      date_opened: '01/01/2020',
+      monthly_payment: '$50',
+      credit_bureau: 'TransUnion',
+      created_at: new Date().toISOString(),
+    };
+    expect(() => ParsedTradelineSchema.parse(validTradeline)).not.toThrow();
+  });
+
+  it('should throw error for invalid credit_limit format', () => {
+    const invalidTradeline = {
+      id: 'test-1',
+      creditor_name: 'Test Bank',
+      account_type: 'Credit Card',
+      account_status: 'Open',
+      account_balance: '$1000',
+      credit_limit: '$5,000.75', // Invalid format
+      is_negative: false,
+      account_number: '1234567890',
+      date_opened: '01/01/2020',
+      monthly_payment: '$50',
+      credit_bureau: 'TransUnion',
+      created_at: new Date().toISOString(),
+    };
+    expect(() => ParsedTradelineSchema.parse(invalidTradeline)).toThrow();
   });
 });

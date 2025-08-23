@@ -1,0 +1,39 @@
+FROM node:20-alpine
+
+# Install system dependencies
+RUN apk add --no-cache python3 make g++ git wget
+
+WORKDIR /app
+
+# NPM configs
+ENV NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000 \
+    NPM_CONFIG_RETRIES=5 \
+    NPM_CONFIG_REGISTRY=https://registry.npmjs.org/ \
+    NPM_CONFIG_TIMEOUT=300000 \
+    NPM_CONFIG_PROGRESS=false
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S viteuser -u 1001
+
+# Copy package files and install dependencies
+COPY --chown=viteuser:nodejs package.json package-lock.json* ./
+RUN npm cache clean --force && npm cache verify && npm install --legacy-peer-deps --no-audit --no-fund
+
+# Copy source code
+COPY --chown=viteuser:nodejs . .
+
+# Create cache directories with proper permissions
+RUN mkdir -p /app/node_modules/.vite /tmp/.vite && \
+    chown -R viteuser:nodejs /app/node_modules/.vite /tmp/.vite
+
+# Switch to non-root user
+USER viteuser
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider --timeout=5 http://localhost:8080 || exit 1
+
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "8080"]

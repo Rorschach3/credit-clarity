@@ -1,5 +1,29 @@
 // src/utils/pdf-processor.ts
 import { z } from 'zod';
+import { supabase } from "@/integrations/supabase/client";
+
+// Utility function to get auth headers
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    
+    if (error) {
+      console.error('❌ Error getting auth session:', error);
+      return {};
+    }
+    
+    if (session?.access_token) {
+      return {
+        'Authorization': `Bearer ${session.access_token}`
+      };
+    }
+    
+    return {};
+  } catch (error) {
+    console.error('❌ Error getting auth headers:', error);
+    return {};
+  }
+}
 
 export const TradelineSchema = z.object({
   accountName: z.string(),
@@ -22,9 +46,11 @@ export async function processPdfFile(file: File, userId: string): Promise<PDFPro
     // Vite environment variable
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
     
-    const response = await fetch(`${apiUrl}/process-credit-report`, {
+    const authHeaders = await getAuthHeaders();
+    const response = await fetch(`${apiUrl}/api/v1/processing/upload`, {
       method: 'POST',
       body: formData,
+      headers: authHeaders,
     });
     
     if (!response.ok) {

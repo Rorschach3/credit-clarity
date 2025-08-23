@@ -4,17 +4,17 @@ import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import type { Database } from '@/integrations/supabase/types';
 
-// ==================== TYPE DEFINITIONS ====================
+// ==================== DATABASE TYPE DEFINITIONS ====================
 
 // Extract exact database types from your Supabase schema
 export type DatabaseTradeline = Database['public']['Tables']['tradelines']['Row'];
 export type InsertTradeline = Database['public']['Tables']['tradelines']['Insert'];
 export type UpdateTradeline = Database['public']['Tables']['tradelines']['Update'];
 
-// Extract database enums for validation
-type TradelineStatus = Database['public']['Enums']['tradeline_status'];
-type TradelineType = Database['public']['Enums']['tradeline_type'];
-type Bureau = Database['public']['Enums']['bureau'];
+// Note: Database enums available but not currently used in validation
+// type TradelineStatus = Database['public']['Enums']['tradeline_status'];
+// type TradelineType = Database['public']['Enums']['tradeline_type'];  
+// type Bureau = Database['public']['Enums']['bureau'];
 
 // ==================== ENHANCED ZOD SCHEMAS ====================
 
@@ -472,12 +472,15 @@ const findExistingTradelineByFuzzyMatch = async (
   userId: string
 ): Promise<{ isMatch: boolean; existingTradeline?: ParsedTradeline } | null> => {
   try {
+    // Handle potential undefined account_number
+    const accountNumber = tradeline.account_number || '';
+    
     // Exact match on account number and creditor name
     const { data: exactMatches, error: exactError } = await supabase
       .from('tradelines')
       .select('*')
       .eq('user_id', userId)
-      .eq('account_number', tradeline.account_number)
+      .eq('account_number', accountNumber)
       .eq('creditor_name', tradeline.creditor_name);
 
     if (!exactError && exactMatches?.length) {
@@ -492,7 +495,7 @@ const findExistingTradelineByFuzzyMatch = async (
       .from('tradelines')
       .select('*')
       .eq('user_id', userId)
-      .eq('account_number', tradeline.account_number)
+      .eq('account_number', accountNumber)
       .ilike('creditor_name', `%${tradeline.creditor_name}%`);
 
     if (!fuzzyError && fuzzyMatches?.length) {
@@ -827,7 +830,8 @@ export const getNegativeTradelines = (tradelines: ParsedTradeline[]): ParsedTrad
   return tradelines.filter(t => 
     t.is_negative || 
     NEGATIVE_INDICATORS.some(indicator => 
-      t.account_status.toLowerCase().includes(indicator)
+      // Handle potential undefined account_status
+      (t.account_status || '').toLowerCase().includes(indicator)
     )
   );
 };

@@ -3,7 +3,36 @@
  * Handles background job status polling with exponential backoff
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { supabase } from "@/integrations/supabase/client";
+
+// Get API base URL
+const getApiBaseUrl = () => {
+  return import.meta.env.VITE_API_URL || 'http://localhost:8000';
+};
+
+// Utility function to get auth headers
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    
+    if (error) {
+      console.error('❌ Error getting auth session:', error);
+      return { 'Content-Type': 'application/json' };
+    }
+    
+    if (session?.access_token) {
+      return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      };
+    }
+    
+    return { 'Content-Type': 'application/json' };
+  } catch (error) {
+    console.error('❌ Error getting auth headers:', error);
+    return { 'Content-Type': 'application/json' };
+  }
+}
 
 export interface JobStatus {
   success: boolean;
@@ -29,7 +58,7 @@ export interface JobPollingOptions {
   initialInterval?: number;
   /** Maximum polling interval in milliseconds (default: 10000) */
   maxInterval?: number;
-  /** Maximum total polling time in milliseconds (default: 30 minutes) */
+  /** Maximum total polling time in milliseconds (default: 35 minutes) */
   maxDuration?: number;
   /** Exponential backoff multiplier (default: 1.5) */
   backoffMultiplier?: number;
@@ -52,7 +81,7 @@ export class JobPollingService {
     const {
       initialInterval = 1000,
       maxInterval = 10000,
-      maxDuration = 30 * 60 * 1000, // 30 minutes
+      maxDuration = 35 * 60 * 1000, // 35 minutes
       backoffMultiplier = 1.5
     } = options;
 
@@ -149,11 +178,11 @@ export class JobPollingService {
    */
   async getJobStatus(jobId: string): Promise<JobStatus> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/job/${jobId}`, {
+      const headers = await getAuthHeaders();
+      // Use relative URL to go through Vite proxy
+      const response = await fetch(`${getApiBaseUrl()}/api/v1/processing/job/${jobId}`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
       });
 
       if (!response.ok) {
@@ -193,11 +222,11 @@ export class JobPollingService {
    */
   async cancelJob(jobId: string): Promise<{ success: boolean; message?: string; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/job/${jobId}`, {
+      const headers = await getAuthHeaders();
+      // Use relative URL to go through Vite proxy
+      const response = await fetch(`${getApiBaseUrl()}/api/v1/processing/job/${jobId}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
       });
 
       const result = await response.json();
@@ -234,11 +263,11 @@ export class JobPollingService {
     error?: string;
   }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/jobs/${userId}?limit=${limit}`, {
+      const headers = await getAuthHeaders();
+      // Use full API URL
+      const response = await fetch(`${getApiBaseUrl()}/api/v1/processing/jobs?limit=${limit}`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
       });
 
       if (!response.ok) {
@@ -280,6 +309,46 @@ export class JobPollingService {
 
 // Export singleton instance
 export const jobPollingService = new JobPollingService();
+
+// Standalone function for fetching jobs
+export const fetchJobs = async (limit = 10) => {
+  try {
+    // Get auth headers
+    const { data: { session }, error } = await supabase.auth.getSession();
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    
+    if (!error && session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+    
+    // Use relative URL to go through Vite proxy
+    const res = await fetch(`${getApiBaseUrl()}/api/v1/processing/jobs?limit=${limit}`, {
+      method: "GET",
+      headers,
+    });
+
+    if (!res.ok) {
+      // Server responded but not with 2xx
+      const errorText = await res.text();
+      throw new Error(
+        `Backend error ${res.status}: ${res.statusText} → ${errorText}`
+      );
+    }
+
+    return await res.json();
+  } catch (err) {
+    if (err instanceof TypeError && err.message.includes("fetch")) {
+      // Likely CORS or network error
+      throw new Error(
+        "Network request failed — possible CORS misconfiguration or server unreachable. Check backend headers."
+      );
+    }
+
+    throw err; // Bubble up other errors
+  }
+};
 
 // Cleanup on page unload
 if (typeof window !== 'undefined') {
