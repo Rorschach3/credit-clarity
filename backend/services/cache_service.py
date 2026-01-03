@@ -115,9 +115,17 @@ class RedisCache:
         self.default_ttl = default_ttl
         self._client = None
         self._available = False
+        self._initialized = False
+        self._init_task: Optional[asyncio.Task] = None
         
         # Try to initialize Redis
-        asyncio.create_task(self._initialize())
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        
+        if loop:
+            self._init_task = loop.create_task(self._initialize())
     
     async def _initialize(self):
         """Initialize Redis connection."""
@@ -141,9 +149,23 @@ class RedisCache:
         except Exception as e:
             logger.warning(f"Redis initialization failed: {e}")
             self._available = False
+        finally:
+            self._initialized = True
+
+    async def ensure_initialized(self) -> None:
+        """Ensure Redis initialization has been attempted inside an event loop."""
+        if self._initialized:
+            return
+        if self._init_task:
+            await self._init_task
+            return
+        
+        self._init_task = asyncio.create_task(self._initialize())
+        await self._init_task
     
     async def get(self, key: str) -> Optional[Any]:
         """Get value from Redis cache."""
+        await self.ensure_initialized()
         if not self._available or not self._client:
             return None
         
@@ -158,6 +180,7 @@ class RedisCache:
     
     async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
         """Set value in Redis cache."""
+        await self.ensure_initialized()
         if not self._available or not self._client:
             return False
         
@@ -172,6 +195,7 @@ class RedisCache:
     
     async def delete(self, key: str) -> bool:
         """Delete key from Redis cache."""
+        await self.ensure_initialized()
         if not self._available or not self._client:
             return False
         
@@ -184,6 +208,7 @@ class RedisCache:
     
     async def clear(self) -> bool:
         """Clear all Redis cache entries."""
+        await self.ensure_initialized()
         if not self._available or not self._client:
             return False
         
@@ -235,6 +260,7 @@ class MultiLevelCache:
     
     async def get(self, key: str) -> Optional[Any]:
         """Get value from multi-level cache."""
+        await self.redis_cache.ensure_initialized()
         # Try Redis first (L1)
         if self.redis_cache.is_available():
             value = await self.redis_cache.get(key)
@@ -256,6 +282,7 @@ class MultiLevelCache:
     async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
         """Set value in multi-level cache."""
         ttl = ttl or self.default_ttl
+        await self.redis_cache.ensure_initialized()
         
         # Set in memory cache first (always works)
         self.memory_cache.set(key, value, ttl)
@@ -271,6 +298,8 @@ class MultiLevelCache:
         redis_deleted = False
         memory_deleted = False
         
+        await self.redis_cache.ensure_initialized()
+        
         if self.redis_cache.is_available():
             redis_deleted = await self.redis_cache.delete(key)
         
@@ -280,6 +309,7 @@ class MultiLevelCache:
     
     async def clear(self) -> None:
         """Clear all cache levels."""
+        await self.redis_cache.ensure_initialized()
         if self.redis_cache.is_available():
             await self.redis_cache.clear()
         
