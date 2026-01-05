@@ -75,7 +75,7 @@
     "googleapis": "^150.0.1",
     "input-otp": "^1.2.4",
     "jq": "^1.7.2",
-    "jspdf": "^3.0.1",
+    "jspdf": "^4.0.0",
     "lucide-react": "^0.462.0",
     "magic": "^2.3.5-alpha.1",
     "motion": "^12.23.0",
