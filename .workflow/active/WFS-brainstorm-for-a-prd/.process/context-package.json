@@ -1,0 +1,494 @@
+{
+  "metadata": {
+    "task_description": "Brainstorm for a Product Requirements Document (PRD) to define features, roadmap, and product strategy for Credit Clarity AI platform",
+    "timestamp": "2026-01-03T16:17:00Z",
+    "keywords": ["PRD", "product requirements", "brainstorming", "feature planning", "roadmap", "credit repair", "AI", "dispute letters"],
+    "complexity": "medium",
+    "session_id": "WFS-brainstorm-for-a-prd"
+  },
+  "project_context": {
+    "architecture_patterns": [
+      "Client-Server Monolithic Repository",
+      "Service Layer Pattern",
+      "Repository Pattern",
+      "Provider Pattern (React Context)",
+      "Decorator Pattern (Middleware)",
+      "Lazy Loading",
+      "Multi-Level Cache (Redis + In-Memory)"
+    ],
+    "coding_conventions": {
+      "naming": {
+        "functions": "snake_case (Python), camelCase (TypeScript)",
+        "classes": "PascalCase",
+        "files": "snake_case (Python), kebab-case/PascalCase (React components)"
+      },
+      "error_handling": {
+        "pattern": "structured exceptions with custom error classes",
+        "logging": "structured JSON logging with request tracing"
+      },
+      "async_patterns": {
+        "preferred": "async/await (Python FastAPI), Promises/async-await (TypeScript)"
+      },
+      "documentation": {
+        "style": "docstrings (Python), JSDoc (TypeScript)",
+        "api_docs": "OpenAPI/Swagger auto-generated"
+      }
+    },
+    "tech_stack": {
+      "language": "Python 3.13, TypeScript 5.5",
+      "frameworks": [
+        "FastAPI 0.115.14 (Backend API)",
+        "React 18.3.1 (Frontend UI)",
+        "Vite 6.3.5 (Build tool)",
+        "TanStack Query 5.56.2 (Data fetching)",
+        "Tailwind CSS 3.4.11 (Styling)",
+        "Radix UI (Component primitives)"
+      ],
+      "libraries": [
+        "Supabase 2.16.0 (Database & Auth)",
+        "google-generativeai 0.8.5 (Gemini AI)",
+        "google-cloud-documentai 3.5.0 (OCR)",
+        "pdfplumber 0.11.4 (PDF processing)",
+        "PyPDF2 3.0.1 (PDF parsing)",
+        "pytesseract 0.3.13 (OCR fallback)",
+        "zod 3.25.67 (Schema validation)",
+        "react-hook-form 7.58.1 (Form management)",
+        "framer-motion 12.23.3 (Animations)"
+      ],
+      "database": "PostgreSQL (via Supabase)",
+      "cloud_services": [
+        "Google Cloud Document AI (OCR)",
+        "Google Gemini AI (LLM parsing)",
+        "Supabase (Backend-as-a-Service)",
+        "AWS (optional, credentials in env)"
+      ],
+      "external_apis": [
+        "Stripe (Payment processing)",
+        "Resend (Email service)",
+        "Google Document AI API",
+        "Google Gemini API",
+        "OpenAI API (alternative LLM)"
+      ],
+      "testing": [
+        "Jest 29.7.0 (Frontend unit tests)",
+        "React Testing Library 16.3.0",
+        "pytest (Backend - inferred)"
+      ]
+    },
+    "domain_knowledge": {
+      "industry": "Credit Repair & Financial Services",
+      "compliance": "FCRA (Fair Credit Reporting Act)",
+      "key_concepts": [
+        "Tradelines - individual credit account entries",
+        "Credit bureaus (Experian, Equifax, TransUnion)",
+        "Dispute letters - FCRA-compliant correspondence",
+        "Credit score calculation",
+        "Negative items (late payments, collections, charge-offs)",
+        "OCR-based document extraction",
+        "AI-powered tradeline parsing"
+      ],
+      "business_value": "Automate credit repair workflow from PDF upload to dispute letter generation, reducing manual effort by 90%"
+    }
+  },
+  "assets": {
+    "documentation": [
+      {
+        "path": "README.md",
+        "scope": "project-overview",
+        "contains": ["product overview", "tech stack", "key features", "getting started", "architecture diagrams"],
+        "relevance_score": 0.98
+      },
+      {
+        "path": "docs/CLAUDE.md",
+        "scope": "development-guide",
+        "contains": ["architecture patterns", "coding standards", "development commands", "key features"],
+        "relevance_score": 0.95
+      },
+      {
+        "path": "docs/ARCHITECTURE_GUIDE.md",
+        "scope": "architecture-deep-dive",
+        "contains": ["modular architecture", "API versioning", "service layers", "error handling", "testing strategy", "deployment process"],
+        "relevance_score": 0.92
+      },
+      {
+        "path": "backend/.env.example",
+        "scope": "configuration-template",
+        "contains": ["required environment variables", "external service credentials", "feature flags"],
+        "relevance_score": 0.80
+      }
+    ],
+    "source_code": [
+      {
+        "path": "backend/main.py",
+        "role": "backend-entry-point",
+        "dependencies": ["FastAPI", "CORS middleware", "Supabase", "Google Document AI", "Gemini AI"],
+        "exports": ["FastAPI app", "API routes", "middleware configuration"],
+        "relevance_score": 0.99
+      },
+      {
+        "path": "backend/core/config.py",
+        "role": "configuration-management",
+        "dependencies": ["pydantic_settings", "BaseSettings"],
+        "exports": ["Settings class", "environment validation"],
+        "relevance_score": 0.94
+      },
+      {
+        "path": "backend/api/v1/routes/processing_v2.py",
+        "role": "processing-api",
+        "dependencies": ["TradelineExtractionPipeline", "background_jobs", "monitoring"],
+        "exports": ["/processing/v2/upload endpoint", "A/B testing logic", "job management"],
+        "relevance_score": 0.97
+      },
+      {
+        "path": "backend/services/tradeline_extraction/pipeline.py",
+        "role": "core-business-logic",
+        "dependencies": ["Google Document AI", "LLM parser", "PDF processor"],
+        "exports": ["TradelineExtractionPipeline class", "extract method"],
+        "relevance_score": 0.99
+      },
+      {
+        "path": "backend/services/enhanced_pdf_processor.py",
+        "role": "document-processing",
+        "dependencies": ["pdfplumber", "PyPDF2", "pytesseract", "Google Document AI"],
+        "exports": ["EnhancedPDFProcessor class", "OCR processing"],
+        "relevance_score": 0.96
+      },
+      {
+        "path": "backend/services/llm_parser_service.py",
+        "role": "ai-parsing",
+        "dependencies": ["google.generativeai", "openai"],
+        "exports": ["LLMParserService class", "tradeline extraction via LLM"],
+        "relevance_score": 0.95
+      },
+      {
+        "path": "backend/services/background_jobs.py",
+        "role": "async-processing",
+        "dependencies": ["asyncio", "job_processor"],
+        "exports": ["submit_pdf_processing_job", "JobPriority", "job_processor"],
+        "relevance_score": 0.90
+      },
+      {
+        "path": "frontend/src/App.tsx",
+        "role": "frontend-entry-point",
+        "dependencies": ["React Router", "Supabase Auth", "TanStack Query", "theme provider"],
+        "exports": ["App component", "routing configuration"],
+        "relevance_score": 0.98
+      },
+      {
+        "path": "frontend/src/components/dashboard/CreditDashboard.tsx",
+        "role": "main-dashboard-ui",
+        "dependencies": ["TanStack Query", "Supabase", "Recharts"],
+        "exports": ["CreditDashboard component", "credit score display", "tradeline list"],
+        "relevance_score": 0.97
+      },
+      {
+        "path": "frontend/src/pages/DisputeWizardPage.tsx",
+        "role": "dispute-generation-ui",
+        "dependencies": ["react-hook-form", "AI service"],
+        "exports": ["DisputeWizardPage component", "multi-step wizard"],
+        "relevance_score": 0.94
+      },
+      {
+        "path": "frontend/src/utils/creditReportProcessor.ts",
+        "role": "frontend-processing-utils",
+        "dependencies": ["Supabase client", "FormData API"],
+        "exports": ["processWithAI", "validateFile", "getAuthToken"],
+        "relevance_score": 0.93
+      },
+      {
+        "path": "frontend/src/services/jobPollingService.ts",
+        "role": "async-job-tracking",
+        "dependencies": ["API client", "polling logic"],
+        "exports": ["job status polling", "progress tracking"],
+        "relevance_score": 0.88
+      }
+    ],
+    "config": [
+      {
+        "path": "package.json",
+        "contains": ["monorepo workspaces", "scripts", "devDependencies"],
+        "relevance_score": 0.85
+      },
+      {
+        "path": "frontend/package.json",
+        "contains": ["React dependencies", "build tools", "testing libraries"],
+        "relevance_score": 0.83
+      },
+      {
+        "path": "backend/requirements.txt",
+        "contains": ["Python dependencies", "AI libraries", "Cloud SDKs"],
+        "relevance_score": 0.82
+      },
+      {
+        "path": "frontend/tsconfig.json",
+        "contains": ["TypeScript compiler options", "path aliases"],
+        "relevance_score": 0.70
+      },
+      {
+        "path": "frontend/vite.config.ts",
+        "contains": ["Vite build configuration", "plugins", "server settings"],
+        "relevance_score": 0.72
+      }
+    ],
+    "tests": [
+      {
+        "path": "frontend/src/**/__tests__/",
+        "pattern": "*.test.ts, *.test.tsx",
+        "relevance_score": 0.75
+      },
+      {
+        "path": "backend/tests/",
+        "pattern": "test_*.py",
+        "relevance_score": 0.75
+      }
+    ],
+    "database": [
+      {
+        "path": "supabase/migrations/",
+        "contains": ["database schema migrations", "RLS policies", "table definitions"],
+        "relevance_score": 0.88
+      }
+    ]
+  },
+  "dependencies": {
+    "internal": [
+      {
+        "from": "backend/main.py",
+        "to": "backend/api/v1/routes/processing_v2.py",
+        "type": "router-dependency"
+      },
+      {
+        "from": "backend/api/v1/routes/processing_v2.py",
+        "to": "backend/services/tradeline_extraction/pipeline.py",
+        "type": "service-dependency"
+      },
+      {
+        "from": "backend/services/tradeline_extraction/pipeline.py",
+        "to": "backend/services/enhanced_pdf_processor.py",
+        "type": "service-dependency"
+      },
+      {
+        "from": "backend/services/tradeline_extraction/pipeline.py",
+        "to": "backend/services/llm_parser_service.py",
+        "type": "service-dependency"
+      },
+      {
+        "from": "backend/main.py",
+        "to": "backend/core/config.py",
+        "type": "configuration-dependency"
+      },
+      {
+        "from": "backend/main.py",
+        "to": "backend/core/security.py",
+        "type": "auth-dependency"
+      },
+      {
+        "from": "frontend/src/App.tsx",
+        "to": "frontend/src/components/dashboard/CreditDashboard.tsx",
+        "type": "component-dependency"
+      },
+      {
+        "from": "frontend/src/App.tsx",
+        "to": "frontend/src/pages/DisputeWizardPage.tsx",
+        "type": "route-dependency"
+      },
+      {
+        "from": "frontend/src/components/dashboard/CreditDashboard.tsx",
+        "to": "frontend/src/integrations/supabase/client.ts",
+        "type": "data-access-dependency"
+      },
+      {
+        "from": "frontend/src/utils/creditReportProcessor.ts",
+        "to": "frontend/src/integrations/supabase/client.ts",
+        "type": "auth-dependency"
+      }
+    ],
+    "external": [
+      {
+        "package": "fastapi",
+        "version": "0.115.14",
+        "usage": "Backend API framework",
+        "layer": "backend"
+      },
+      {
+        "package": "supabase",
+        "version": "2.16.0",
+        "usage": "Database, Auth, Storage BaaS",
+        "layer": "backend"
+      },
+      {
+        "package": "google-cloud-documentai",
+        "version": "3.5.0",
+        "usage": "OCR and document parsing",
+        "layer": "backend"
+      },
+      {
+        "package": "google-generativeai",
+        "version": "0.8.5",
+        "usage": "Gemini AI for tradeline extraction",
+        "layer": "backend"
+      },
+      {
+        "package": "pdfplumber",
+        "version": "0.11.4",
+        "usage": "PDF text and table extraction",
+        "layer": "backend"
+      },
+      {
+        "package": "react",
+        "version": "18.3.1",
+        "usage": "Frontend UI framework",
+        "layer": "frontend"
+      },
+      {
+        "package": "@supabase/supabase-js",
+        "version": "2.50.5",
+        "usage": "Supabase client SDK",
+        "layer": "frontend"
+      },
+      {
+        "package": "@tanstack/react-query",
+        "version": "5.56.2",
+        "usage": "Data fetching and caching",
+        "layer": "frontend"
+      },
+      {
+        "package": "tailwindcss",
+        "version": "3.4.11",
+        "usage": "Utility-first CSS framework",
+        "layer": "frontend"
+      },
+      {
+        "package": "zod",
+        "version": "3.25.67",
+        "usage": "Schema validation",
+        "layer": "frontend"
+      },
+      {
+        "package": "stripe",
+        "version": "18.1.1",
+        "usage": "Payment processing",
+        "layer": "frontend"
+      }
+    ],
+    "cloud_services": [
+      {
+        "service": "Google Cloud Document AI",
+        "purpose": "OCR and form extraction from credit report PDFs",
+        "credentials_required": "GOOGLE_APPLICATION_CREDENTIALS"
+      },
+      {
+        "service": "Google Gemini AI",
+        "purpose": "LLM-based tradeline parsing and extraction",
+        "credentials_required": "GEMINI_API_KEY"
+      },
+      {
+        "service": "Supabase",
+        "purpose": "PostgreSQL database, authentication, storage",
+        "credentials_required": "SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY"
+      },
+      {
+        "service": "Stripe",
+        "purpose": "Payment processing for subscriptions",
+        "credentials_required": "STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY"
+      },
+      {
+        "service": "AWS (optional)",
+        "purpose": "Additional cloud services",
+        "credentials_required": "AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY"
+      },
+      {
+        "service": "Resend (optional)",
+        "purpose": "Email service for notifications",
+        "credentials_required": "RESEND_API_KEY"
+      }
+    ]
+  },
+  "conflict_detection": {
+    "risk_level": "low",
+    "risk_factors": {
+      "existing_implementations": [
+        "Mature codebase with established architecture",
+        "Clear separation of concerns (frontend/backend)",
+        "Well-defined API contracts"
+      ],
+      "api_changes": false,
+      "architecture_changes": false,
+      "data_model_changes": false,
+      "breaking_changes": []
+    },
+    "affected_modules": [],
+    "mitigation_strategy": "PRD brainstorming is discovery phase - no code changes expected. Focus on understanding existing features, identifying gaps, and planning future roadmap without immediate implementation risks."
+  },
+  "business_context": {
+    "target_users": [
+      "Individuals seeking to improve credit scores",
+      "Credit repair specialists",
+      "Financial advisors"
+    ],
+    "key_value_propositions": [
+      "90% reduction in manual credit repair effort",
+      "AI-powered tradeline extraction with 95%+ accuracy",
+      "FCRA-compliant dispute letter generation",
+      "Real-time credit score tracking",
+      "Automated workflow from PDF upload to dispute submission"
+    ],
+    "competitive_advantages": [
+      "Created by former credit repair specialist - domain expertise",
+      "AI/ML integration (Google Document AI + Gemini)",
+      "Full-stack automation (OCR → parsing → disputes)",
+      "Open architecture for customization"
+    ],
+    "current_features": [
+      "PDF credit report upload and OCR processing",
+      "AI-powered tradeline extraction",
+      "Credit dashboard with score tracking",
+      "Dispute wizard for letter generation",
+      "User authentication and authorization",
+      "Background job processing for large files",
+      "A/B testing framework for pipeline optimization",
+      "Multi-level caching (Redis + in-memory)",
+      "Real-time job status tracking"
+    ],
+    "potential_features": [
+      "Automated dispute letter mailing integration",
+      "Credit bureau response tracking",
+      "Score prediction and simulation",
+      "Financial advice chatbot",
+      "Mobile app (React Native)",
+      "Multi-bureau comparison dashboard",
+      "Historical score trend analysis",
+      "Dispute outcome success analytics",
+      "Template library for different dispute scenarios",
+      "Integration with credit monitoring services"
+    ]
+  },
+  "technical_constraints": {
+    "performance": [
+      "PDF processing should complete within 30 seconds for files <10MB",
+      "Background jobs for files >10MB with progress tracking",
+      "Real-time updates for job status via polling (5s interval)"
+    ],
+    "security": [
+      "FCRA compliance for handling credit data",
+      "End-to-end encryption for sensitive data",
+      "Supabase RLS policies for data access control",
+      "JWT-based authentication",
+      "Rate limiting (100 requests/60s window)"
+    ],
+    "scalability": [
+      "Stateless backend design",
+      "Database connection pooling",
+      "Async background job processing",
+      "Multi-level caching strategy",
+      "Horizontal scaling capability"
+    ],
+    "compliance": [
+      "FCRA (Fair Credit Reporting Act) compliance",
+      "GDPR considerations for EU users",
+      "Data retention policies",
+      "Secure credential storage"
+    ]
+  },
+  "exploration_results": null
+}

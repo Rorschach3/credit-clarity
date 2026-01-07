@@ -22,22 +22,28 @@ import { ProfileSummary } from '@/components/dispute-wizard/ProfileSummary';
 import { TradelineSelection } from '@/components/dispute-wizard/TradelineSelection';
 import { DisputeLetterGeneration } from '@/components/dispute-wizard/DisputeLetterGeneration';
 
-// Import lazy-loaded utils
-import { 
-  generateDisputeLetters, 
-  generatePDFPacket,
-  generateCompletePacket,
-  type GeneratedDisputeLetter,
-  type PacketProgress
-} from '@/utils/disputeUtils';
-import { 
-  fetchUserDocuments,
-  downloadDocumentBlobs,
-  hasRequiredDocuments,
-  getMissingDocuments,
-  type DocumentBlob
-} from '@/utils/documentPacketUtils';
+// Import types only (no code execution)
 import { type ParsedTradeline } from '@/utils/tradelineParser';
+import type { GeneratedDisputeLetter, PacketProgress } from '@/utils/disputeUtils';
+import type { DocumentBlob } from '@/utils/documentPacketUtils';
+
+// Lazy load PDF utilities only when needed (dynamic import)
+const loadPDFUtils = async () => {
+  const [disputeUtils, documentUtils] = await Promise.all([
+    import('@/utils/disputeUtils'),
+    import('@/utils/documentPacketUtils')
+  ]);
+
+  return {
+    generateDisputeLetters: disputeUtils.generateDisputeLetters,
+    generatePDFPacket: disputeUtils.generatePDFPacket,
+    generateCompletePacket: disputeUtils.generateCompletePacket,
+    fetchUserDocuments: documentUtils.fetchUserDocuments,
+    downloadDocumentBlobs: documentUtils.downloadDocumentBlobs,
+    hasRequiredDocuments: documentUtils.hasRequiredDocuments,
+    getMissingDocuments: documentUtils.getMissingDocuments,
+  };
+};
 
 interface UploadedDocument {
   id: string;
@@ -172,8 +178,11 @@ const DisputeWizardPage = () => {
     setGenerationProgress({ step: 'Starting...', progress: 0, message: 'Initializing dispute letter generation' });
 
     try {
+      // Dynamically load PDF utilities (lazy loading)
+      const pdfUtils = await loadPDFUtils();
+
       // Generate letters
-      const letters = await generateDisputeLetters(
+      const letters = await pdfUtils.generateDisputeLetters(
         selectedTradelines,
         negativeTradelines,
         disputeProfile,
@@ -181,7 +190,7 @@ const DisputeWizardPage = () => {
       );
 
       // Generate PDF
-      const pdfBlob = await generatePDFPacket(letters, setGenerationProgress);
+      const pdfBlob = await pdfUtils.generatePDFPacket(letters, setGenerationProgress);
       const filename = `dispute-packet-${new Date().toISOString().split('T')[0]}.pdf`;
 
       setGeneratedLetters(letters);
@@ -288,27 +297,30 @@ const DisputeWizardPage = () => {
 
     try {
       setIsGenerating(true);
-      setGenerationProgress({ 
-        step: 'Fetching documents...', 
-        progress: 0, 
-        message: 'Checking for uploaded documents' 
+      setGenerationProgress({
+        step: 'Fetching documents...',
+        progress: 0,
+        message: 'Checking for uploaded documents'
       });
 
+      // Dynamically load PDF utilities (lazy loading)
+      const pdfUtils = await loadPDFUtils();
+
       // Fetch user documents
-      const userDocuments = await fetchUserDocuments(user.id);
-      
-      setGenerationProgress({ 
-        step: 'Validating documents...', 
-        progress: 10, 
-        message: 'Checking required documents' 
+      const userDocuments = await pdfUtils.fetchUserDocuments(user.id);
+
+      setGenerationProgress({
+        step: 'Validating documents...',
+        progress: 10,
+        message: 'Checking required documents'
       });
 
       // Check if we have documents to include
       let documentBlobs: DocumentBlob[] = [];
-      
+
       if (userDocuments.length > 0) {
         // Check for missing documents
-        const missingDocs = getMissingDocuments(userDocuments);
+        const missingDocs = pdfUtils.getMissingDocuments(userDocuments);
         if (missingDocs.length > 0) {
           toast.info(`Missing documents: ${missingDocs.join(', ')}`, {
             description: "Proceeding with available documents"
@@ -316,8 +328,8 @@ const DisputeWizardPage = () => {
         }
 
         // Download document blobs
-        documentBlobs = await downloadDocumentBlobs(userDocuments, setGenerationProgress);
-        
+        documentBlobs = await pdfUtils.downloadDocumentBlobs(userDocuments, setGenerationProgress);
+
         if (documentBlobs.length === 0) {
           toast.warning("No documents could be downloaded", {
             description: "Creating packet with dispute letters only"
@@ -330,9 +342,9 @@ const DisputeWizardPage = () => {
       }
 
       // Generate complete packet
-      const completePacket = await generateCompletePacket(
-        generatedLetters, 
-        documentBlobs, 
+      const completePacket = await pdfUtils.generateCompletePacket(
+        generatedLetters,
+        documentBlobs,
         setGenerationProgress
       );
 

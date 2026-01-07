@@ -83,6 +83,7 @@ const CreditReportUploadPage = () => {
     };
   }, []);
 
+
   const loadExistingTradelines = async () => {
     if (!user?.id) return;
     
@@ -96,16 +97,13 @@ const CreditReportUploadPage = () => {
 
   // Handle file upload and processing
   const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("🔥 CACHE BUSTER - handleFileUpload called with:", typeof event, event.constructor.name);
-    
     const file = event.target.files?.[0];
-    console.log("📁 File extracted:", file instanceof File, file?.name, file?.type, file?.size);
-    
+
     if (!file) {
       sonnerToast.error("Please select a file");
       return;
     }
-    
+
     if (!user?.id) {
       sonnerToast.error("Please log in to upload files");
       return;
@@ -116,7 +114,7 @@ const CreditReportUploadPage = () => {
 
     try {
       let result;
-      
+
       if (processingMethod === 'ocr') {
         const tradelines = await processFileWithOCR(file, user.id, setProcessingProgress);
         result = { tradelines, isBackgroundJob: false } as any;
@@ -161,7 +159,7 @@ const CreditReportUploadPage = () => {
             console.log('✅ Job completed:', status);
             setActiveJobStatus(status);
             
-            if (status.result?.tradelines_found > 0) {
+            if (status.result && status.result.tradelines_found > 0) {
               // Refresh tradelines from database since job saved them
               await refreshTradelines();
               
@@ -204,8 +202,8 @@ const CreditReportUploadPage = () => {
           },
           // Polling options
           {
-            initialInterval: 2000,   // Start polling every 2 seconds
-            maxInterval: 10000,     // Max 10 seconds between polls
+            initialInterval: 5000,   // Start polling every 5 seconds
+            maxInterval: 30000,      // Max 30 seconds between polls
             maxDuration: 20 * 60 * 1000  // 20 minutes max
           }
         );
@@ -439,7 +437,7 @@ const CreditReportUploadPage = () => {
                 (err) => {
                   setActiveJobStatus((prev) => prev ? { ...prev, status: 'failed', message: err, success: false, progress: 0 } as any : prev);
                 },
-                { initialInterval: 2000, maxInterval: 10000, maxDuration: 20 * 60 * 1000 }
+                { initialInterval: 5000, maxInterval: 30000, maxDuration: 20 * 60 * 1000 }
               );
             }}
           />
@@ -487,9 +485,8 @@ const CreditReportUploadPage = () => {
         {showManualModal && (
           <Suspense fallback={<ComponentLoading message="Loading form..." />}>
             <ManualTradelineModal
-              isOpen={showManualModal}
               onClose={() => setShowManualModal(false)}
-              onSave={handleManualTradelineAdd}
+              onAdd={handleManualTradelineAdd}
             />
           </Suspense>
         )}

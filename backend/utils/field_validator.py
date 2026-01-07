@@ -11,7 +11,7 @@ class FieldValidator:
     """Validates and cleans extracted credit report fields"""
     
     def __init__(self):
-        self.currency_pattern = re.compile(r'^\$\d{1,3}(,\d{3})*(\.\d{2})?$')
+        self.currency_pattern = re.compile(r'^\$\d{1,3}(,\d{3})*\.\d{2}$')
         self.date_patterns = [
             re.compile(r'^\d{1,2}/\d{1,2}/\d{4}$'),  # MM/DD/YYYY
             re.compile(r'^\d{1,2}-\d{1,2}-\d{4}$'),  # MM-DD-YYYY
@@ -349,9 +349,7 @@ class FieldValidator:
             return None
         
         if isinstance(value, (int, float)):
-            if value == 0:
-                return "$0"
-            return f"${value:,.0f}"
+            return f"${value:,.2f}"
         
         value = str(value).strip()
         if not value or value.lower() in ['null', 'none', 'n/a']:
@@ -367,9 +365,7 @@ class FieldValidator:
             try:
                 numeric_str = numeric_match.group().replace(',', '')
                 numeric_value = float(numeric_str)
-                if numeric_value == 0:
-                    return "$0"
-                return f"${numeric_value:,.0f}"
+                return f"${numeric_value:,.2f}"
             except ValueError:
                 pass
         
@@ -446,11 +442,16 @@ class FieldValidator:
         """Validate currency - optional field"""
         if value is None:
             return True, 0.8, []
-        
+
+        if isinstance(value, (int, float)):
+            return True, 0.95, []
+
         if isinstance(value, str):
-            if value.startswith('$') and (value[1:].replace(',', '').isdigit() or value == "$0"):
+            val = value.strip()
+            if self.currency_pattern.match(val):
                 return True, 0.95, []
-        
+            return False, 0.4, ["Currency must be in format $X.XX with 2 decimal places"]
+
         return True, 0.6, []
     
     def validate_account_number(self, value: Union[str, None]) -> Tuple[bool, float, list]:

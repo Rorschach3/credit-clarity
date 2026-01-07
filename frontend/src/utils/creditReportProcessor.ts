@@ -1,4 +1,5 @@
 import { ParsedTradeline } from "./tradelineParser";
+import { supabase } from "@/integrations/supabase/client";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -63,6 +64,41 @@ const createFormData = (file: File, userId?: string): FormData => {
   return formData;
 };
 
+const getAuthToken = async (): Promise<string | null> => {
+  try {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.access_token) {
+      return data.session.access_token;
+    }
+  } catch (error) {
+    console.warn('⚠️ Failed to read session from Supabase:', error);
+  }
+
+  const storedToken = localStorage.getItem('supabase.auth.token') || sessionStorage.getItem('supabase.auth.token');
+  if (!storedToken) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(storedToken);
+    return parsed.access_token || parsed.token || null;
+  } catch (error) {
+    console.warn('⚠️ Failed to parse stored auth token:', error);
+    return null;
+  }
+};
+
+const buildAuthHeaders = async (): Promise<Record<string, string>> => {
+  const authToken = await getAuthToken();
+  if (!authToken) {
+    return {};
+  }
+
+  return {
+    Authorization: `Bearer ${authToken}`
+  };
+};
+
 // Pure utility function for OCR processing (no hooks)
 export const processWithOCR = async (file: File, userId?: string): Promise<string> => {
   // BULLETPROOF FILE VALIDATION
@@ -72,10 +108,12 @@ export const processWithOCR = async (file: File, userId?: string): Promise<strin
   const formData = createFormData(file, userId);
   
   try {
+    const headers = await buildAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/api/process-credit-report`, {
       method: 'POST',
-      body: formData
-      // NO HEADERS - Let browser set multipart/form-data with boundary
+      body: formData,
+      headers
+      // NO CONTENT-TYPE HEADER - Let browser set multipart/form-data with boundary
     });
     
     if (!response.ok) {
@@ -105,14 +143,22 @@ export const processWithOCR = async (file: File, userId?: string): Promise<strin
 
 // Enhanced AI processing function with progress callbacks and timeout handling
 export const processWithAI = async (
-  file: File, 
+  file: File,
   userId?: string,
   onProgress?: (message: string) => void,
   retryCount: number = 0
 ): Promise<ProcessingResult> => {
+  console.log('🔧 TEMPORARY DEBUG: processWithAI called with:', {
+    fileName: file.name,
+    fileSize: file.size,
+    fileType: file.type,
+    userId: userId,
+    retryCount: retryCount
+  });
+
   // BULLETPROOF FILE VALIDATION
   validateFile(file);
-  
+
   // BULLETPROOF FORMDATA
   const formData = createFormData(file, userId);
   
@@ -144,14 +190,34 @@ export const processWithAI = async (
     const startTime = Date.now();
     
     console.log('🚀 Making fetch request...');
+    console.log('🔧 TEMPORARY DEBUG: About to send request to:', `${API_BASE_URL}/api/process-credit-report`);
+    console.log('🔧 TEMPORARY DEBUG: FormData contents:');
+    for (const [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        console.log(`  ${key}: File(${value.name}, ${value.size} bytes, ${value.type})`);
+      } else {
+        console.log(`  ${key}: ${value}`);
+      }
+    }
+
+    const headers = await buildAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/api/process-credit-report`, {
       method: 'POST',
       body: formData,
+      headers,
       signal: controller.signal,
       // Prevent browser extensions from interfering
       keepalive: false
     });
-    console.log('📥 Fetch response received:', response.status, response.statusText);
+    console.log('📥 Fetch response received:', {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      headers: [...response.headers.entries()],
+      url: response.url,
+      type: response.type,
+      redirected: response.redirected
+    });
     
     // Clear timeout on successful response
     clearTimeout(timeoutId);
@@ -166,7 +232,9 @@ export const processWithAI = async (
       console.error('❌ Backend error:', response.status, errorText);
       
       // Specific error handling
-      if (response.status === 413) {
+      if (response.status === 401) {
+        throw new Error('Unauthorized - please sign in and try again');
+      } else if (response.status === 413) {
         throw new Error('File too large - please try a smaller PDF');
       } else if (response.status === 500) {
         throw new Error('Server error - please try again or contact support');
@@ -180,6 +248,14 @@ export const processWithAI = async (
     console.log('📥 Parsing response...');
     const result = await response.json();
     console.log('✅ Processing Complete!', result);
+    console.log('🔧 TEMPORARY DEBUG: Backend response details:', {
+      success: result.success,
+      tradelines_found: result.tradelines_found,
+      tradelines_saved: result.tradelines_saved,
+      processing_method: result.processing_method,
+      has_tradelines: !!(result.tradelines && result.tradelines.length > 0),
+      tradelines_count: result.tradelines ? result.tradelines.length : 0
+    });
     
     // Check if this is a background job response
     if (result.success && result.job_id) {
@@ -302,9 +378,11 @@ export const testBackendConnection = async (): Promise<void> => {
     const emptyFormData = new FormData();
     emptyFormData.append('user_id', 'test-user');
     
+    const headers = await buildAuthHeaders();
     const emptyResponse = await fetch(`${API_BASE_URL}/api/process-credit-report`, {
       method: 'POST',
-      body: emptyFormData
+      body: emptyFormData,
+      headers
     });
     
     console.log('📨 Empty request response:', emptyResponse.status);

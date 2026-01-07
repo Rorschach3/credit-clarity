@@ -1,0 +1,232 @@
+{
+  "id": "IMPL-002",
+  "title": "Create Technical Architecture and System Design PRD Section",
+  "status": "completed",
+  "context_package_path": ".workflow/active/WFS-brainstorm-for-a-prd/.process/context-package.json",
+  "meta": {
+    "type": "docs",
+    "agent": "@code-developer",
+    "execution_group": null
+  },
+  "context": {
+    "requirements": [
+      "Create 1 technical architecture document (8-12 pages) covering system design and integration patterns",
+      "Document 5 major architectural components: AI/ML pipeline, mailing service integration, rate limiting, multi-bureau tracking, security/compliance",
+      "Include 4 phase-specific architecture decisions: Phase 1 (MVP), Phase 2 (optimization), Phase 3 (AI enhancement), Phase 4 (scale)",
+      "Reference 10+ architecture decisions from guidance-specification.md (D-010 to D-021)",
+      "Integrate findings from 2 architect role analyses: system-architect (6 docs), data-architect (6 docs)"
+    ],
+    "focus_paths": [
+      "docs/",
+      ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/system-architect/",
+      ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/"
+    ],
+    "acceptance": [
+      "1 technical architecture document created: verify by ls docs/PRD-Technical-Architecture.md",
+      "5 architectural components documented: verify by grep -c '### Component [1-5]:' docs/PRD-Technical-Architecture.md = 5",
+      "10+ architecture decisions referenced: verify by grep -c 'D-0[1-2][0-9]' docs/PRD-Technical-Architecture.md >= 10",
+      "4 phase architectures defined: verify by grep -c '## Phase [1-4]:' docs/PRD-Technical-Architecture.md = 4",
+      "2 architect role integrations: verify by grep -c 'system-architect\\|data-architect' docs/PRD-Technical-Architecture.md >= 2"
+    ],
+    "depends_on": ["IMPL-001"],
+    "inherited": {
+      "from": "IMPL-001",
+      "context": ["PRD executive summary completed", "Core features defined", "Documentation structure established"]
+    },
+    "shared_context": {
+      "tech_stack": ["FastAPI", "PostgreSQL", "Google Document AI", "Gemini AI", "Redis", "Supabase", "Lob.com", "USPS API"],
+      "architecture_patterns": ["Service Layer", "Repository Pattern", "Hybrid AI (Document AI + Gemini + Rules)", "Abstraction Layer for mailing services"],
+      "conventions": ["Follow existing ARCHITECTURE_GUIDE.md structure", "Include code examples and diagrams", "Document technology selection rationale"]
+    },
+    "artifacts": [
+      {
+        "type": "topic_framework",
+        "source": "brainstorm_framework",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/guidance-specification.md",
+        "priority": "highest",
+        "usage": "Architecture decisions reference (sections 4 and 5)",
+        "contains": "AI approach, mailing sequencing, rate limiting, vector DB selection"
+      },
+      {
+        "type": "individual_role_analysis",
+        "source": "brainstorm_roles",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/system-architect/analysis.md",
+        "priority": "high",
+        "usage": "Overall system architecture strategy and component integration",
+        "contains": "Current architecture assessment, AI pipeline design, mailing service patterns"
+      },
+      {
+        "type": "individual_role_analysis",
+        "source": "brainstorm_roles",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/system-architect/analysis-ai-ml-architecture.md",
+        "priority": "high",
+        "usage": "Detailed AI/ML pipeline architecture and hybrid approach design",
+        "contains": "Document AI + Gemini + Rules hybrid, negative tradeline classification, score prediction engine"
+      },
+      {
+        "type": "individual_role_analysis",
+        "source": "brainstorm_roles",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/system-architect/analysis-service-integration.md",
+        "priority": "high",
+        "usage": "Mailing service integration patterns (Lob → USPS migration)",
+        "contains": "Abstraction layer design, A/B testing strategy, error handling patterns"
+      },
+      {
+        "type": "individual_role_analysis",
+        "source": "brainstorm_roles",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/system-architect/analysis-data-infrastructure.md",
+        "priority": "high",
+        "usage": "Rate limiting architecture and caching strategy",
+        "contains": "Hybrid middleware + Redis persistence, multi-level caching"
+      },
+      {
+        "type": "individual_role_analysis",
+        "source": "brainstorm_roles",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/system-architect/analysis-security-compliance.md",
+        "priority": "high",
+        "usage": "FCRA compliance and security architecture",
+        "contains": "Supabase RLS + encryption, FCRA requirements, data protection"
+      },
+      {
+        "type": "individual_role_analysis",
+        "source": "brainstorm_roles",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/analysis.md",
+        "priority": "high",
+        "usage": "Data architecture overview and technology strategy",
+        "contains": "Hybrid storage strategy (PostgreSQL + TimescaleDB), structured JSON pattern"
+      },
+      {
+        "type": "individual_role_analysis",
+        "source": "brainstorm_roles",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/analysis-data-models-schema-design.md",
+        "priority": "high",
+        "usage": "Database schema design for multi-bureau tracking and dispute management",
+        "contains": "Dispute tracking tables, status history, multi-bureau queries"
+      }
+    ]
+  },
+  "flow_control": {
+    "pre_analysis": [
+      {
+        "step": "load_context_package",
+        "action": "Load context package for artifact paths and smart context",
+        "commands": ["Read(.workflow/active/WFS-brainstorm-for-a-prd/.process/context-package.json)"],
+        "output_to": "context_package",
+        "on_error": "fail"
+      },
+      {
+        "step": "load_system_architect_analyses",
+        "action": "Load system-architect role analyses progressively (6 documents total)",
+        "commands": [
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/system-architect/analysis.md)",
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/system-architect/analysis-ai-ml-architecture.md)",
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/system-architect/analysis-service-integration.md)",
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/system-architect/analysis-data-infrastructure.md)",
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/system-architect/analysis-security-compliance.md)",
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/system-architect/analysis-scalability-performance.md)"
+        ],
+        "output_to": "system_architect_analyses",
+        "on_error": "skip_optional"
+      },
+      {
+        "step": "load_data_architect_analyses",
+        "action": "Load data-architect role analyses progressively (6 documents total)",
+        "commands": [
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/analysis.md)",
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/analysis-data-models-schema-design.md)",
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/analysis-database-architecture-strategy.md)",
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/analysis-security-compliance-governance.md)"
+        ],
+        "output_to": "data_architect_analyses",
+        "on_error": "skip_optional"
+      },
+      {
+        "step": "review_existing_architecture_docs",
+        "action": "Review existing architecture documentation for consistency and integration points",
+        "commands": [
+          "Read(docs/ARCHITECTURE_GUIDE.md)"
+        ],
+        "output_to": "existing_architecture",
+        "on_error": "skip_optional"
+      }
+    ],
+    "implementation_approach": [
+      {
+        "step": 1,
+        "title": "Load and synthesize architecture artifacts",
+        "description": "Extract technical architecture decisions from system-architect and data-architect role analyses",
+        "modification_points": [
+          "Load 6 system-architect documents: extract AI pipeline, mailing integration, rate limiting, security patterns",
+          "Load 4 data-architect documents: extract data models, database strategy, schema design",
+          "Load guidance-specification.md: extract 10+ architecture decisions (D-010 to D-021)",
+          "Load existing ARCHITECTURE_GUIDE.md: identify integration points and consistency requirements",
+          "Synthesize findings into 5 major architectural components"
+        ],
+        "logic_flow": [
+          "Read all architect analysis files from pre_analysis outputs",
+          "Extract architecture patterns: Hybrid AI approach, abstraction layer for mailing, middleware + Redis rate limiting",
+          "Extract technology selections: Lob → USPS migration, TimescaleDB now, Pinecone/Weaviate for chatbot",
+          "Organize into component sections: AI/ML, Mailing, Rate Limiting, Multi-Bureau Tracking, Security",
+          "Map phase-specific architectures: Phase 1 (Lob + MVP), Phase 2 (USPS + optimization), Phase 3 (AI enhancement), Phase 4 (scale)",
+          "Cross-reference with existing ARCHITECTURE_GUIDE.md for consistency"
+        ],
+        "depends_on": [],
+        "output": "architecture_synthesis"
+      },
+      {
+        "step": 2,
+        "title": "Create technical architecture document",
+        "description": "Write comprehensive technical architecture markdown document with code examples and diagrams",
+        "modification_points": [
+          "Create 1 new file: docs/PRD-Technical-Architecture.md (estimated 1200-1600 lines)",
+          "Include 6 main sections: Overview, Component Architecture (5 components), Phase Architectures (4 phases), Technology Stack, Integration Patterns, Appendix",
+          "Document 5 components with detailed design: AI/ML pipeline, Mailing service, Rate limiting, Multi-bureau tracking, Security/compliance",
+          "Include 10-15 code examples demonstrating architecture patterns (Python, SQL)",
+          "Add 5-7 architecture diagrams using ASCII art or mermaid notation"
+        ],
+        "logic_flow": [
+          "Create docs/PRD-Technical-Architecture.md with proper frontmatter",
+          "Write Overview section: current architecture, target architecture, key challenges (1-2 pages)",
+          "Write Component Architecture section:",
+          "  - Component 1: AI/ML Pipeline (Hybrid Document AI + Gemini + Rules) with code examples (2 pages)",
+          "  - Component 2: Mailing Service Integration (abstraction layer, Lob → USPS) with code examples (2 pages)",
+          "  - Component 3: Rate Limiting (middleware + Redis hybrid) with code examples (1.5 pages)",
+          "  - Component 4: Multi-Bureau Tracking (database schema, queries) with SQL examples (1.5 pages)",
+          "  - Component 5: Security/Compliance (FCRA, RLS, encryption) with code examples (2 pages)",
+          "Write Phase Architectures section: Phase 1-4 evolution with migration strategies (2 pages)",
+          "Write Technology Stack section: Justified technology selections with rationale (1 page)",
+          "Write Integration Patterns section: Cross-component data flows and APIs (1 page)",
+          "Add Appendix: Architecture decision records, technology comparison matrices",
+          "Validate document structure matches acceptance criteria"
+        ],
+        "depends_on": [1],
+        "output": "technical_architecture_document"
+      },
+      {
+        "step": 3,
+        "title": "Validate architecture document completeness",
+        "description": "Verify technical architecture meets acceptance criteria and aligns with existing ARCHITECTURE_GUIDE.md",
+        "modification_points": [
+          "Validate 5 components documented: verify grep count matches expected",
+          "Validate 10+ architecture decisions: verify D-XXX citations present",
+          "Validate 4 phase architectures: verify Phase 1-4 sections exist",
+          "Validate code examples: verify 10-15 code blocks present",
+          "Validate consistency with ARCHITECTURE_GUIDE.md: cross-reference technology stack and patterns"
+        ],
+        "logic_flow": [
+          "Run grep validation commands from acceptance criteria",
+          "Count component sections, decision references, phase architectures",
+          "Verify code examples syntax validity (Python, SQL)",
+          "Cross-check technology stack with ARCHITECTURE_GUIDE.md",
+          "Validate architecture patterns align with existing codebase structure",
+          "Generate validation report with pass/fail status"
+        ],
+        "depends_on": [2],
+        "output": "architecture_validation_report"
+      }
+    ],
+    "target_files": [
+      "docs/PRD-Technical-Architecture.md"
+    ]
+  }
+}

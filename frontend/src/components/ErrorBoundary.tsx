@@ -24,6 +24,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
+    
+    // Special handling for date/time errors
+    if (error.message && error.message.includes('Invalid time value')) {
+      console.warn('Detected invalid date error - this may be from helmet meta tags or schema');
+      console.warn('Error stack:', error.stack);
+    }
   }
 
   private handleReset = () => {

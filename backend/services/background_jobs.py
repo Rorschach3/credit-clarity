@@ -19,6 +19,26 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
+# Try to import Redis queue, fall back to None if unavailable
+try:
+    from services.redis_queue import RedisJobQueue, RedisRateLimiter, get_redis_queue, REDIS_AVAILABLE
+    REDIS_QUEUE_AVAILABLE = REDIS_AVAILABLE
+except ImportError:
+    REDIS_QUEUE_AVAILABLE = False
+    RedisJobQueue = None
+    get_redis_queue = None
+
+
+class JobStage(Enum):
+    """Report processing stages."""
+    UPLOAD = "upload"
+    OCR = "ocr"
+    PARSING = "parsing"
+    TRADELINE_DETECTION = "tradeline_detection"
+    VALIDATION = "validation"
+    COMPLETE = "complete"
+
+
 class JobStatus(Enum):
     """Job status enumeration."""
     PENDING = "pending"
@@ -262,18 +282,182 @@ class JobQueue:
         }
 
 
+class RedisQueueAdapter:
+    """Adapter for Redis job queue, providing same interface as JobQueue."""
+    
+    def __init__(self, redis_queue: 'RedisJobQueue'):
+        """Initialize with Redis job queue instance."""
+        self._redis_queue = redis_queue
+    
+    async def add_job(self, job: Job) -> None:
+        """Add job to Redis queue."""
+        job_data = job.to_dict()
+        priority = job.priority.value if hasattr(job.priority, 'value') else job.priority
+        await self._redis_queue.enqueue(job_data, priority=priority, job_id=job.job_id)
+        logger.info(f"Added job {job.job_id} ({job.task_name}) to Redis queue")
+    
+    async def get_next_job(self) -> Optional[Job]:
+        """Get next job from Redis queue."""
+        job_data = await self._redis_queue.dequeue()
+        if job_data:
+            return Job.from_dict(job_data)
+        return None
+    
+    async def complete_job(self, job_id: str, result: Dict[str, Any]) -> None:
+        """Mark job as completed in Redis."""
+        await self._redis_queue.mark_complete(job_id, result)
+        logger.info(f"Job {job_id} completed successfully")
+    
+    async def fail_job(self, job_id: str, error: str) -> None:
+        """Mark job as failed in Redis."""
+        await self._redis_queue.mark_failed(job_id, error)
+    
+    async def update_job_progress(self, job_id: str, progress: int, message: str = "") -> None:
+        """Update job progress in Redis."""
+        job_status = await self._redis_queue.get_status(job_id)
+        if job_status:
+            await self._redis_queue.update_status(
+                job_id,
+                status=job_status.get('status', 'running'),
+                progress=progress,
+                progress_message=message
+            )
+    
+    async def get_job(self, job_id: str) -> Optional[Job]:
+        """Get job from Redis."""
+        job_data = await self._redis_queue.get_status(job_id)
+        if job_data:
+            return Job.from_dict(job_data)
+        return None
+    
+    async def get_user_jobs(self, user_id: str, limit: int = 50) -> List[Job]:
+        """Get jobs for user from Redis (limited implementation)."""
+        # For Redis, we need to scan - this is a simplified implementation
+        stats = await self._redis_queue.get_queue_stats()
+        jobs = []
+        
+        # This is a best-effort implementation
+        # In production, you would use Redis SCAN with user_id filter
+        return jobs[:limit]
+    
+    async def get_stats(self) -> Dict[str, Any]:
+        """Get queue stats from Redis."""
+        return await self._redis_queue.get_queue_stats()
+
+
+class HybridJobQueue:
+    """Hybrid job queue that uses Redis when available, falls back to memory."""
+    
+    def __init__(self):
+        self._memory_queue = JobQueue()
+        self._redis_adapter: Optional[RedisQueueAdapter] = None
+        self._use_redis = False
+        self._redis_queue: Optional[RedisJobQueue] = None
+    
+    async def initialize(self) -> bool:
+        """Initialize Redis connection if available."""
+        if REDIS_QUEUE_AVAILABLE and get_redis_queue:
+            try:
+                self._redis_queue = await get_redis_queue()
+                if await self._redis_queue.is_connected():
+                    self._redis_adapter = RedisQueueAdapter(self._redis_queue)
+                    self._use_redis = True
+                    logger.info("Using Redis-backed job queue")
+                    return True
+            except Exception as e:
+                logger.warning(f"Failed to connect to Redis, using memory queue: {e}")
+        
+        self._use_redis = False
+        logger.info("Using in-memory job queue (Redis unavailable)")
+        return False
+    
+    @property
+    def use_redis(self) -> bool:
+        """Check if using Redis."""
+        return self._use_redis
+    
+    async def add_job(self, job: Job) -> None:
+        """Add job to queue (Redis or memory)."""
+        if self._use_redis and self._redis_adapter:
+            await self._redis_adapter.add_job(job)
+        else:
+            self._memory_queue.add_job(job)
+    
+    async def get_next_job(self) -> Optional[Job]:
+        """Get next job from queue."""
+        if self._use_redis and self._redis_adapter:
+            return await self._redis_adapter.get_next_job()
+        else:
+            return self._memory_queue.get_next_job()
+    
+    async def complete_job(self, job_id: str, result: Dict[str, Any]) -> None:
+        """Mark job as completed."""
+        if self._use_redis and self._redis_adapter:
+            await self._redis_adapter.complete_job(job_id, result)
+        else:
+            self._memory_queue.complete_job(job_id, result)
+    
+    async def fail_job(self, job_id: str, error: str) -> None:
+        """Mark job as failed."""
+        if self._use_redis and self._redis_adapter:
+            await self._redis_adapter.fail_job(job_id, error)
+        else:
+            self._memory_queue.fail_job(job_id, error)
+    
+    async def update_job_progress(self, job_id: str, progress: int, message: str = "") -> None:
+        """Update job progress."""
+        if self._use_redis and self._redis_adapter:
+            await self._redis_adapter.update_job_progress(job_id, progress, message)
+        else:
+            self._memory_queue.update_job_progress(job_id, progress, message)
+    
+    async def get_job(self, job_id: str) -> Optional[Job]:
+        """Get job by ID."""
+        if self._use_redis and self._redis_adapter:
+            return await self._redis_adapter.get_job(job_id)
+        else:
+            return self._memory_queue.get_job(job_id)
+    
+    async def get_user_jobs(self, user_id: str, limit: int = 50) -> List[Job]:
+        """Get jobs for user."""
+        if self._use_redis and self._redis_adapter:
+            return await self._redis_adapter.get_user_jobs(user_id, limit)
+        else:
+            return self._memory_queue.get_user_jobs(user_id, limit)
+    
+    async def get_stats(self) -> Dict[str, Any]:
+        """Get queue statistics."""
+        if self._use_redis and self._redis_adapter:
+            stats = await self._redis_adapter.get_stats()
+            stats['backend'] = 'redis'
+            return stats
+        else:
+            stats = self._memory_queue.get_stats()
+            stats['backend'] = 'memory'
+            return stats
+
+
 class BackgroundJobProcessor:
-    """Background job processor with worker management."""
+    """Background job processor with worker management and Redis support."""
     
     def __init__(self, max_workers: int = 3):
         self.max_workers = max_workers
-        self.job_queue = JobQueue()
+        self._queue = HybridJobQueue()
         self.task_registry: Dict[str, Callable] = {}
         self.workers: List[asyncio.Task] = []
         self.is_running = False
         
         # Register built-in tasks
         self._register_builtin_tasks()
+    
+    async def initialize(self) -> None:
+        """Initialize the job queue (Redis or memory)."""
+        await self._queue.initialize()
+    
+    @property
+    def job_queue(self) -> HybridJobQueue:
+        """Get the job queue."""
+        return self._queue
     
     def _register_builtin_tasks(self):
         """Register built-in task handlers."""
@@ -309,7 +493,7 @@ class BackgroundJobProcessor:
             timeout=timeout
         )
         
-        self.job_queue.add_job(job)
+        await self._queue.add_job(job)
         
         # Cache job info for quick access
         await cache.set(f"job_status_{job_id}", job.to_dict(), ttl=7200)  # 2 hours
@@ -324,7 +508,7 @@ class BackgroundJobProcessor:
             return cached_job
         
         # Get from queue
-        job = self.job_queue.get_job(job_id)
+        job = await self._queue.get_job(job_id)
         if job:
             job_dict = job.to_dict()
             await cache.set(f"job_status_{job_id}", job_dict, ttl=7200)
@@ -334,7 +518,7 @@ class BackgroundJobProcessor:
     
     async def cancel_job(self, job_id: str) -> bool:
         """Cancel a job."""
-        job = self.job_queue.get_job(job_id)
+        job = await self._queue.get_job(job_id)
         if job and job.status in [JobStatus.PENDING, JobStatus.RETRY]:
             job.status = JobStatus.CANCELLED
             return True
@@ -347,12 +531,15 @@ class BackgroundJobProcessor:
         
         self.is_running = True
         
+        # Initialize queue
+        await self.initialize()
+        
         # Start worker tasks
         for i in range(self.max_workers):
             worker = asyncio.create_task(self._worker_loop(f"worker-{i}"))
             self.workers.append(worker)
         
-        logger.info(f"Started background job processor with {self.max_workers} workers")
+        logger.info(f"Started background job processor with {self.max_workers} workers (queue: {'redis' if self._queue.use_redis else 'memory'})")
     
     async def stop(self) -> None:
         """Stop the background job processor."""
@@ -378,7 +565,7 @@ class BackgroundJobProcessor:
         while self.is_running:
             try:
                 # Get next job
-                job = self.job_queue.get_next_job()
+                job = await self._queue.get_next_job()
                 
                 if job:
                     logger.info(f"Worker {worker_name} processing job {job.job_id}")
@@ -406,7 +593,7 @@ class BackgroundJobProcessor:
             
             # Create progress callback
             async def update_progress(progress: int, message: str = ""):
-                self.job_queue.update_job_progress(job.job_id, progress, message)
+                await self._queue.update_job_progress(job.job_id, progress, message)
                 # Update cache
                 job_dict = job.to_dict()
                 await cache.set(f"job_status_{job.job_id}", job_dict, ttl=7200)
@@ -422,7 +609,7 @@ class BackgroundJobProcessor:
             )
             
             # Mark job as completed
-            self.job_queue.complete_job(job.job_id, result or {})
+            await self._queue.complete_job(job.job_id, result or {})
             
             # Update cache
             job_dict = job.to_dict()
@@ -430,11 +617,11 @@ class BackgroundJobProcessor:
             
         except asyncio.TimeoutError:
             error_msg = f"Job timed out after {job.timeout} seconds"
-            self.job_queue.fail_job(job.job_id, error_msg)
+            await self._queue.fail_job(job.job_id, error_msg)
         except Exception as e:
             error_msg = f"Job failed: {str(e)}"
             logger.error(f"Job {job.job_id} failed: {error_msg}\n{traceback.format_exc()}")
-            self.job_queue.fail_job(job.job_id, error_msg)
+            await self._queue.fail_job(job.job_id, error_msg)
     
     # Built-in task handlers
     async def _process_large_pdf_task(self, pdf_path: str, user_id: str, progress_callback, **kwargs) -> Dict[str, Any]:
@@ -552,9 +739,9 @@ class BackgroundJobProcessor:
             logger.error(f"Report generation failed: {e}")
             raise
     
-    def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> Dict[str, Any]:
         """Get processor statistics."""
-        queue_stats = self.job_queue.get_stats()
+        queue_stats = await self._queue.get_stats()
         return {
             'is_running': self.is_running,
             'workers': len(self.workers),

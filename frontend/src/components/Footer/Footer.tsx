@@ -27,7 +27,7 @@ const Footer: React.FC = () => {
           </a>
         </div>
         <p className="text-xs text-muted-foreground">
-          &copy; {new Date().getFullYear()} CreditClarity. All rights reserved.
+          &copy; <span suppressHydrationWarning>{new Date().getFullYear()}</span> CreditClarity. All rights reserved.
         </p>
       </div>
     </footer>

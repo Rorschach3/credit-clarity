@@ -159,6 +159,20 @@ class ErrorCorrectionSystem:
                 'l': '1',  # Lowercase l to 1
                 'S': '5',  # S to 5 in amounts
                 'B': '8',  # B to 8
+                'I': '1',  # I to 1
+                'Z': '2',  # Z to 2
+                'G': '6',  # G to 6
+                'T': '7',  # T to 7
+                'g': '9',  # g to 9
+            },
+            'text_corrections': {
+                'rn': 'm',
+                'vv': 'w',
+                'cl': 'd',
+            },
+            'account_number_corrections': {
+                'remove_chars': r'[^A-Za-z0-9*]',
+                'masking': {'X': '*', 'x': '*', '#': '*'},
             }
         }
     
@@ -479,42 +493,74 @@ class ErrorCorrectionSystem:
                     remaining_errors.append(error)
             else:
                 remaining_errors.append(error)
-        
+
+        # Fallback strategies for negative accounts with missing fields
+        is_negative = getattr(corrected_tradeline, 'is_negative', False)
+        missing_critical = 0
+        if is_negative:
+            # If creditor_name missing for negative accounts, infer from context
+            if not getattr(corrected_tradeline, 'creditor_name', None):
+                inferred = self._infer_creditor_name_from_context(original_text)
+                if inferred:
+                    corrected_tradeline.creditor_name = inferred
+                    corrections_applied.append(f"creditor_name inferred from context: {inferred}")
+                else:
+                    missing_critical += 1
+            # If account_balance missing for charge-off/collection, flag for manual review
+            if (not getattr(corrected_tradeline, 'account_balance', None) or getattr(corrected_tradeline, 'account_balance', '') == '$0') and any(term in (getattr(corrected_tradeline, 'account_status', '') or '').lower() for term in ['charge off', 'collection']):
+                corrections_applied.append("account_balance missing for negative account: needs manual review")
+                missing_critical += 1
+            # If date_opened missing, try to infer from date_closed or last_payment_date
+            if not getattr(corrected_tradeline, 'date_opened', None):
+                inferred_date = self._infer_date_opened(corrected_tradeline)
+                if inferred_date:
+                    corrected_tradeline.date_opened = inferred_date
+                    corrections_applied.append(f"date_opened inferred: {inferred_date}")
+                else:
+                    missing_critical += 1
+            # If account_status missing but other negative indicators present, infer from payment history and balance
+            if not getattr(corrected_tradeline, 'account_status', None) and (getattr(corrected_tradeline, 'account_balance', None) or getattr(corrected_tradeline, 'payment_history', None)):
+                inferred_status = self._infer_account_status(corrected_tradeline)
+                if inferred_status:
+                    corrected_tradeline.account_status = inferred_status
+                    corrections_applied.append(f"account_status inferred: {inferred_status}")
+                else:
+                    missing_critical += 1
+            # Flag for manual review if >2 missing critical fields
+            if missing_critical > 2:
+                corrections_applied.append("negative account: >2 missing critical fields, flagged for manual review")
+
         # If significant errors remain, try fallback strategies
         if len(remaining_errors) > 2 or any(e.severity == ErrorSeverity.CRITICAL for e in remaining_errors):
             logger.info("Attempting fallback strategies for remaining errors")
-            
             fallback_result = await self._apply_fallback_strategies(
                 corrected_tradeline, remaining_errors, original_text, pdf_path
             )
-            
             if fallback_result.success:
                 corrected_tradeline = fallback_result.corrected_data
                 corrections_applied.extend(fallback_result.corrections_applied)
                 remaining_errors = fallback_result.remaining_errors
-        
+
         # Final AI validation and correction
         if self.ai_validator:
             try:
                 validation_result = await self.ai_validator.validate_and_correct_tradeline(
                     corrected_tradeline, original_text
                 )
-                
                 if validation_result.is_valid and validation_result.corrections_made:
                     corrected_tradeline = validation_result.corrected_data
                     corrections_applied.extend(validation_result.corrections_made)
                     logger.info(f"AI validation applied {len(validation_result.corrections_made)} additional corrections")
-                
             except Exception as e:
                 logger.warning(f"AI validation failed: {e}")
-        
+
         # Calculate confidence improvement
         original_confidence = getattr(tradeline, 'extraction_confidence', 0.5)
         new_confidence = getattr(corrected_tradeline, 'extraction_confidence', original_confidence)
         confidence_improvement = new_confidence - original_confidence
-        
+
         success = len(corrections_applied) > 0 and len(remaining_errors) < len(errors) / 2
-        
+
         return CorrectionResult(
             success=success,
             corrected_data=corrected_tradeline if success else None,
@@ -523,6 +569,91 @@ class ErrorCorrectionSystem:
             confidence_improvement=confidence_improvement,
             method_used="direct_correction_with_ai"
         )
+
+    def _infer_creditor_name_from_context(self, context: str) -> Optional[str]:
+        if not context:
+            return None
+
+        patterns = [
+            r'(?:collection(?:s)?(?:\s+agency)?|charged\s+off|charge[-\s]?off|placed\s+with|assigned\s+to|sold\s+to|transferred\s+to|referred\s+to)\s*[:\-]?\s*(?P<name>[A-Z0-9][A-Z0-9 &.\-]{2,60})',
+            r'(?P<name>[A-Z0-9][A-Z0-9 &.\-]{2,60})\s*(?:collection(?:s)?\s+agency|collections|collection)',
+            r'(?:creditor|agency)\s*[:\-]\s*(?P<name>[A-Z0-9][A-Z0-9 &.\-]{2,60})',
+        ]
+
+        candidates: List[str] = []
+        for pattern in patterns:
+            for match in re.finditer(pattern, context, flags=re.IGNORECASE):
+                name = match.group('name').strip()
+                name = re.sub(r'\s{2,}', ' ', name)
+                name = re.sub(r'^[^A-Za-z0-9]+|[^A-Za-z0-9]+$', '', name)
+                name = re.sub(
+                    r'\b(?:collection(?:s)?|agency|charged\s+off|charge\s+off|charge-off)\b',
+                    '',
+                    name,
+                    flags=re.IGNORECASE,
+                ).strip()
+                if self._is_plausible_creditor_name(name):
+                    candidates.append(name)
+
+        if not candidates:
+            return None
+
+        counts: Dict[str, int] = {}
+        for candidate in candidates:
+            counts[candidate] = counts.get(candidate, 0) + 1
+
+        return max(candidates, key=lambda name: (counts[name], len(name)))
+
+    def _is_plausible_creditor_name(self, name: str) -> bool:
+        if not name:
+            return False
+        cleaned = name.strip()
+        if len(cleaned) < 3 or len(cleaned) > 60:
+            return False
+        if not re.search(r'[A-Za-z]', cleaned):
+            return False
+        digit_ratio = sum(ch.isdigit() for ch in cleaned) / max(len(cleaned), 1)
+        if digit_ratio > 0.3:
+            return False
+
+        blocked = {
+            'ACCOUNT', 'ACCOUNTS', 'BALANCE', 'CHARGE', 'CHARGED', 'COLLECTION',
+            'COLLECTIONS', 'CREDITOR', 'CREDIT', 'REPORT', 'STATUS', 'PAYMENT',
+            'AGENCY', 'INFORMATION', 'HISTORY', 'PAST DUE', 'TOTAL', 'BUREAU',
+        }
+        if cleaned.upper() in blocked:
+            return False
+
+        return True
+
+    def _infer_date_opened(self, tradeline) -> Optional[str]:
+        # Try to infer date_opened from date_closed or last_payment_date
+        if getattr(tradeline, 'date_closed', None):
+            # Subtract typical account age (e.g., 3 years)
+            try:
+                from datetime import datetime, timedelta
+                closed = datetime.strptime(tradeline.date_closed, '%m/%d/%Y')
+                inferred = closed.replace(year=closed.year - 3)
+                return inferred.strftime('%m/%d/%Y')
+            except Exception:
+                return None
+        if getattr(tradeline, 'last_payment_date', None):
+            try:
+                from datetime import datetime, timedelta
+                last_payment = datetime.strptime(tradeline.last_payment_date, '%m/%d/%Y')
+                inferred = last_payment.replace(year=last_payment.year - 3)
+                return inferred.strftime('%m/%d/%Y')
+            except Exception:
+                return None
+        return None
+
+    def _infer_account_status(self, tradeline) -> Optional[str]:
+        # Infer account status from payment history and balance
+        if getattr(tradeline, 'payment_history', None) and 'late' in tradeline.payment_history.lower():
+            return 'Late'
+        if getattr(tradeline, 'account_balance', None) and tradeline.account_balance != '$0':
+            return 'Collection'
+        return None
     
     async def _apply_fallback_strategies(
         self,

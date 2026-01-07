@@ -161,11 +161,11 @@ async def _process_synchronously_v2(
             
         else:
             # Fallback to V1 pipeline
-            from services.optimized_processor import OptimizedCreditReportProcessor
-            proc_v1 = OptimizedCreditReportProcessor()
+            from main import LegacyCreditReportProcessor
+            proc_v1 = LegacyCreditReportProcessor()
             
             with track_performance(f"v1_sync_processing_{user_id}"):
-                result_v1 = await proc_v1.process_credit_report_optimized(temp_file_path)
+                result_v1 = await proc_v1.process_credit_report_optimal(temp_file_path)
             
             if not result_v1.get('success'):
                 raise HTTPException(

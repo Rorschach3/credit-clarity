@@ -8,6 +8,7 @@ import { useTheme } from './hooks/use-theme';
 import { Navbar } from './components/layout/Navbar';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { queryClient } from './lib/react-query';
+import * as Sentry from '@sentry/react';
 import { 
   PageLoading, 
   DisputeWizardLoading, 
@@ -16,7 +17,7 @@ import {
   ProfileLoading,
   DashboardLoading 
 } from './components/ui/loading';
-import { Analytics } from "@vercel/analytics/next"
+import { Analytics } from "@vercel/analytics/react"
 
 // Eager load lightweight pages
 import HomePage from "@/pages/HomePage";
@@ -45,12 +46,14 @@ const ContactForm = React.lazy(() => import('./components/Contact/ContactForm'))
 const Footer = React.lazy(() => import('./components/Footer/Footer'));
 
 import { AuthProvider, useAuth } from './hooks/use-auth';
+import { OrganizationSchema } from './components/seo/OrganizationSchema';
 
 function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <Analytics />
+        <OrganizationSchema />
         <AuthProvider>
           <Router>
             <AppContent />
@@ -58,7 +61,6 @@ function App() {
         </AuthProvider>
         {/* React Query DevTools - only shows in development */}
         <ReactQueryDevtools initialIsOpen={false} />
-        < Analytics />
       </QueryClientProvider>
     </ErrorBoundary>
   );

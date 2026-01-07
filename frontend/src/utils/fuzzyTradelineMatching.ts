@@ -71,45 +71,34 @@ export function normalizeCreditorName(name: string): string {
   
   let normalized = name
     .trim()
-    .toUpperCase() // Keep uppercase to preserve abbreviations
-    .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-    .replace(/[^\w\s\\/]/g, ''); // Remove special chars except / and spaces
-  
-  // Preserve important abbreviations and identifiers
-  const preservedTerms = [
-    'SYNCB', 'CAP1', 'WMT', 'BOA', 'BOFA', 'AMEX', 'CITI', 'WF', 'USAA',
-    'COMENITY', 'ADS', 'FKA', 'PULL', 'DIGITAL', 'OLD NAVY', 'KAY JEWELERS',
-    'PIERCINGPGD', 'ACIMA', 'SIMPLE', 'CHASE', 'DISCOVER', 'CAPITAL ONE'
-  ];
-  
-  // Handle common variations while preserving key identifiers
-  const variations: Record<string, string> = {
-    'BANK OF AMERICA': 'BOA',
-    'JP MORGAN CHASE': 'CHASE',
-    'AMERICAN EXPRESS': 'AMEX',
-    'CITIBANK': 'CITI',
-    'WELLS FARGO': 'WF',
-    'CAPITAL ONE': 'CAP1',
-    'SYNCHRONY BANK': 'SYNCB',
-    'WALMART': 'WMT'
-  };
-  
-  // Apply variations
-  for (const [original, replacement] of Object.entries(variations)) {
-    normalized = normalized.replace(new RegExp(`\\b${original}\\b`, 'g'), replacement);
+    .toLowerCase()
+    .replace(/\bn\.?a\.?\b/g, 'na')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ');
+
+  const wordsToRemove = new Set([
+    'bank',
+    'card',
+    'corp',
+    'corporation',
+    'company',
+    'inc',
+    'llc',
+    'financial'
+  ]);
+
+  let words = normalized.split(' ').filter(Boolean);
+  words = words.filter(word => !wordsToRemove.has(word));
+
+  if (words[words.length - 1] === 'na') {
+    const trimmed = words.slice(0, -1);
+    if (trimmed.length === 1 && trimmed[0].length > 2) {
+      words = trimmed;
+    }
   }
-  
-  // Only remove generic terms if they're not the main identifier
-  const wordsToRemove = ['BANK', 'CREDIT', 'CARD', 'COMPANY', 'CORP', 'INC', 'LLC', 'FINANCIAL', 'SERVICES'];
-  const words = normalized.split(' ');
-  
-  // Keep generic terms if the name would become too short
-  if (words.length > 2) {
-    normalized = words
-      .filter(word => !wordsToRemove.includes(word) || preservedTerms.includes(word))
-      .join(' ');
-  }
-  
+
+  normalized = words.join(' ');
+
   return normalized.trim();
 }
 
@@ -119,36 +108,19 @@ export function normalizeCreditorName(name: string): string {
 export function compareAccountNumbers(account1: string, account2: string): number {
   if (!account1 || !account2) return 0;
   if (account1 === account2) return 100;
-  
-  // Handle "Unknown" accounts - only match if both are unknown
-  if (account1 === 'Unknown' && account2 === 'Unknown') return 100;
-  if (account1 === 'Unknown' || account2 === 'Unknown') return 0;
-  
+
   // Extract digits only
   const digits1 = account1.replace(/\D/g, '');
   const digits2 = account2.replace(/\D/g, '');
-  
+
   if (!digits1 || !digits2) return 0;
   if (digits1 === digits2) return 100;
-  
-  // Check for partial matches (useful for masked account numbers)
-  const minLength = Math.min(digits1.length, digits2.length);
-  if (minLength < 4) return 0;
-  
-  // Compare first 4 digits
+
   const prefix1 = digits1.substring(0, 4);
   const prefix2 = digits2.substring(0, 4);
-  if (prefix1 === prefix2) return 80;
-  
-  // Compare last 4 digits (common for masked numbers)
-  if (digits1.length >= 4 && digits2.length >= 4) {
-    const suffix1 = digits1.slice(-4);
-    const suffix2 = digits2.slice(-4);
-    if (suffix1 === suffix2) return 70;
-  }
-  
-  // Fuzzy comparison for similar numbers
-  return calculateSimilarity(digits1, digits2);
+  if (prefix1 && prefix2 && prefix1 === prefix2) return 100;
+
+  return 0;
 }
 
 /**
@@ -237,68 +209,43 @@ export function isTradelineMatch(
 ): FuzzyMatchResult {
   const thresholds: MatchingThresholds = {
     creditorNameMinScore: 70,
-    accountNumberMinScore: 70,
-    overallMinScore: 75,
-    requireCreditBureauMatch: true,
-    requireDateMatch: false, // Made optional since dates are often missing
+    accountNumberMinScore: 100,
+    overallMinScore: 100,
+    requireCreditBureauMatch: false,
+    requireDateMatch: true,
     ...customThresholds
   };
+
   const creditorNameScore = compareCreditorNames(
     incomingTradeline.creditor_name,
     existingTradeline.creditor_name
   );
-  
+
   const accountNumberScore = compareAccountNumbers(
     incomingTradeline.account_number || '',
     existingTradeline.account_number || ''
   );
-  
+
   const incomingDate = normalizeDate(incomingTradeline.date_opened ?? '');
   const existingDate = normalizeDate(existingTradeline.date_opened ?? '');
-  const dateOpenedMatch = (incomingDate === existingDate && incomingDate !== '') || 
-                         (!thresholds.requireDateMatch && (!incomingDate || !existingDate));
-  
-  const creditBureauMatch = !thresholds.requireCreditBureauMatch || 
-                           incomingTradeline.credit_bureau === existingTradeline.credit_bureau ||
-                           !incomingTradeline.credit_bureau || !existingTradeline.credit_bureau ||
-                           incomingTradeline.credit_bureau === 'Unknown' || existingTradeline.credit_bureau === 'Unknown';
-  
-  // Calculate weighted overall score
+  const dateOpenedMatch = incomingDate !== '' && incomingDate === existingDate;
+
+  const creditBureauMatch = !thresholds.requireCreditBureauMatch ||
+    incomingTradeline.credit_bureau === existingTradeline.credit_bureau;
+
+  const creditorNameMatch = creditorNameScore >= thresholds.creditorNameMinScore;
+  const accountNumberMatch = accountNumberScore >= thresholds.accountNumberMinScore;
+
   let overallScore = 0;
-  let weightSum = 0;
-  
-  // Creditor name is most important (50% weight)
-  if (creditorNameScore >= thresholds.creditorNameMinScore) {
-    overallScore += creditorNameScore * 0.5;
-    weightSum += 0.5;
-  }
-  
-  // Account number is important (30% weight)
-  if (accountNumberScore >= thresholds.accountNumberMinScore) {
-    overallScore += accountNumberScore * 0.3;
-    weightSum += 0.3;
-  }
-  
-  // Date and bureau (20% weight combined)
-  if (dateOpenedMatch) {
-    overallScore += 100 * 0.1;
-    weightSum += 0.1;
-  }
-  
-  if (creditBureauMatch) {
-    overallScore += 100 * 0.1;
-    weightSum += 0.1;
-  }
-  
-  // Normalize score based on actual weights
-  if (weightSum > 0) {
-    overallScore = overallScore / weightSum;
-  }
-  
-  // Determine if it's a match
+  if (creditorNameMatch) overallScore += 40;
+  if (accountNumberMatch) overallScore += 30;
+  if (dateOpenedMatch) overallScore += 30;
+
   const isMatch = overallScore >= thresholds.overallMinScore &&
-                  creditorNameScore >= thresholds.creditorNameMinScore &&
-                  creditBureauMatch;
+    creditorNameMatch &&
+    accountNumberMatch &&
+    dateOpenedMatch &&
+    creditBureauMatch;
   
   const result = {
     isMatch,
@@ -309,7 +256,9 @@ export function isTradelineMatch(
       accountNumberScore,
       dateOpenedMatch,
       creditBureauMatch,
-      overallScore
+      overallScore,
+      accountNumberMatch,
+      creditorNameMatch
     }
   };
   
@@ -537,9 +486,25 @@ export function mergeTradelineFields(
   ];
   
   // Type-safe field updates
+  const updateOnlyIfEmpty = new Set<keyof ParsedTradeline>([
+    'account_balance',
+    'account_status',
+    'credit_bureau'
+  ]);
+
   stringFieldsToCheck.forEach(field => {
-    if (isBetterValue(existingTradeline[field], incomingTradeline[field])) {
-      const value = incomingTradeline[field];
+    const existingValue = existingTradeline[field];
+    const incomingValue = incomingTradeline[field];
+
+    if (updateOnlyIfEmpty.has(field)) {
+      if (isEmpty(existingValue) && !isEmpty(incomingValue)) {
+        updates[field] = incomingValue as string | undefined;
+      }
+      return;
+    }
+
+    if (isBetterValue(existingValue, incomingValue)) {
+      const value = incomingValue;
       if (value !== null) {
         updates[field] = value as string | undefined;
       }

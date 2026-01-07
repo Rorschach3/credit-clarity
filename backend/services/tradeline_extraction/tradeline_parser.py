@@ -9,6 +9,10 @@ from datetime import datetime
 import uuid
 from dataclasses import dataclass
 
+# Shared date parser utility
+from utils.date_parser import CreditReportDateParser
+from services.advanced_parsing.negative_tradeline_classifier import NegativeTradelineClassifier
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,11 +62,11 @@ class TransUnionTradelineParser:
         # Account type mappings from TransUnion format to expected format
         self.account_type_mappings = {
             'revolving': 'Revolving',
-            'revolving account': 'Revolving', 
+            'revolving account': 'Revolving',
             'installment': 'Installment',
             'installment account': 'Installment'
         }
-        
+
         # Account status mappings
         self.account_status_mappings = {
             'current': 'Current',
@@ -70,12 +74,57 @@ class TransUnionTradelineParser:
             'open': 'Current',  # Map open to current
             'paid': 'Closed'    # Map paid to closed
         }
-        
+
         # Currency pattern for formatting
         self.currency_pattern = re.compile(r'[\$,]')
-        
+
         # Date pattern (MM/DD/YYYY)
         self.date_pattern = re.compile(r'(\d{1,2})/(\d{1,2})/(\d{4})')
+
+        # Initialize shared date parser
+        self.date_parser = CreditReportDateParser()
+
+        # Negative classifier for extra signals
+        self.negative_classifier = NegativeTradelineClassifier()
+
+        # Section splitting helpers
+        self.section_dividers = [
+            r'(?i)account information',
+            r'(?i)tradeline',
+            r'(?i)creditor',
+            r'(?i)company name',
+            r'(?i)account #',
+            r'(?i)loan type'
+        ]
+
+        # Table header mapping
+        self.table_header_mapping = {
+            'creditor': 'creditor_name',
+            'company': 'creditor_name',
+            'lender': 'creditor_name',
+            'account': 'account_number',
+            'account number': 'account_number',
+            'acct': 'account_number',
+            'balance': 'account_balance',
+            'current balance': 'account_balance',
+            'limit': 'credit_limit',
+            'credit limit': 'credit_limit',
+            'payment': 'monthly_payment',
+            'monthly payment': 'monthly_payment',
+            'status': 'account_status',
+            'account status': 'account_status',
+            'type': 'account_type',
+            'account type': 'account_type',
+            'opened': 'date_opened',
+            'date opened': 'date_opened'
+        }
+
+        # Payment history detection
+        self.payment_history_patterns = [
+            re.compile(r'(?i)payment history[:\s]+(.+?)(?=\n\S|$)', re.MULTILINE),
+            re.compile(r'(?i)(\d+\s+days?\s+late)', re.MULTILINE),
+            re.compile(r'(?i)late\s+(\d+)', re.MULTILINE)
+        ]
     
     def parse_tradelines_from_text(self, text: str) -> List[ParsedTradeline]:
         """
@@ -86,6 +135,7 @@ class TransUnionTradelineParser:
         
         # Split text into sections for each creditor
         creditor_sections = self._split_into_creditor_sections(text)
+        table_tradelines = self._extract_tradelines_from_tables(text)
         
         for section in creditor_sections:
             try:
@@ -95,6 +145,10 @@ class TransUnionTradelineParser:
             except Exception as e:
                 logger.warning(f"Failed to parse tradeline section: {e}")
                 continue
+
+        if table_tradelines:
+            logger.info(f"Parsed {len(table_tradelines)} tradelines from detected tables")
+            tradelines.extend(table_tradelines)
         
         # Generate IDs and timestamps for parsed tradelines
         self._add_metadata_to_tradelines(tradelines)
@@ -163,6 +217,82 @@ class TransUnionTradelineParser:
         has_letters = any(c.isalpha() for c in line)
         
         return (is_mostly_caps or has_business_words) and len(line) > 3 and has_letters
+
+    def _extract_tradelines_from_tables(self, text: str) -> List[ParsedTradeline]:
+        """Pull tradelines from rudimentary tables detected inside the report."""
+        lines = [line.strip() for line in text.splitlines()]
+        table_blocks: List[List[str]] = []
+        current_block: List[str] = []
+
+        for line in lines:
+            if '|' in line and len(line.split('|')) > 1:
+                current_block.append(line)
+            else:
+                if len(current_block) >= 2:
+                    table_blocks.append(current_block.copy())
+                current_block = []
+
+        if len(current_block) >= 2:
+            table_blocks.append(current_block)
+
+        tradelines: List[ParsedTradeline] = []
+        for block in table_blocks:
+            headers = [header.strip().lower() for header in block[0].split('|')]
+
+            for row in block[1:]:
+                if '|' not in row:
+                    continue
+                values = [value.strip() for value in row.split('|')]
+                if len(values) != len(headers):
+                    continue
+                mapping = dict(zip(headers, values))
+                tradeline = self._build_tradeline_from_table_row(mapping)
+                if tradeline:
+                    tradelines.append(tradeline)
+
+        return tradelines
+
+    def _build_tradeline_from_table_row(self, mapping: Dict[str, str]) -> Optional[ParsedTradeline]:
+        """Build a ParsedTradeline from a single table row mapping."""
+        tradeline = ParsedTradeline()
+        populated = False
+
+        for header, value in mapping.items():
+            if not value:
+                continue
+            field_key = self.table_header_mapping.get(header)
+            if not field_key:
+                continue
+
+            populated = True
+            if field_key == 'creditor_name':
+                tradeline.creditor_name = self._clean_field_value(value)
+            elif field_key == 'account_number':
+                tradeline.account_number = self._format_account_number(value)
+            elif field_key in ['account_balance', 'credit_limit', 'monthly_payment']:
+                tradeline.__setattr__(field_key, self._format_currency(value, field_name=field_key))
+            elif field_key == 'account_status':
+                tradeline.account_status = self._normalize_account_status(value)
+            elif field_key == 'account_type':
+                tradeline.account_type = self._normalize_account_type(value)
+            elif field_key == 'date_opened':
+                tradeline.date_opened = self._format_date(value)
+
+        payment_history_value = mapping.get('payment history') or mapping.get('history')
+        if payment_history_value:
+            tradeline.payment_history = payment_history_value
+
+        if not populated:
+            return None
+
+        tradeline.credit_bureau = "TransUnion"
+        self._classify_negative(tradeline)
+        tradeline.extraction_confidence = self._calculate_tradeline_confidence(tradeline)
+        tradeline.raw_data = {'table_row': mapping}
+
+        if tradeline.creditor_name or tradeline.account_number:
+            return tradeline
+        return None
     
     def _parse_single_tradeline_section(self, section: str) -> Optional[ParsedTradeline]:
         """
@@ -180,7 +310,18 @@ class TransUnionTradelineParser:
         # Parse remaining lines for account information
         for line in lines[1:]:
             self._parse_account_info_line(line, tradeline)
-        
+
+        # Capture payment history when present
+        payment_history = self._parse_payment_history(section)
+        if payment_history:
+            tradeline.payment_history = payment_history
+
+        # Default bureau and classification
+        tradeline.credit_bureau = "TransUnion"
+        self._classify_negative(tradeline)
+        tradeline.extraction_confidence = self._calculate_tradeline_confidence(tradeline)
+        tradeline.raw_data = {'raw_section': section}
+
         return tradeline
     
     def _parse_account_info_line(self, line: str, tradeline: ParsedTradeline):
@@ -212,34 +353,46 @@ class TransUnionTradelineParser:
         # Monthly Payment
         elif 'monthly payment:' in line_lower:
             payment = line.split(':', 1)[1].strip()
-            tradeline.monthly_payment = self._format_currency(payment)
+            tradeline.monthly_payment = self._format_currency(payment, field_name="monthly_payment")
         
         # Credit Limit
         elif 'credit limit:' in line_lower:
             limit = line.split(':', 1)[1].strip()
-            tradeline.credit_limit = self._format_currency(limit)
+            tradeline.credit_limit = self._format_currency(limit, field_name="credit_limit")
         
         # Balance
         elif 'balance:' in line_lower:
             balance = line.split(':', 1)[1].strip()
-            tradeline.account_balance = self._format_currency(balance)
+            tradeline.account_balance = self._format_currency(balance, field_name="account_balance")
     
     def _format_account_number(self, account_num: str) -> Optional[str]:
         """
-        Format account number to match expected format
-        Should end with ****
+        Format account number - remove all special characters and validate.
+        Returns alphanumeric-only account number for clean output.
         """
         if not account_num or account_num.lower() in ['none', 'n/a', '']:
             return None
         
-        # Clean up and ensure it ends with ****
+        # Clean up the account number
         account_num = account_num.strip()
-        if not account_num.endswith('****'):
-            # If it looks like a partial account number, add ****
-            if re.match(r'^[A-Z0-9]+$', account_num):
-                account_num += '****'
         
-        return account_num
+        # Remove ALL special characters (asterisks, X's, dots, dashes, etc.)
+        # Keep only alphanumeric characters per user requirement
+        cleaned_account = re.sub(r'[^A-Za-z0-9]', '', account_num)
+        
+        # Validate: Must be at least 4 characters and contain at least one digit
+        if not cleaned_account or len(cleaned_account) < 4:
+            return None
+        
+        if not any(c.isdigit() for c in cleaned_account):
+            return None
+        
+        # Validate reasonable length (4-20 characters)
+        if len(cleaned_account) > 20:
+            # Truncate if too long (likely OCR error)
+            cleaned_account = cleaned_account[:20]
+        
+        return cleaned_account
     
     def _normalize_account_type(self, account_type: str) -> Optional[str]:
         """
@@ -263,44 +416,30 @@ class TransUnionTradelineParser:
     
     def _format_date(self, date_str: str) -> Optional[str]:
         """
-        Format date to MM/DD/YYYY format
+        Format date to MM/DD/YYYY format using shared date parser.
+        Handles month-name formats, ISO dates, MM/DD/YY, MM/DD/YYYY,
+        MM-YY, MM-YYYY, and partial dates with sensible defaults.
         """
-        if not date_str or date_str.lower() in ['none', 'n/a', '']:
-            return None
-        
-        date_str = date_str.strip()
-        
-        # Try to parse various date formats
-        date_formats = [
-            '%m/%d/%Y',    # MM/DD/YYYY
-            '%m/%d/%y',    # MM/DD/YY
-            '%Y-%m-%d',    # YYYY-MM-DD
-            '%m-%d-%Y',    # MM-DD-YYYY
-        ]
-        
-        for fmt in date_formats:
-            try:
-                parsed_date = datetime.strptime(date_str, fmt)
-                return parsed_date.strftime('%m/%d/%Y')  # Always return MM/DD/YYYY
-            except ValueError:
-                continue
-        
-        # If no format works, try to extract with regex
-        match = self.date_pattern.search(date_str)
-        if match:
-            month, day, year = match.groups()
-            return f"{month.zfill(2)}/{day.zfill(2)}/{year}"
-        
-        return None
+        return self.date_parser.parse_date(date_str)
     
-    def _format_currency(self, amount: str) -> Optional[str]:
+    def _format_currency(self, amount: str, field_name: str = "") -> Optional[str]:
         """
-        Format currency amount to match expected format ($X,XXX or $X)
+        Format currency amount to match expected format: $X,XXX.XX for all fields.
         """
         if not amount or amount.lower() in ['none', 'n/a', '']:
             return None
+
+        # Handle explicit $0 - format based on field type
+        if amount.lower() == '$0' or amount == '0':
+            return '$0.00'
         
         amount = amount.strip()
+        
+        # Apply OCR error corrections
+        amount = amount.replace('O', '0').replace('l', '1').replace('S', '5')
+        
+        # Handle parenthetical negatives: ($1,234) or (1234)
+        is_negative = '(' in amount and ')' in amount or amount.startswith('-')
         
         # Extract numeric value
         numeric_match = re.search(r'[\d,]+\.?\d*', amount)
@@ -312,18 +451,65 @@ class TransUnionTradelineParser:
         try:
             # Parse the numeric value
             numeric_value = float(numeric_str.replace(',', ''))
-            
-            # Format as currency
-            if numeric_value == 0:
-                return '$0'
-            elif numeric_value >= 1000:
-                return f"${numeric_value:,.0f}"
-            else:
-                return f"${numeric_value:.0f}"
+            abs_amount = abs(numeric_value)
+            formatted = f"${abs_amount:,.2f}"
+            return f"-{formatted}" if is_negative else formatted
                 
         except ValueError:
             return None
     
+    def _parse_payment_history(self, section: str) -> str:
+        """Extract payment history summaries from a tradeline section."""
+        for pattern in self.payment_history_patterns:
+            match = pattern.search(section)
+            if match:
+                value = match.group(1).strip()
+                return re.sub(r'\s+', ' ', value)
+        late_matches = re.findall(r'(?i)\b(?:30|60|90|120)\s*days?\s*(?:late|past due)?\b', section)
+        return ' '.join(late_matches) if late_matches else ""
+
+    def _classify_negative(self, tradeline: ParsedTradeline) -> None:
+        """Use the rule-based classifier to flag negative tradelines."""
+        payload = {
+            'account_status': tradeline.account_status or '',
+            'payment_history': getattr(tradeline, 'payment_history', '') or '',
+            'account_balance': tradeline.account_balance or '',
+            'credit_limit': tradeline.credit_limit or '',
+            'creditor_name': tradeline.creditor_name or '',
+            'comments': getattr(tradeline, 'comments', '') or ''
+        }
+        classification = self.negative_classifier.classify(payload)
+        tradeline.is_negative = classification.is_negative
+        tradeline.negative_confidence = classification.confidence
+        tradeline.negative_indicators = classification.indicators
+
+    def _calculate_tradeline_confidence(self, tradeline: ParsedTradeline) -> float:
+        """Score how confident we are in an individual tradeline."""
+        confidence = 0.0
+        if tradeline.creditor_name:
+            confidence += 0.3
+        if tradeline.account_type:
+            confidence += 0.2
+        if tradeline.account_status:
+            confidence += 0.2
+        if tradeline.account_balance:
+            confidence += 0.1
+        if tradeline.credit_limit:
+            confidence += 0.1
+        if tradeline.date_opened:
+            confidence += 0.1
+        return min(1.0, confidence)
+
+    def _calculate_parsing_confidence(self, tradelines: List[ParsedTradeline], sections_count: int) -> float:
+        """Compute an aggregate confidence score across all parsed tradelines."""
+        if not tradelines or sections_count == 0:
+            return 0.0
+        extraction_rate = len(tradelines) / sections_count
+        base_confidence = extraction_rate * 0.6
+        avg_conf = sum(t.extraction_confidence for t in tradelines) / len(tradelines)
+        base_confidence += avg_conf * 0.4
+        return min(1.0, base_confidence)
+
     def _add_metadata_to_tradelines(self, tradelines: List[ParsedTradeline]):
         """
         Add ID and timestamp metadata to tradelines

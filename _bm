@@ -1,0 +1,287 @@
+---
+title: Sprint 1 Implementation Plan
+sprint: 1
+focus: Foundation & Core Ingestion
+totalPoints: 29
+status: in-progress
+startDate: 2026-01-07
+estimatedDuration: 2 weeks
+---
+
+# Sprint 1: Foundation & Core Ingestion
+
+**Goal:** Establish authentication, upload infrastructure, and begin extraction
+
+## Sprint Overview
+
+| Epic | Story | Points | Status | Priority |
+|------|-------|--------|--------|----------|
+| EPIC-01 | US-01: User Account Registration | 3 | In Progress | P0 |
+| EPIC-01 | US-02: User Authentication (Login) | 3 | In Progress | P0 |
+| EPIC-01 | US-03: Password Reset Flow | 2 | Pending | P0 |
+| EPIC-01 | US-04: User Profile Management | 2 | Pending | P0 |
+| EPIC-02 | US-05: Credit Report PDF Upload | 5 | In Progress | P0 |
+| EPIC-02 | US-06: Upload Status Tracking | 3 | In Progress | P0 |
+| EPIC-02 | US-07: Report Processing Pipeline | 8 | In Progress | P0 |
+| EPIC-02 | US-08: Upload Error Handling | 3 | Pending | P0 |
+
+## Current State Summary
+
+Based on codebase assessment:
+- ✅ **60-70% complete** - Existing infrastructure ready
+- 🔄 **15-25% needs enhancement** - Partial implementation
+- ⏳ **10-15% missing** - New components required
+
+## Implementation Tasks by Week
+
+### Week 1: Authentication Foundation
+
+#### Task 1.1: Backend Auth Routes (US-01, US-02)
+**Status:** Missing - No dedicated `/api/v1/auth/` endpoints
+
+**Required Files:**
+- `backend/api/v1/routes/auth.py` - New authentication routes
+- `backend/api/v1/routes/__init__.py` - Update to include auth routes
+
+**Implementation:**
+```python
+# backend/api/v1/routes/auth.py
+from fastapi import APIRouter, Depends, HTTPException, status
+from supabase import create_client, Client
+from backend.core.config import settings
+from backend.core.security import verify_token, create_rate_limit_response
+
+router = APIRouter(prefix="/auth", tags=["authentication"])
+
+@router.post("/register")
+async def register(user_data: RegisterRequest):
+    """Register new user with email/password"""
+    # Implement Supabase sign-up
+    # Send email verification
+    # Return user ID
+
+@router.post("/login")
+async def login(credentials: LoginRequest):
+    """Authenticate user and return JWT"""
+    # Verify credentials with Supabase
+    # Apply rate limiting
+    # Return session token
+
+@router.post("/logout")
+async def logout(token: str = Depends(verify_token)):
+    """Invalidate user session"""
+    # Sign out from Supabase
+```
+
+#### Task 1.2: Password Complexity Validation (US-01)
+**Status:** Partial - Currently only 8-char minimum
+
+**Required Changes:**
+- `frontend/src/pages/SignupPage.tsx` - Add validation
+- `backend/api/v1/routes/auth.py` - Add server-side validation
+
+**Validation Rules:**
+- Minimum 8 characters
+- At least one uppercase letter
+- At least one lowercase letter
+- At least one number
+- At least one special character
+
+#### Task 1.3: Redis Rate Limiting (US-02)
+**Status:** Partial - Placeholder exists in `backend/core/security.py:144`
+
+**Required Changes:**
+- `backend/core/security.py` - Implement Redis rate limiter
+- `backend/api/v1/routes/auth.py` - Apply to login endpoint
+
+**Implementation:**
+```python
+# backend/core/security.py
+class RateLimiter:
+    async def check_rate_limit(self, key: str, max_requests: int = 10, window: int = 60):
+        """Redis-backed rate limiting"""
+        # Implement sliding window algorithm
+```
+
+#### Task 1.4: Profile Audit Logging (US-04)
+**Status:** Missing - No audit trail for profile changes
+
+**Required Changes:**
+- `backend/api/v1/routes/users.py` - New profile endpoints
+- `backend/services/audit_service.py` - New audit service
+
+**Audit Events:**
+- Profile created
+- Profile updated
+- Email changed
+- Password changed
+
+---
+
+### Week 2: Upload & Processing
+
+#### Task 2.1: Duplicate File Detection (US-05)
+**Status:** Missing - No hash-based deduplication
+
+**Required Changes:**
+- `backend/services/storage_service.py` - Add SHA-256 hash
+- `backend/api/v1/routes/processing.py` - Check for duplicates
+
+**Implementation:**
+```python
+# backend/services/storage_service.py
+import hashlib
+
+async def detect_duplicate(file_content: bytes) -> bool:
+    """Check if file already exists"""
+    file_hash = hashlib.sha256(file_content).hexdigest()
+    # Query Supabase for existing hash
+```
+
+#### Task 2.2: Virus Scanning (US-05)
+**Status:** Missing - No virus scanning integration
+
+**Required Changes:**
+- `backend/services/virus_scanner.py` - New service
+- `backend/api/v1/routes/processing.py` - Integrate scanner
+
+**Options:**
+- ClamAV (local)
+- Cloud virus scanning API
+
+#### Task 2.3: Redis Queue Adapter (US-07)
+**Status:** Partial - In-memory queue exists
+
+**Required Changes:**
+- `backend/services/background_jobs.py` - Add Redis adapter
+- `backend/core/config.py` - Add Redis configuration
+
+**Implementation:**
+```python
+# backend/services/background_jobs.py
+class RedisJobQueue:
+    """Redis-backed job queue for production"""
+    async def enqueue(self, job_data: dict):
+        # Push to Redis list
+    async def dequeue(self):
+        # Pop from Redis list
+```
+
+#### Task 2.4: Real-time Job Updates (US-06)
+**Status:** Missing - No WebSocket support
+
+**Required Changes:**
+- `backend/main.py` - Add WebSocket endpoint
+- `frontend/src/hooks/useCreditReportProcessing.ts` - WebSocket client
+
+**Implementation:**
+```python
+# backend/main.py
+from fastapi import WebSocket
+
+@websocket.websocket("/ws/processing/{job_id}")
+async def websocket_job_status(websocket: WebSocket, job_id: str):
+    """Real-time job status updates"""
+    # Subscribe to Redis channel
+    # Send status updates to client
+```
+
+#### Task 2.5: Error Envelope Utility (US-08)
+**Status:** Missing - No consistent error formatting
+
+**Required Changes:**
+- `backend/core/exceptions.py` - Define error envelope
+- All API routes - Use error envelope
+
+**Error Envelope Format:**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "AUTH_INVALID_CREDENTIALS",
+    "message": "Invalid email or password",
+    "field": "password",
+    "request_id": "req-abc123"
+  },
+  "data": null
+}
+```
+
+---
+
+## Missing Components Summary
+
+| Component | File Path | Priority |
+|-----------|-----------|----------|
+| Backend Auth Routes | `backend/api/v1/routes/auth.py` | High |
+| Backend User Routes | `backend/api/v1/routes/users.py` | High |
+| Redis Queue Adapter | `backend/services/redis_queue.py` | High |
+| WebSocket Server | `backend/main.py` | High |
+| Error Envelope | `backend/core/exceptions.py` | High |
+| Audit Service | `backend/services/audit_service.py` | Medium |
+| Virus Scanner | `backend/services/virus_scanner.py` | Medium |
+
+---
+
+## Configuration Requirements
+
+Add to `.env`:
+```bash
+# Redis (for rate limiting and job queue)
+REDIS_URL=redis://localhost:6379
+
+# Rate Limiting
+RATE_LIMIT_REQUESTS=10
+RATE_LIMIT_WINDOW=60
+
+# Virus Scanning (optional)
+CLAMAV_HOST=localhost
+CLAMAV_PORT=3310
+```
+
+---
+
+## Testing Requirements
+
+### Unit Tests Required:
+- `backend/tests/unit/test_auth.py` - Authentication flow
+- `backend/tests/unit/test_rate_limiting.py` - Rate limiting
+- `backend/tests/unit/test_storage.py` - File upload
+- `backend/tests/unit/test_errors.py` - Error handling
+
+### Integration Tests Required:
+- `backend/tests/integration/test_auth_flow.py` - Full auth flow
+- `backend/tests/integration/test_upload_flow.py` - Upload to processing
+
+---
+
+## Definition of Done
+
+### Sprint 1 Complete When:
+- [ ] Users can register with validated passwords
+- [ ] Users can login with rate limiting enforced
+- [ ] Password reset flow works end-to-end
+- [ ] Profile updates logged to audit trail
+- [ ] Credit reports upload with duplicate detection
+- [ ] Processing jobs run on Redis queue
+- [ ] Real-time job status via WebSocket
+- [ ] All errors return consistent envelope with request_id
+- [ ] All unit tests pass (80%+ coverage)
+- [ ] All integration tests pass
+
+---
+
+## Next Steps
+
+1. **Create backend auth routes** - Enable full authentication API
+2. **Implement Redis rate limiter** - Prevent brute force attacks
+3. **Add password validation** - Improve security
+4. **Implement Redis queue** - Production-ready job processing
+5. **Add WebSocket support** - Real-time updates
+6. **Create error envelope** - Consistent error handling
+7. **Add virus scanning** - Security for file uploads
+8. **Write tests** - Ensure quality
+
+---
+
+*Created: 2026-01-07 | Status: In Progress*

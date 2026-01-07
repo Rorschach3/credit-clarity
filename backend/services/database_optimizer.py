@@ -42,18 +42,27 @@ class DatabaseOptimizer:
         self._cache_expiry = {}
         self.cache_ttl = 300  # 5 minutes default TTL
         
-        # Initialize connections
-        asyncio.create_task(self._initialize_pool())
+        # Initialize connections (run immediately if no loop is running)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            loop.create_task(self._initialize_pool())
+        else:
+            asyncio.run(self._initialize_pool())
     
     async def _initialize_pool(self):
         """Initialize connection pool."""
-        if not settings.supabase_url or not settings.supabase_anon_key:
+        supabase_key = settings.supabase_service_role_key or settings.supabase_anon_key
+        if not settings.supabase_url or not supabase_key:
             logger.warning("Supabase credentials not available")
             return
         
         try:
             for _ in range(self.max_connections):
-                client = create_client(settings.supabase_url, settings.supabase_anon_key)
+                client = create_client(settings.supabase_url, supabase_key)
                 await self._connection_pool.put(client)
                 self._active_connections += 1
             

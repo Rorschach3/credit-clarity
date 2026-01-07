@@ -12,8 +12,7 @@ import traceback
 from typing import List, Dict, Any, Optional
 import sys
 from datetime import datetime
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
-
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends, Header, WebSocket, WebSocketException
 from fastapi.middleware.cors import CORSMiddleware # type: ignore
 from pydantic import BaseModel, ValidationError # type: ignore
 
@@ -38,6 +37,8 @@ from datetime import datetime
 
 # PDF Chunking
 from services.pdf_chunker import PDFChunker
+from core.security import verify_supabase_jwt
+from services.advanced_parsing.negative_tradeline_classifier import NegativeTradelineClassifier
 
 # Import asyncio for timeout handling
 import asyncio
@@ -52,7 +53,10 @@ if current_dir not in sys.path:
 
 # Import utility modules
 from utils.field_validator import field_validator
-from utils.tradeline_normalizer import tradeline_normalizer
+
+# Import error handling and response modules
+from middleware.error_handler import ErrorHandlerMiddleware, setup_exception_handlers
+from core.response import ResponseFormatter, success_response, error_response
 
 async def with_timeout(coro, timeout_seconds):
     try:
@@ -61,22 +65,33 @@ async def with_timeout(coro, timeout_seconds):
         logger.error(f"Operation timed out after {timeout_seconds} seconds")
         raise TimeoutError("Operation timed out")
 
-# Enhanced logging setup
+# Enhanced logging setup - reduced verbosity for production
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,  # Changed from DEBUG to INFO to reduce log spam
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-# Suppress pdfminer debug logs
+# Suppress verbose debug logs from third-party libraries
 logging.getLogger('pdfminer').setLevel(logging.WARNING)
 logging.getLogger('pdfminer.psparser').setLevel(logging.WARNING)
 logging.getLogger('pdfminer.pdfinterp').setLevel(logging.WARNING)
 logging.getLogger('pdfminer.converter').setLevel(logging.WARNING)
 logging.getLogger('pdfminer.pdfdocument').setLevel(logging.WARNING)
 logging.getLogger('pdfminer.pdfpage').setLevel(logging.WARNING)
+# Suppress extremely verbose multipart logging that was causing log spam
+logging.getLogger('python_multipart.multipart').setLevel(logging.WARNING)
+# Suppress uvicorn access logs for API endpoints to reduce noise
+logging.getLogger('uvicorn.access').setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
-app = FastAPI(title="Credit Report Processor", debug=True)
+app = FastAPI(
+    title="Credit Report Processor",
+    debug=os.getenv("DEBUG", "false").lower() == "true"
+)
+
+# Add error handler middleware
+app.add_middleware(ErrorHandlerMiddleware)
+setup_exception_handlers(app)
 
 # Initialize background job processor
 from services.background_jobs import job_processor
@@ -85,13 +100,19 @@ from services.background_jobs import job_processor
 async def startup_event():
     """Initialize services on startup"""
     await job_processor.start()
+    from services.websocket_manager import initialize_websocket_manager
+    await initialize_websocket_manager()
     logger.info("🚀 Background job processor started")
+    logger.info("🚀 WebSocket manager initialized")
 
 @app.on_event("shutdown")  
 async def shutdown_event():
     """Cleanup on shutdown"""
+    from services.websocket_manager import shutdown_websocket_manager
+    await shutdown_websocket_manager()
     await job_processor.stop()
     logger.info("🛑 Background job processor stopped")
+    logger.info("🛑 WebSocket manager stopped")
 
 # Note: CORS is configured later in the file with more permissive settings for development
 
@@ -100,8 +121,9 @@ PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT_ID")
 LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us")
 PROCESSOR_ID = os.getenv("DOCUMENT_AI_PROCESSOR_ID")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-SUPABASE_URL = "https://gywohmbqohytziwsjrps.supabase.co"
+SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 def normalize_date_for_postgres(date_str: str) -> Optional[str]:
     """
@@ -174,11 +196,13 @@ logger.info(f"  PROCESSOR_ID: {'✅ Set' if PROCESSOR_ID else '❌ Missing'}")
 logger.info(f"  GEMINI_API_KEY: {'✅ Set' if GEMINI_API_KEY else '❌ Missing'}")
 logger.info(f"  SUPABASE_URL: {'✅ Set' if SUPABASE_URL else '❌ Missing'}")
 logger.info(f"  SUPABASE_ANON_KEY: {'✅ Set' if SUPABASE_ANON_KEY else '❌ Missing'}")
+logger.info(f"  SUPABASE_SERVICE_ROLE_KEY: {'✅ Set' if SUPABASE_SERVICE_ROLE_KEY else '❌ Missing'}")
 
 # Initialize services with error handling
 try:
-    if SUPABASE_URL and SUPABASE_ANON_KEY:
-        supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+    supabase_key = SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY
+    if SUPABASE_URL and supabase_key:
+        supabase: Client = create_client(SUPABASE_URL, supabase_key)
         logger.info("✅ Supabase client initialized")
     else:
         logger.error("❌ Supabase configuration missing")
@@ -186,6 +210,58 @@ try:
 except Exception as e:
     logger.error(f"❌ Supabase initialization failed: {e}")
     supabase = None
+
+# Authentication dependency
+async def get_current_user(authorization: str = Header(None)) -> str:
+    """
+    Verify Supabase JWT token and return authenticated user ID.
+
+    Args:
+        authorization: Authorization header containing Bearer token
+
+    Returns:
+        str: Authenticated user ID
+
+    Raises:
+        HTTPException: If token is invalid or missing
+    """
+    if not authorization:
+        raise HTTPException(
+            status_code=401,
+            detail="Missing authorization header. Please provide a valid Bearer token."
+        )
+
+    try:
+        # Extract token from "Bearer <token>" format
+        scheme, token = authorization.split()
+        if scheme.lower() != "bearer":
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid authentication scheme. Use Bearer token."
+            )
+    except ValueError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid authorization header format. Use 'Bearer <token>'."
+        )
+
+    try:
+        user = verify_supabase_jwt(token)
+        if not user.get("id"):
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid or expired token"
+            )
+
+        logger.info(f"✅ User authenticated: {user['id']}")
+        return user["id"]
+
+    except Exception as e:
+        logger.error(f"❌ Authentication failed: {str(e)}")
+        raise HTTPException(
+            status_code=401,
+            detail=f"Authentication failed: {str(e)}"
+        )
 
 try:
     if GEMINI_API_KEY and GEMINI_AVAILABLE and genai:
@@ -231,11 +307,12 @@ class TradelineSchema(BaseModel):
     dispute_count: int = 0
 
 # CORS configuration for development - allows frontend to connect
+# Note: For production, replace localhost origins with actual domain
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",    # React default
-        "http://127.0.0.1:3000", 
+        "http://127.0.0.1:3000",
         "http://localhost:5173",    # Vite default
         "http://127.0.0.1:5173",
         "http://localhost:8080",    # Other common ports
@@ -245,8 +322,17 @@ app.add_middleware(
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-    expose_headers=["*"]
+    allow_headers=[
+        "Accept",
+        "Accept-Language",
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With"
+    ],
+    expose_headers=[
+        "X-Total-Count",
+        "X-Process-Time"
+    ]
 )
 
 def detect_credit_bureau(text_content: str) -> str:
@@ -336,7 +422,7 @@ class LegacyCreditReportProcessor:
             'document_ai_fallback': 0,
             'total_processed': 0
         }
-        
+
         # Initialize Document AI client for fallback
         self.document_ai_client = None
         if PROJECT_ID and PROCESSOR_ID:
@@ -349,7 +435,9 @@ class LegacyCreditReportProcessor:
                 logger.info(f"✅ Document AI fallback configured for {LOCATION}")
             except Exception as e:
                 logger.warning(f"⚠️ Document AI fallback not available: {e}")
-        
+
+        self.negative_classifier = NegativeTradelineClassifier()
+
         # Setup cost logging
         self._setup_cost_logging()
     
@@ -801,9 +889,33 @@ class LegacyCreditReportProcessor:
         
         # Smart deduplication with enhanced criteria
         unique_tradelines = self._smart_deduplicate_tradelines(tradelines)
-        
+
+        unique_tradelines = self._apply_negative_classification(unique_tradelines)
+
         self.logger.info(f"📊 Final result: {len(unique_tradelines)} unique tradelines (removed {len(tradelines) - len(unique_tradelines)} duplicates)")
         return unique_tradelines
+
+    def _apply_negative_classification(self, tradelines: list) -> list:
+        """Backfill negative flags using rule-based classification."""
+        if not tradelines:
+            return tradelines
+
+        for tradeline in tradelines:
+            if not isinstance(tradeline, dict):
+                continue
+
+            existing_flag = tradeline.get("is_negative")
+            if existing_flag is True:
+                continue
+
+            classification = self.negative_classifier.classify(tradeline)
+
+            if classification.is_negative and classification.confidence >= 0.7:
+                tradeline["is_negative"] = True
+            elif existing_flag is None:
+                tradeline["is_negative"] = classification.is_negative
+
+        return tradelines
     
     def _extract_date_from_text(self, text: str, creditor_name: str) -> str:
         """Extract date_opened from text context around creditor name"""
@@ -1761,72 +1873,72 @@ def detect_credit_bureau(text: str) -> str:
         return 'Unknown'
 
 
-# Test endpoint for debugging
-@app.post("/test-pdf")
-async def test_pdf_processing(file: UploadFile = File(...)):
-    """Simple test endpoint to debug PDF processing"""
-    try:
-        logger.info(f"🧪 Testing PDF processing: {file.filename}")
-        
-        # Basic file validation
-        if not file.filename.lower().endswith('.pdf'):
-            return {"success": False, "error": "Not a PDF file"}
-        
-        # Save file temporarily
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
-            content = await file.read()
-            temp_file.write(content)
-            temp_file_path = temp_file.name
-        
+# Test endpoint for debugging (only available in DEBUG mode)
+if os.getenv("DEBUG", "false").lower() == "true":
+    @app.post("/test-pdf")
+    async def test_pdf_processing(file: UploadFile = File(...)):
+        """Simple test endpoint to debug PDF processing (DEBUG mode only)"""
         try:
-            # Test basic PDF reading
-            import pdfplumber
-            with pdfplumber.open(temp_file_path) as pdf:
-                page_count = len(pdf.pages)
-                if page_count > 0:
-                    first_page_text = pdf.pages[0].extract_text()
-                    return {
-                        "success": True,
-                        "page_count": page_count,
-                        "first_page_preview": first_page_text[:200] if first_page_text else "No text found"
-                    }
-                else:
-                    return {"success": False, "error": "No pages found in PDF"}
-        
-        except Exception as e:
-            logger.error(f"❌ PDF processing test failed: {str(e)}")
-            return {"success": False, "error": f"PDF processing failed: {str(e)}"}
-        
-        finally:
-            try:
-                os.unlink(temp_file_path)
-            except:
-                pass
-                
-    except Exception as e:
-        logger.error(f"❌ Test endpoint failed: {str(e)}")
-        return {"success": False, "error": str(e)}
+            logger.info(f"🧪 Testing PDF processing: {file.filename}")
 
-# Main processing endpoint (legacy path)
+            # Basic file validation
+            if not file.filename.lower().endswith('.pdf'):
+                return {"success": False, "error": "Not a PDF file"}
+
+            # Save file temporarily
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+                content = await file.read()
+                temp_file.write(content)
+                temp_file_path = temp_file.name
+
+            try:
+                # Test basic PDF reading
+                import pdfplumber
+                with pdfplumber.open(temp_file_path) as pdf:
+                    page_count = len(pdf.pages)
+                    if page_count > 0:
+                        first_page_text = pdf.pages[0].extract_text()
+                        return {
+                            "success": True,
+                            "page_count": page_count,
+                            "first_page_preview": first_page_text[:200] if first_page_text else "No text found"
+                        }
+                    else:
+                        return {"success": False, "error": "No pages found in PDF"}
+
+            except Exception as e:
+                logger.error(f"❌ PDF processing test failed: {str(e)}")
+                return {"success": False, "error": f"PDF processing failed: {str(e)}"}
+
+            finally:
+                try:
+                    os.unlink(temp_file_path)
+                except:
+                    pass
+
+        except Exception as e:
+            logger.error(f"❌ Test endpoint failed: {str(e)}")
+            return {"success": False, "error": str(e)}
+
+# Main processing endpoint (legacy path) - requires authentication
 @app.post("/process-credit-report")
 async def process_credit_report(
     file: UploadFile = File(...),
-    user_id: str = Form(default="default-user"),
-    use_background: bool = Form(default=False)
+    use_background: bool = Form(default=False),
+    user_id: str = Depends(get_current_user)
 ):
-    """Process uploaded credit report PDF using optimal hybrid strategy"""
+    """Process uploaded credit report PDF using optimal hybrid strategy (requires authentication)"""
     return await _process_credit_report_core(file, user_id, use_background)
 
-# Frontend API endpoint with /api prefix
-@app.post("/api/process-credit-report")  
+# Frontend API endpoint with /api prefix - requires authentication
+@app.post("/api/process-credit-report")
 async def api_process_credit_report(
     file: UploadFile = File(...),
-    user_id: str = Form(default="default-user"),
-    use_background: bool = Form(default=True)  # Default to background processing for frontend
+    use_background: bool = Form(default=True),  # Default to background processing for frontend
+    user_id: str = Depends(get_current_user)
 ):
-    """API endpoint for frontend - routes to background processing by default"""
+    """API endpoint for frontend - routes to background processing by default (requires authentication)"""
     return await _process_credit_report_core(file, user_id, use_background)
-
 async def _process_credit_report_core(
     file: UploadFile,
     user_id: str,
@@ -1906,20 +2018,19 @@ async def _process_credit_report_core(
                 logger.info("🔄 Falling back to synchronous processing")
         
         try:
-            # Use new optimized processor with chunking support
-            logger.info("🔧 Initializing OptimizedCreditReportProcessor with chunking...")
-            from services.optimized_processor import OptimizedCreditReportProcessor
-            processor = OptimizedCreditReportProcessor()
-            logger.info("✅ OptimizedCreditReportProcessor with chunking initialized successfully")
-            
+            # Use legacy credit report processor
+            logger.info("🔧 Initializing LegacyCreditReportProcessor...")
+            processor = LegacyCreditReportProcessor()
+            logger.info("✅ LegacyCreditReportProcessor initialized successfully")
+
             # Calculate file size for routing decision
             file_size_mb = len(content) / (1024 * 1024)
-            
-            logger.info(f"📦 Processing {file_size_mb:.2f}MB file with chunking support")
-            
-            # Use optimized processing pipeline with chunking (extended timeout)
-            logger.info("🚀 Starting optimized processing pipeline with chunking...")
-            result = await processor.process_credit_report_optimized(temp_file_path)
+
+            logger.info(f"📦 Processing {file_size_mb:.2f}MB file")
+
+            # Use legacy processing pipeline
+            logger.info("🚀 Starting legacy processing pipeline...")
+            result = await processor.process_credit_report_optimal(temp_file_path)
             logger.info(f"📊 Processing result: success={result.get('success', False)}")
             
             if result['success']:
@@ -1933,30 +2044,15 @@ async def _process_credit_report_core(
                         # Add user_id to each tradeline
                         for tradeline in tradelines:
                             tradeline['user_id'] = user_id
-                        
+
                         # Insert tradelines into database
-                        from utils.tradeline_normalizer import tradeline_normalizer
-                        normalized_tradelines = []
-                        for tradeline in tradelines:
-                            try:
-                                # Validate and normalize each tradeline
-                                normalized = tradeline_normalizer.normalize(tradeline)
-                                if normalized:
-                                    normalized_tradelines.append(normalized)
-                            except Exception as norm_error:
-                                logger.warning(f"Failed to normalize tradeline: {norm_error}")
-                                continue
-                        
-                        if normalized_tradelines:
-                            # Batch insert
-                            insert_result = supabase.table("tradelines").insert(normalized_tradelines).execute()
-                            if insert_result.data:
-                                logger.info(f"✅ Successfully saved {len(insert_result.data)} tradelines to database")
-                            else:
-                                logger.warning("⚠️ Database insert returned no data")
-                        
+                        insert_result = supabase.table("tradelines").insert(tradelines).execute()
+                        if insert_result.data:
+                            logger.info(f"✅ Successfully saved {len(insert_result.data)} tradelines to database for user {user_id}")
+                        else:
+                            logger.warning(f"⚠️ Database insert returned no data for user {user_id}")
                     except Exception as db_error:
-                        logger.error(f"❌ Failed to save tradelines to database: {db_error}")
+                        logger.error(f"❌ Failed to insert tradelines into database for user {user_id}: {db_error}", exc_info=True)
                         # Continue without failing the entire request
                 
                 return {
@@ -2001,6 +2097,7 @@ async def _process_credit_report_core(
     except Exception as e:
         logger.error(f"❌ Processing failed: {str(e)}")
         return {"success": False, "error": str(e)}
+
 
 
 # Job status endpoints
@@ -2068,18 +2165,125 @@ async def cancel_job(job_id: str):
         cancelled = await job_processor.cancel_job(job_id)
         
         if cancelled:
-            return {
-                "success": True,
-                "message": f"Job {job_id} cancelled successfully"
-            }
+            return success_response(data={"job_id": job_id, "cancelled": True})
         else:
-            return {
-                "success": False,
-                "error": "Job cannot be cancelled (may be running or already completed)"
-            }
+            return error_response(
+                code="JOB_CANNOT_CANCEL",
+                message="Job cannot be cancelled (may be running or already completed)"
+            )
     except Exception as e:
         logger.error(f"❌ Failed to cancel job: {str(e)}")
-        return {"success": False, "error": str(e)}
+        return error_response(code="JOB_CANCEL_FAILED", message=str(e))
+
+# ==================== WEBSOCKET ENDPOINTS ====================
+
+@app.websocket("/ws/processing/{job_id}")
+async def websocket_job_status(websocket: WebSocket, job_id: str):
+    """
+    WebSocket endpoint for real-time job status updates.
+    
+    Clients connect to receive live updates about their job processing status.
+    
+    Message Format (sent to client):
+    {
+        "type": "job_status",
+        "job_id": "job-123",
+        "status": "processing",
+        "progress": 45,
+        "stage": "ocr_extraction",
+        "message": "Processing page 3 of 10",
+        "request_id": "req-abc123",
+        "timestamp": "2024-01-15T10:30:00Z"
+    }
+    
+    Client can send:
+    - {"type": "ping"} - Keep connection alive
+    - {"type": "get_status"} - Request current job status
+    """
+    from services.websocket_manager import websocket_manager, job_status_publisher
+    
+    try:
+        # Accept the connection
+        await websocket.accept()
+        
+        # Register connection
+        await websocket_manager.connect(job_id, websocket)
+        
+        # Subscribe to Redis channel for this job
+        await job_status_publisher.subscribe_to_job(job_id)
+        
+        # Send initial status if job exists
+        try:
+            from services.background_jobs import job_processor
+            job_data = await job_processor.get_job_status(job_id)
+            
+            if job_data:
+                initial_message = {
+                    "type": "job_status",
+                    "job_id": job_id,
+                    "status": job_data.get("status", "unknown"),
+                    "progress": job_data.get("progress", 0),
+                    "stage": job_data.get("stage", ""),
+                    "message": job_data.get("progress_message", ""),
+                    "timestamp": datetime.now().isoformat()
+                }
+                await websocket.send_json(initial_message)
+        except Exception:
+            pass  # Job may not exist yet, that's okay
+        
+        # Listen for messages from client
+        while True:
+            try:
+                data = await websocket.receive_json()
+                
+                if data.get("type") == "ping":
+                    await websocket.send_json({"type": "pong", "timestamp": datetime.now().isoformat()})
+                
+                elif data.get("type") == "get_status":
+                    # Fetch current job status
+                    try:
+                        from services.background_jobs import job_processor
+                        job_data = await job_processor.get_job_status(job_id)
+                        
+                        if job_data:
+                            status_message = {
+                                "type": "job_status",
+                                "job_id": job_id,
+                                "status": job_data.get("status", "unknown"),
+                                "progress": job_data.get("progress", 0),
+                                "stage": job_data.get("stage", ""),
+                                "message": job_data.get("progress_message", ""),
+                                "result": job_data.get("result"),
+                                "error": job_data.get("error"),
+                                "timestamp": datetime.now().isoformat()
+                            }
+                            await websocket.send_json(status_message)
+                        else:
+                            await websocket.send_json({
+                                "type": "error",
+                                "code": "JOB_NOT_FOUND",
+                                "message": f"Job {job_id} not found"
+                            })
+                    except Exception as e:
+                        await websocket.send_json({
+                            "type": "error",
+                            "code": "STATUS_FETCH_FAILED",
+                            "message": str(e)
+                        })
+                        
+            except WebSocketDisconnect:
+                break
+            except Exception as e:
+                logger.error(f"WebSocket error: {e}")
+                break
+                
+    except Exception as e:
+        logger.error(f"WebSocket connection error: {e}")
+    finally:
+        # Clean up connection
+        await websocket_manager.disconnect(job_id, websocket)
+        logger.info(f"WebSocket disconnected for job {job_id}")
+
 
 # Health check endpoint
 @app.get("/health")

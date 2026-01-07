@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1, 2, 3, 4, 7, 8, 9, 10, 11]
+stepsCompleted: [1, 2, 3, 4, 7, 8, 9, 10, 11, "step-01b-continue"]
 inputDocuments:
   - docs/COMPLETE_PACKET_IMPLEMENTATION.md
   - docs/FUZZY_MATCHING_README.md

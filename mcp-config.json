@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "codebase": {
+      "command": "node",
+      "args": ["/mnt/c/projects/credit-clarity/mcp-codebase-server/dist/index.js"],
+      "env": {
+        "CODEBASE_ROOT": "/mnt/c/projects/credit-clarity"
+      }
+    },
+    "clerk-backend": {
+      "command": "node", 
+      "args": ["/mnt/c/projects/credit-clarity/mcp-clerk-backend/dist/index.js"],
+      "env": {
+        "CLERK_SECRET_KEY": "sk_test_sOjaWCpqwtzI5yCrcDvP4l5H8VsxvTmEN0b5muUXp0",
+        "CLERK_PUBLISHABLE_KEY": "pk_test_bXVzaWNhbC13YWxsYWJ5LTgyLmNsZXJrLmFjY291bnRzLmRldiQ"
+      }
+    }
+  }
+}

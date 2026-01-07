@@ -95,6 +95,30 @@ describe('EnhancedCreditReportParser', () => {
       expect(blocks[0]).toContain('CAPITAL ONE');
       expect(blocks[1]).toContain('DISCOVER');
     });
+
+    it('should split account blocks inside a good standing section', () => {
+      const sectionText = `
+        ACCOUNTS IN GOOD STANDING
+        
+        CHASE FREEDOM CARD  
+        Address: PO BOX 15298
+        Account Number: ****9999
+        Status: Open
+        Balance: $1,200.00
+        
+        WELLS FARGO AUTO LOAN
+        Address: PO BOX 54321
+        Account Number: ****7777
+        Status: Current
+        Balance: $15,000.00
+      `;
+
+      const blocks = parser.parseAccountBlocks(sectionText);
+
+      expect(blocks).toHaveLength(2);
+      expect(blocks[0]).toContain('CHASE FREEDOM CARD');
+      expect(blocks[1]).toContain('WELLS FARGO AUTO LOAN');
+    });
   });
 
   describe('Regex-Driven Account Detail Extraction', () => {
@@ -247,6 +271,11 @@ describe('EnhancedCreditReportParser', () => {
 
   describe('Full Integration Tests', () => {
     it('should parse a complete mock credit report', () => {
+      const previousDebug = process.env.PARSER_DEBUG;
+      process.env.PARSER_DEBUG = '1';
+      if (global.restoreConsole) {
+        global.restoreConsole();
+      }
       const mockCreditReport = `
         EXPERIAN CREDIT REPORT
         Consumer: John Doe
@@ -290,6 +319,10 @@ describe('EnhancedCreditReportParser', () => {
       `;
       
       const tradelines = parser.parseEnhancedCreditReport(mockCreditReport, 'test-user-123');
+      process.env.PARSER_DEBUG = previousDebug;
+      if (global.mockConsole) {
+        global.mockConsole();
+      }
       
       expect(tradelines).toHaveLength(4);
       

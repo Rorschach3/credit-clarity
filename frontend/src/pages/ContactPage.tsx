@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Mail, Phone, MapPin } from "lucide-react";
+import { Helmet } from "react-helmet-async";
 
 export default function ContactPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,9 +40,23 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="py-16 px-4 container">
-     <div className="max-w-3xl mx-auto text-center mb-12">
-      <h1 className="text-4xl font-bold mb-4">Contact Us</h1>
+    <>
+      <Helmet>
+        <title>Contact Us - Credit Clarity | Get Expert Credit Repair Help</title>
+        <meta name="description" content="Have questions about credit repair? Contact Credit Clarity for expert support. We're here to help you improve your credit score with AI-powered solutions." />
+        <meta name="keywords" content="contact credit repair, credit repair support, credit clarity contact, credit score help" />
+        <meta property="og:title" content="Contact Us - Credit Clarity" />
+        <meta property="og:description" content="Have questions about credit repair? Contact Credit Clarity for expert support." />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Contact Us - Credit Clarity" />
+        <meta name="twitter:description" content="Have questions about credit repair? Contact Credit Clarity for expert support." />
+        <link rel="canonical" href="https://creditclarity.ai/contact" />
+      </Helmet>
+
+      <div className="py-16 px-4 container">
+       <div className="max-w-3xl mx-auto text-center mb-12">
+        <h1 className="text-4xl font-bold mb-4">Contact Us</h1>
         <p className="text-xl text-gray-600">
           Have questions or need help? We're here for you.
         </p>
@@ -198,5 +213,6 @@ export default function ContactPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }

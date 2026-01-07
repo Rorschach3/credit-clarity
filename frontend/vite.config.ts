@@ -1,38 +1,67 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import sitemap from "vite-plugin-sitemap";
 // import { visualizer } from "rollup-plugin-visualizer";
 
 
-export default defineConfig(({ mode }) => ({
-  server: {
-    host: "::",
-    port: 8080,
-    hmr: {
+export default defineConfig(({ mode }) => {
+  const isProduction = mode === "production";
+  const isDevelopment = mode === "development";
+
+  return {
+    server: {
+      host: "::",
       port: 8080,
-    },
-    watch: {
-      ignored: ['**/.venv/**'],
-    },
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
+      hmr: {
+        port: 8080,
+      },
+      watch: {
+        ignored: ['**/.venv/**', '**/node_modules/**', '**/dist/**'],
+      },
+      proxy: {
+        '/api': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api/, ''),
+        },
       },
     },
-  },
-  plugins: [react()], // visualizer({ filename: "./dist/bundle-analysis.html", open: true, gzipSize: true, brotliSize: true })],
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
+    plugins: [
+      react(),
+      // Sitemap generation for SEO
+      sitemap({
+        hostname: 'https://creditclarity.ai',
+        dynamicRoutes: [
+          '/',
+          '/about',
+          '/pricing',
+          '/contact',
+          '/faq',
+          '/dashboard',
+          '/credit-report-upload',
+          '/tradelines',
+          '/dispute-wizard',
+          '/profile',
+        ],
+        changefreq: 'weekly',
+        priority: 0.7,
+        lastmod: new Date(),
+      }),
+      // Uncomment for bundle analysis: visualizer({ filename: "./dist/bundle-analysis.html", open: true, gzipSize: true, brotliSize: true })
+    ],
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "./src"),
+      },
     },
-  },
-  build: {
-    sourcemap: mode === "development",
-    minify: mode === "production",
-    target: "esnext",
-    chunkSizeWarningLimit: 1000,
+    build: {
+      sourcemap: isDevelopment ? true : 'hidden', // Hidden sourcemaps in production for security
+      minify: isProduction ? 'esbuild' : false, // Use esbuild for faster minification
+      target: "es2020", // Modern target for better optimization
+      chunkSizeWarningLimit: 500, // Stricter chunk size limits
+      cssCodeSplit: true, // CSS code splitting for better caching
+      cssMinify: isProduction, // Minify CSS in production
     commonjsOptions: {
       include: [/pako/, /node_modules/],
       transformMixedEsModules: true,
@@ -47,8 +76,9 @@ export default defineConfig(({ mode }) => ({
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
 
+          // Separate framer-motion from router for better caching (as recommended)
           if (id.includes("react-router-dom")) return "router";
-          if (id.includes("framer-motion")) return "router";
+          if (id.includes("framer-motion")) return "animations";
           if (id.includes("@tanstack/react-query")) return "tanstack";
           if (id.includes("@tanstack/react-query-devtools")) return "tanstack";
           if (id.includes("@supabase")) return "supabase";
@@ -87,14 +117,37 @@ export default defineConfig(({ mode }) => ({
         entryFileNames: "js/[name]-[hash].js",
         assetFileNames: (assetInfo) => {
           const ext = assetInfo.name?.split(".").pop() ?? "";
-          if (/png|jpe?g|svg|gif|tiff|bmp|ico/i.test(ext)) {
+
+          // Organize assets by type for better CDN caching
+          if (/png|jpe?g|svg|gif|tiff|bmp|ico|webp/i.test(ext)) {
             return `img/[name]-[hash][extname]`;
           }
           if (/css/i.test(ext)) {
             return `css/[name]-[hash][extname]`;
           }
+          if (/woff2?|ttf|otf|eot/i.test(ext)) {
+            return `fonts/[name]-[hash][extname]`;
+          }
+          if (/json/i.test(ext)) {
+            return `data/[name]-[hash][extname]`;
+          }
+
           return `assets/[name]-[hash][extname]`;
         },
+
+        // Optimize for HTTP/2 and modern browsers
+        format: 'es',
+        generatedCode: 'es2015',
+      },
+
+      // Tree shaking optimizations
+      treeshake: {
+        preset: 'recommended',
+        manualPureFunctions: [
+          'console.log',
+          'console.info',
+          'console.debug',
+        ],
       },
     },
   },
@@ -102,10 +155,15 @@ export default defineConfig(({ mode }) => ({
     include: [
       "react",
       "react-dom",
+      "react-dom/client",
       "react-router-dom",
       "@tanstack/react-query",
       "@supabase/supabase-js",
       "lucide-react",
+      "clsx",
+      "tailwind-merge",
+      "date-fns",
+      "uuid",
       "pako", // Include pako for proper CommonJS to ES module conversion
     ],
     exclude: [
@@ -117,9 +175,50 @@ export default defineConfig(({ mode }) => ({
       "jspdf",
       "pdf-lib",
     ],
+    esbuildOptions: {
+      target: 'es2020',
+      format: 'esm',
+      platform: 'browser',
+      define: {
+        global: 'globalThis',
+      },
+    },
   },
+
+  // Environment variables
   define: {
     // Fix for pako default export issue
     global: 'globalThis',
+    'process.env.NODE_ENV': JSON.stringify(mode),
+
+    // Performance flags
+    '__DEV__': JSON.stringify(isDevelopment),
+    '__PROD__': JSON.stringify(isProduction),
   },
-}));
+
+  // Performance-focused esbuild configuration
+  esbuild: {
+    target: 'es2020',
+    logOverride: {
+      'this-is-undefined-in-esm': 'silent',
+    },
+    // Production optimizations
+    ...(isProduction && {
+      drop: ['console', 'debugger'],
+      minifyIdentifiers: true,
+      minifySyntax: true,
+      minifyWhitespace: true,
+    }),
+  },
+
+  // Worker optimization
+  worker: {
+    format: 'es',
+    rollupOptions: {
+      output: {
+        chunkFileNames: 'workers/[name]-[hash].js',
+      },
+    },
+  },
+};
+});

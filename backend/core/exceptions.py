@@ -272,3 +272,47 @@ def external_service_error(service: str, message: str) -> ExternalServiceError:
 def business_error(message: str, rule: Optional[str] = None) -> BusinessLogicError:
     """Create business logic error."""
     return BusinessLogicError(message, rule)
+
+
+class InvalidTokenError(CreditClarityException):
+    """Invalid or expired token errors."""
+    
+    def __init__(
+        self,
+        message: str = "Invalid or expired token",
+        token_type: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(
+            message=message,
+            error_code="INVALID_TOKEN",
+            details={**(details or {}), "token_type": token_type} if token_type else details,
+            status_code=401
+        )
+
+
+class PasswordComplexityError(CreditClarityException):
+    """Password complexity validation errors."""
+    
+    def __init__(
+        self,
+        message: str = "Password does not meet complexity requirements",
+        requirements: Optional[Dict[str, Any]] = None,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(
+            message=message,
+            error_code="PASSWORD_COMPLEXITY_ERROR",
+            details={**(details or {}), "requirements": requirements} if requirements else details,
+            status_code=400
+        )
+
+
+def invalid_token_error(message: str = "Invalid or expired token", token_type: Optional[str] = None) -> InvalidTokenError:
+    """Create invalid token error."""
+    return InvalidTokenError(message, token_type)
+
+
+def password_complexity_error(message: str = "Password does not meet complexity requirements") -> PasswordComplexityError:
+    """Create password complexity error."""
+    return PasswordComplexityError(message)

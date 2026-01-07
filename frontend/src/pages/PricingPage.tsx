@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useNavigate } from "react-router-dom";
 import MainLayout from "@/components/layout/MainLayout";
+import { Helmet } from "react-helmet-async";
 
 export default function PricingPage() {
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
@@ -97,6 +98,19 @@ export default function PricingPage() {
 
   return (
    <MainLayout>
+    <Helmet>
+      <title>Pricing Plans - Credit Clarity | Affordable Credit Repair</title>
+      <meta name="description" content="Choose from flexible pricing plans for AI-powered credit repair. From free basic analysis to unlimited dispute letters with expert support." />
+      <meta name="keywords" content="credit repair pricing, affordable credit repair, credit repair plans, credit score improvement cost" />
+      <meta property="og:title" content="Pricing Plans - Credit Clarity" />
+      <meta property="og:description" content="Choose from flexible pricing plans for AI-powered credit repair. From free basic analysis to unlimited dispute letters." />
+      <meta property="og:type" content="website" />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content="Pricing Plans - Credit Clarity" />
+      <meta name="twitter:description" content="Choose from flexible pricing plans for AI-powered credit repair." />
+      <link rel="canonical" href="https://creditclarity.ai/pricing" />
+    </Helmet>
+
     <div className="py-16 px-4 container">
      <div className="max-w-3xl mx-auto text-center mb-12">
       <h1 className="text-4xl font-bold mb-4">Simple, Transparent Pricing</h1>

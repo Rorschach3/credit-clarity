@@ -1,0 +1,224 @@
+{
+  "id": "IMPL-004",
+  "title": "Create Data Architecture and Schema Design PRD Section",
+  "status": "completed",
+  "context_package_path": ".workflow/active/WFS-brainstorm-for-a-prd/.process/context-package.json",
+  "meta": {
+    "type": "docs",
+    "agent": "@code-developer",
+    "execution_group": null
+  },
+  "context": {
+    "requirements": [
+      "Create 1 comprehensive data architecture document (8-10 pages) covering database design and data flows",
+      "Document 5 major data models: credit reports, tradelines, disputes, status history, user management",
+      "Include 3 database technology selections: PostgreSQL (Supabase), TimescaleDB, Pinecone/Weaviate",
+      "Document 4 data pipeline integrations: AI extraction, mailing service, bureau response OCR, analytics",
+      "Include 8-10 SQL schema definitions with indexes and constraints",
+      "Integrate findings from 6 data-architect analyses covering models, database strategy, integration, security, scalability"
+    ],
+    "focus_paths": [
+      "docs/",
+      ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/"
+    ],
+    "acceptance": [
+      "1 data architecture document created: verify by ls docs/PRD-Data-Architecture.md",
+      "5 data models documented: verify by grep -c '### Data Model [1-5]:' docs/PRD-Data-Architecture.md = 5",
+      "3 database technologies documented: verify by grep -c 'PostgreSQL\\|TimescaleDB\\|Pinecone\\|Weaviate' docs/PRD-Data-Architecture.md >= 10",
+      "8+ SQL schemas present: verify by grep -c 'CREATE TABLE' docs/PRD-Data-Architecture.md >= 8",
+      "4 data pipelines documented: verify by grep -c 'Pipeline [1-4]:' docs/PRD-Data-Architecture.md = 4"
+    ],
+    "depends_on": ["IMPL-002"],
+    "inherited": {
+      "from": "IMPL-002",
+      "context": ["Technical architecture completed", "Multi-bureau tracking component defined", "Security architecture established"]
+    },
+    "shared_context": {
+      "tech_stack": ["PostgreSQL", "Supabase", "TimescaleDB", "Pinecone/Weaviate", "Redis"],
+      "data_patterns": ["Structured JSON for tradelines", "Multi-bureau relational model", "Time-series hypertables", "Vector embeddings"],
+      "conventions": ["Follow PostgreSQL naming conventions", "Include RLS policies", "Document indexes and constraints", "Include data retention policies"]
+    },
+    "artifacts": [
+      {
+        "type": "topic_framework",
+        "source": "brainstorm_framework",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/guidance-specification.md",
+        "priority": "highest",
+        "usage": "Data architecture decisions (Section 5) and storage strategy",
+        "contains": "TimescaleDB timing decision, training data strategy, analytics scope, privacy approach"
+      },
+      {
+        "type": "individual_role_analysis",
+        "source": "brainstorm_roles",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/analysis.md",
+        "priority": "high",
+        "usage": "Overall data architecture strategy and technology selections",
+        "contains": "Hybrid storage strategy, structured JSON pattern, multi-bureau model, privacy-first security"
+      },
+      {
+        "type": "individual_role_analysis",
+        "source": "brainstorm_roles",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/analysis-data-models-schema-design.md",
+        "priority": "high",
+        "usage": "Comprehensive database schema definitions for all data models",
+        "contains": "Credit reports, tradelines, disputes, status history, user management schemas"
+      },
+      {
+        "type": "individual_role_analysis",
+        "source": "brainstorm_roles",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/analysis-database-architecture-strategy.md",
+        "priority": "high",
+        "usage": "Database technology selection and architectural patterns",
+        "contains": "PostgreSQL + Supabase rationale, TimescaleDB for time-series, vector DB comparison"
+      },
+      {
+        "type": "individual_role_analysis",
+        "source": "brainstorm_roles",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/analysis-data-integration-pipelines.md",
+        "priority": "high",
+        "usage": "Data flow architecture and pipeline integration patterns",
+        "contains": "AI extraction pipeline, mailing service data flows, bureau response processing, analytics pipeline"
+      },
+      {
+        "type": "individual_role_analysis",
+        "source": "brainstorm_roles",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/analysis-security-compliance-governance.md",
+        "priority": "high",
+        "usage": "Data security, FCRA compliance, encryption strategy",
+        "contains": "FCRA requirements, RLS policies, column-level encryption, data retention, audit trails"
+      },
+      {
+        "type": "individual_role_analysis",
+        "source": "brainstorm_roles",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/analysis-scalability-performance-capacity.md",
+        "priority": "high",
+        "usage": "Query optimization, indexing strategies, capacity planning",
+        "contains": "Multi-bureau query optimization, indexing strategies, storage growth projections"
+      }
+    ]
+  },
+  "flow_control": {
+    "pre_analysis": [
+      {
+        "step": "load_context_package",
+        "action": "Load context package for artifact paths and smart context",
+        "commands": ["Read(.workflow/active/WFS-brainstorm-for-a-prd/.process/context-package.json)"],
+        "output_to": "context_package",
+        "on_error": "fail"
+      },
+      {
+        "step": "load_data_architect_analyses",
+        "action": "Load all 6 data-architect role analyses progressively",
+        "commands": [
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/analysis.md)",
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/analysis-data-models-schema-design.md)",
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/analysis-database-architecture-strategy.md)",
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/analysis-data-integration-pipelines.md)",
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/analysis-security-compliance-governance.md)",
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/analysis-scalability-performance-capacity.md)"
+        ],
+        "output_to": "data_architect_analyses",
+        "on_error": "skip_optional"
+      },
+      {
+        "step": "review_existing_database_structure",
+        "action": "Review existing Supabase migrations for current database schema",
+        "commands": [
+          "bash(find supabase/migrations/ -name '*.sql' -type f | head -5)",
+          "bash(ls -la backend/services/ | grep -E 'database|db')"
+        ],
+        "output_to": "existing_database",
+        "on_error": "skip_optional"
+      }
+    ],
+    "implementation_approach": [
+      {
+        "step": 1,
+        "title": "Load and synthesize data architecture artifacts",
+        "description": "Extract database schemas, data models, and pipeline designs from data-architect analyses",
+        "modification_points": [
+          "Load 6 data-architect documents: extract 5 data models, 3 database technologies, 4 data pipelines, 8+ SQL schemas",
+          "Load analysis-data-models-schema-design.md: extract complete SQL schema definitions",
+          "Load analysis-database-architecture-strategy.md: extract technology selection rationale",
+          "Load analysis-data-integration-pipelines.md: extract data flow diagrams and pipeline patterns",
+          "Load analysis-security-compliance-governance.md: extract RLS policies, encryption patterns, compliance requirements",
+          "Synthesize into coherent data architecture document structure"
+        ],
+        "logic_flow": [
+          "Read all data-architect analysis files from pre_analysis outputs",
+          "Extract 5 major data models: credit_reports, tradelines, disputes, dispute_status_history, users",
+          "Extract SQL schema definitions: CREATE TABLE statements with indexes, constraints, RLS policies",
+          "Extract database technology decisions: PostgreSQL + Supabase, TimescaleDB (now), Pinecone/Weaviate (Phase 3)",
+          "Extract data pipeline patterns: AI extraction flow, mailing service integration, analytics aggregation",
+          "Map FCRA compliance requirements to data retention and encryption patterns",
+          "Organize into sections: Overview, Data Models, Database Technologies, Data Pipelines, Security/Compliance, Scalability"
+        ],
+        "depends_on": [],
+        "output": "data_architecture_synthesis"
+      },
+      {
+        "step": 2,
+        "title": "Create data architecture document",
+        "description": "Write comprehensive data architecture markdown with SQL schemas, data flow diagrams, and security policies",
+        "modification_points": [
+          "Create 1 new file: docs/PRD-Data-Architecture.md (estimated 1200-1500 lines)",
+          "Include 6 main sections: Overview, Data Models (5), Database Technologies (3), Data Pipelines (4), Security/Compliance, Scalability/Performance",
+          "Document 5 data models with complete SQL schemas: credit_reports, tradelines, disputes, dispute_status_history, users",
+          "Include 8-10 SQL CREATE TABLE statements with indexes, constraints, RLS policies",
+          "Add 4 data pipeline flow diagrams using ASCII art or mermaid notation",
+          "Document 3-5 data security patterns: encryption, RLS, audit trails, retention policies"
+        ],
+        "logic_flow": [
+          "Create docs/PRD-Data-Architecture.md with proper frontmatter",
+          "Write Overview section: hybrid storage strategy, structured JSON pattern, FCRA compliance overview (1 page)",
+          "Write Data Models section (4-5 pages):",
+          "  - Model 1: Credit Reports (structured JSON tradeline storage)",
+          "  - Model 2: Tradelines (account details, negative flags, dispute reasons)",
+          "  - Model 3: Disputes (multi-bureau tracking, status, mailing info)",
+          "  - Model 4: Dispute Status History (audit trail, change tracking)",
+          "  - Model 5: User Management (auth, rate limits, subscription tier)",
+          "Write Database Technologies section (2 pages):",
+          "  - PostgreSQL + Supabase: primary database, RLS, connection pooling",
+          "  - TimescaleDB: time-series extension for historical score tracking",
+          "  - Pinecone/Weaviate: vector DB for Phase 3 chatbot RAG",
+          "Write Data Pipelines section (2-3 pages):",
+          "  - Pipeline 1: AI Extraction (Document AI → Gemini → PostgreSQL)",
+          "  - Pipeline 2: Mailing Service (Letter generation → Lob/USPS → Tracking storage)",
+          "  - Pipeline 3: Bureau Response Processing (OCR → Status update → History audit)",
+          "  - Pipeline 4: Analytics Aggregation (Real-time stats calculation triggers)",
+          "Write Security/Compliance section (1.5 pages): FCRA requirements, RLS policies, column encryption, retention policies",
+          "Write Scalability/Performance section (1 page): Indexing strategies, query optimization, capacity projections",
+          "Add Appendix: Sample queries for multi-bureau tracking, data retention scripts",
+          "Validate all SQL schemas are syntactically correct and include RLS policies"
+        ],
+        "depends_on": [1],
+        "output": "data_architecture_document"
+      },
+      {
+        "step": 3,
+        "title": "Validate data architecture document completeness",
+        "description": "Verify all data models, schemas, and pipelines are documented with security policies",
+        "modification_points": [
+          "Validate 5 data models documented: verify grep count matches expected",
+          "Validate 8+ SQL schemas present: verify CREATE TABLE count >= 8",
+          "Validate 3 database technologies documented: verify PostgreSQL, TimescaleDB, Pinecone/Weaviate references",
+          "Validate 4 data pipelines documented: verify pipeline sections exist",
+          "Validate FCRA compliance coverage: verify RLS policies, encryption, retention policies documented"
+        ],
+        "logic_flow": [
+          "Run grep validation commands from acceptance criteria",
+          "Count data models, SQL schemas, database technology references, pipeline sections",
+          "Validate SQL syntax correctness for all CREATE TABLE statements",
+          "Verify RLS policies are defined for user-facing tables (credit_reports, tradelines, disputes)",
+          "Verify FCRA compliance requirements are addressed (7-year retention, column encryption)",
+          "Generate validation report with pass/fail status"
+        ],
+        "depends_on": [2],
+        "output": "data_architecture_validation_report"
+      }
+    ],
+    "target_files": [
+      "docs/PRD-Data-Architecture.md"
+    ]
+  }
+}

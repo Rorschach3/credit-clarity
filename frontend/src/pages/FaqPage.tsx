@@ -2,10 +2,25 @@
 import React from "react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { FileText, Brain, Rocket } from "lucide-react";
+import { Helmet } from "react-helmet-async";
 
 export default function FaqPage() {
   return (
-      <div className="container py-12 max-w-4xl mx-auto">
+      <>
+        <Helmet>
+          <title>FAQ - Credit Clarity | Credit Repair Questions Answered</title>
+          <meta name="description" content="Find answers to common questions about credit repair, dispute letters, and how Credit Clarity's AI-powered platform helps improve your credit score." />
+          <meta name="keywords" content="credit repair FAQ, credit dispute questions, credit score help, how does credit repair work" />
+          <meta property="og:title" content="FAQ - Credit Clarity" />
+          <meta property="og:description" content="Find answers to common questions about credit repair and how Credit Clarity helps improve your credit score." />
+          <meta property="og:type" content="website" />
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta name="twitter:title" content="FAQ - Credit Clarity" />
+          <meta name="twitter:description" content="Find answers to common questions about credit repair and how Credit Clarity helps improve your credit score." />
+          <link rel="canonical" href="https://creditclarity.ai/faq" />
+        </Helmet>
+
+        <div className="container py-12 max-w-4xl mx-auto">
         <h1 className="text-4xl font-bold text-center mb-2">Frequently Asked Questions</h1>
         <p className="text-center text-gray-600 mb-12">Understanding Credit Repair and Our AI-Powered Dispute Process</p>
 
@@ -227,5 +242,6 @@ export default function FaqPage() {
           </AccordionItem>
         </Accordion>
       </div>
+      </>
   );
 }

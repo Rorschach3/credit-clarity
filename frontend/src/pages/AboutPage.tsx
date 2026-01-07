@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { Shield, UserCheck, BookOpen } from "lucide-react";
+import { Helmet } from "react-helmet-async";
 
 export default function AboutPage() {
   const teamMembers = [
@@ -28,6 +29,19 @@ export default function AboutPage() {
 
   return (
     <>
+      <Helmet>
+        <title>About Us - Credit Clarity | AI-Powered Credit Repair</title>
+        <meta name="description" content="Learn about Credit Clarity's mission to help Americans improve their credit scores through AI-powered credit report analysis and dispute letter generation." />
+        <meta name="keywords" content="credit repair, about credit clarity, AI credit repair, credit score improvement, credit report analysis" />
+        <meta property="og:title" content="About Us - Credit Clarity" />
+        <meta property="og:description" content="Learn about Credit Clarity's mission to help Americans improve their credit scores through AI-powered credit report analysis." />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="About Us - Credit Clarity" />
+        <meta name="twitter:description" content="Learn about Credit Clarity's mission to help Americans improve their credit scores through AI-powered credit report analysis." />
+        <link rel="canonical" href="https://creditclarity.ai/about" />
+      </Helmet>
+
       <div className="bg-gradient-to-r from-brand-900 to-brand-700 text-white py-20">
         {/* Hero Section */}
         <div className="container px-4 mx-auto">

@@ -50,10 +50,10 @@ export class JobPollingService {
     options: JobPollingOptions = {}
   ): Promise<void> {
     const {
-      initialInterval = 1000,
-      maxInterval = 10000,
+      initialInterval = 5000,      // Increased from 1000ms to 5000ms (5 seconds)
+      maxInterval = 30000,         // Increased from 10000ms to 30000ms (30 seconds)
       maxDuration = 30 * 60 * 1000, // 30 minutes
-      backoffMultiplier = 1.5
+      backoffMultiplier = 2.0      // Increased from 1.5 to 2.0 for faster backoff
     } = options;
 
     // Clear any existing polling for this job

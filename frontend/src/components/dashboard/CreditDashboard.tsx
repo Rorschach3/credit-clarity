@@ -193,7 +193,7 @@ const CreditDashboard: React.FC = () => {
             <AlertCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{creditMetrics.totalNegativeItems}</div>
+            <div className="text-2xl font-bold">{creditMetrics?.totalNegativeItems || 0}</div>
             <p className="text-xs text-muted-foreground">Total items to dispute</p>
           </CardContent>
         </Card>
@@ -204,7 +204,7 @@ const CreditDashboard: React.FC = () => {
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{creditMetrics.itemsDisputed}</div>
+            <div className="text-2xl font-bold">{creditMetrics?.itemsDisputed || 0}</div>
             <p className="text-xs text-muted-foreground">Currently in process</p>
           </CardContent>
         </Card>
@@ -215,7 +215,7 @@ const CreditDashboard: React.FC = () => {
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{creditMetrics.itemsResolved}</div>
+            <div className="text-2xl font-bold">{creditMetrics?.itemsResolved || 0}</div>
             <p className="text-xs text-muted-foreground">Successfully removed</p>
           </CardContent>
         </Card>
@@ -226,7 +226,7 @@ const CreditDashboard: React.FC = () => {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+{creditMetrics.potentialScoreIncrease}</div>
+            <div className="text-2xl font-bold">+{creditMetrics?.potentialScoreIncrease || 0}</div>
             <p className="text-xs text-muted-foreground">Estimated points</p>
           </CardContent>
         </Card>
@@ -242,11 +242,11 @@ const CreditDashboard: React.FC = () => {
             <div className="flex justify-between items-center">
               <span>Overall Progress</span>
               <span className="font-semibold">
-                {creditMetrics.itemsResolved}/{creditMetrics.itemsDisputed} resolved
+                {creditMetrics?.itemsResolved || 0}/{creditMetrics?.itemsDisputed || 0} resolved
               </span>
             </div>
             <Progress 
-              value={creditMetrics.itemsDisputed > 0 ? (creditMetrics.itemsResolved / creditMetrics.itemsDisputed) * 100 : 0} 
+              value={creditMetrics?.itemsDisputed > 0 ? ((creditMetrics?.itemsResolved || 0) / creditMetrics.itemsDisputed) * 100 : 0} 
               className="w-full"
             />
           </div>

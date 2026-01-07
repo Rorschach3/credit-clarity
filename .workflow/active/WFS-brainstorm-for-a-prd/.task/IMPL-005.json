@@ -1,0 +1,202 @@
+{
+  "id": "IMPL-005",
+  "title": "Create Implementation Roadmap and Success Metrics PRD Section",
+  "status": "completed",
+  "context_package_path": ".workflow/active/WFS-brainstorm-for-a-prd/.process/context-package.json",
+  "meta": {
+    "type": "docs",
+    "agent": "@code-developer",
+    "execution_group": null
+  },
+  "context": {
+    "requirements": [
+      "Create 1 comprehensive implementation roadmap document (6-8 pages) covering 12-24 month execution plan",
+      "Document 4 phases: Phase 1 MVP (months 1-6), Phase 2 Optimization (months 7-12), Phase 3 AI Enhancement (months 13-18), Phase 4 Scale (months 19-24)",
+      "Include 15+ KPIs and success metrics across user acquisition, conversion, revenue, technical performance",
+      "Document 8-10 business risks with mitigation strategies",
+      "Include 4 quarterly milestones with deliverables and success criteria",
+      "Integrate metrics from product-manager/analysis-metrics.md and roadmap timeline from analysis-roadmap.md"
+    ],
+    "focus_paths": [
+      "docs/",
+      ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/product-manager/"
+    ],
+    "acceptance": [
+      "1 roadmap document created: verify by ls docs/PRD-Implementation-Roadmap.md",
+      "4 phases documented: verify by grep -c '## Phase [1-4]:' docs/PRD-Implementation-Roadmap.md = 4",
+      "15+ KPIs documented: verify by grep -c 'KPI\\|metric\\|target' docs/PRD-Implementation-Roadmap.md >= 15",
+      "8+ risks with mitigation: verify by grep -c 'Risk [0-9]\\+:' docs/PRD-Implementation-Roadmap.md >= 8",
+      "4 quarterly milestones: verify by grep -c 'Q[1-4]\\|Quarter [1-4]\\|Month [1-9]' docs/PRD-Implementation-Roadmap.md >= 4"
+    ],
+    "depends_on": ["IMPL-001", "IMPL-003"],
+    "inherited": {
+      "from": "IMPL-003",
+      "context": ["Feature specifications completed with 20 features across 4 phases", "RICE prioritization framework established"]
+    },
+    "shared_context": {
+      "tech_stack": ["Markdown", "Documentation"],
+      "roadmap_framework": "Phased delivery (MVP → Optimization → AI Enhancement → Scale)",
+      "conventions": ["Use month-based timeline", "Include success criteria per phase", "Document OKRs and KPIs", "Reference RICE scores from feature specs"]
+    },
+    "artifacts": [
+      {
+        "type": "topic_framework",
+        "source": "brainstorm_framework",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/guidance-specification.md",
+        "priority": "highest",
+        "usage": "Long-term roadmap overview (Section 3) and business risks (Section 7)",
+        "contains": "4-phase roadmap, success validation criteria, identified risks with mitigation"
+      },
+      {
+        "type": "individual_role_analysis",
+        "source": "brainstorm_roles",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/product-manager/analysis-roadmap.md",
+        "priority": "high",
+        "usage": "Detailed 24-month roadmap with 20 features, effort estimates, technical milestones",
+        "contains": "Phase 1-4 objectives, feature timelines, success criteria, resource requirements"
+      },
+      {
+        "type": "individual_role_analysis",
+        "source": "brainstorm_roles",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/product-manager/analysis-metrics.md",
+        "priority": "high",
+        "usage": "Comprehensive KPIs, OKRs, success measurements, analytics requirements",
+        "contains": "User acquisition metrics, conversion funnel KPIs, revenue targets, technical performance metrics"
+      },
+      {
+        "type": "individual_role_analysis",
+        "source": "brainstorm_roles",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/product-manager/analysis.md",
+        "priority": "high",
+        "usage": "Business risks and mitigation strategies",
+        "contains": "5 high/medium priority risks with likelihood, impact, mitigation strategies"
+      },
+      {
+        "type": "individual_role_analysis",
+        "source": "brainstorm_roles",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/product-manager/analysis-business-model.md",
+        "priority": "high",
+        "usage": "Revenue projections, conversion funnel, pricing strategy",
+        "contains": "Revenue model, MRR targets, conversion rate assumptions, CAC/LTV analysis"
+      }
+    ]
+  },
+  "flow_control": {
+    "pre_analysis": [
+      {
+        "step": "load_context_package",
+        "action": "Load context package for artifact paths and smart context",
+        "commands": ["Read(.workflow/active/WFS-brainstorm-for-a-prd/.process/context-package.json)"],
+        "output_to": "context_package",
+        "on_error": "fail"
+      },
+      {
+        "step": "load_roadmap_and_metrics",
+        "action": "Load product-manager roadmap and metrics analyses",
+        "commands": [
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/product-manager/analysis-roadmap.md)",
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/product-manager/analysis-metrics.md)"
+        ],
+        "output_to": "roadmap_metrics",
+        "on_error": "fail"
+      },
+      {
+        "step": "load_business_context",
+        "action": "Load business model and risk analysis for revenue projections and risk mitigation",
+        "commands": [
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/product-manager/analysis.md)",
+          "Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/product-manager/analysis-business-model.md)"
+        ],
+        "output_to": "business_context",
+        "on_error": "skip_optional"
+      }
+    ],
+    "implementation_approach": [
+      {
+        "step": 1,
+        "title": "Load and synthesize roadmap and metrics artifacts",
+        "description": "Extract 4 phase roadmaps, KPIs, success criteria, and business risks from product-manager analyses",
+        "modification_points": [
+          "Load analysis-roadmap.md: extract 4 phases with objectives, features, timelines, success criteria",
+          "Load analysis-metrics.md: extract 15+ KPIs (user acquisition, conversion, revenue, technical performance)",
+          "Load analysis.md: extract 5+ business risks with likelihood, impact, mitigation strategies",
+          "Load analysis-business-model.md: extract revenue projections, MRR targets, conversion assumptions",
+          "Synthesize into timeline-based roadmap with quarterly milestones"
+        ],
+        "logic_flow": [
+          "Read all roadmap and metrics files from pre_analysis outputs",
+          "Extract Phase 1 (Months 1-6): 6 MVP features, 100+ users, $500-1500 MRR, 10-15% conversion",
+          "Extract Phase 2 (Months 7-12): 4 optimization features, 1000+ users, $5000-7000 MRR, 12-15% conversion",
+          "Extract Phase 3 (Months 13-18): 4 AI features, 5000+ users, $30000-35000 MRR, 10% premium adoption",
+          "Extract Phase 4 (Months 19-24): 6 scale features, 15000+ users, $100000+ MRR, mobile + B2B",
+          "Extract KPIs: user acquisition, conversion rate, MRR, churn, AI accuracy, performance metrics",
+          "Extract risks: conversion <10%, FCRA compliance, OCR accuracy, viral growth, adoption",
+          "Organize into quarterly milestone structure with deliverables and gates"
+        ],
+        "depends_on": [],
+        "output": "roadmap_synthesis"
+      },
+      {
+        "step": 2,
+        "title": "Create implementation roadmap document",
+        "description": "Write comprehensive roadmap markdown with phase breakdowns, KPIs, milestones, and risk management",
+        "modification_points": [
+          "Create 1 new file: docs/PRD-Implementation-Roadmap.md (estimated 1000-1200 lines)",
+          "Include 5 main sections: Overview, Phase Roadmaps (4 phases), Success Metrics & KPIs, Quarterly Milestones, Risk Management",
+          "Document 4 phases with objectives, features, timelines, success criteria, resource requirements",
+          "Include 15-20 KPIs organized by category (acquisition, conversion, revenue, technical, engagement)",
+          "Document 8-10 business risks with likelihood, impact, mitigation strategies, success metrics",
+          "Add 4 quarterly milestone tables with deliverables and quality gates"
+        ],
+        "logic_flow": [
+          "Create docs/PRD-Implementation-Roadmap.md with proper frontmatter",
+          "Write Overview section: 12-24 month vision, phased approach rationale, critical path (1 page)",
+          "Write Phase 1 (Months 1-6) section (1.5 pages):",
+          "  - Objectives: Launch freemium platform, validate paid mailing",
+          "  - Core features: 6 MVP features (AI scanner, letter gen, mailing, dashboard, stats, rate limiting)",
+          "  - Success criteria: 100+ users, $500-1500 MRR, 10-15% conversion, 95%+ AI accuracy, 0 FCRA issues",
+          "  - Timeline: Month-by-month feature delivery plan",
+          "Write Phase 2 (Months 7-12) section (1.5 pages): Optimization focus, USPS migration, 1000+ users, $5000-7000 MRR",
+          "Write Phase 3 (Months 13-18) section (1.5 pages): AI enhancement, premium tier, 5000+ users, $30000-35000 MRR",
+          "Write Phase 4 (Months 19-24) section (1.5 pages): Scale, mobile app, B2B tools, 15000+ users, $100000+ MRR",
+          "Write Success Metrics & KPIs section (1.5 pages):",
+          "  - User Acquisition: signups, active users, CAC",
+          "  - Conversion: free-to-paid rate, premium tier adoption, repeat purchase",
+          "  - Revenue: MRR, ARPU, LTV, churn",
+          "  - Technical: AI accuracy, API response time, uptime",
+          "  - Engagement: letters generated, disputes tracked, NPS",
+          "Write Quarterly Milestones section (1 page): Q1-Q8 deliverables with quality gates",
+          "Write Risk Management section (1.5 pages): 8-10 risks with mitigation, monitoring, success metrics",
+          "Validate all phases have quantified success criteria and timelines"
+        ],
+        "depends_on": [1],
+        "output": "roadmap_document"
+      },
+      {
+        "step": 3,
+        "title": "Validate roadmap document completeness",
+        "description": "Verify all phases, KPIs, milestones, and risks are documented with quantified targets",
+        "modification_points": [
+          "Validate 4 phases documented: verify grep count of '## Phase [1-4]:' = 4",
+          "Validate 15+ KPIs present: verify metric references count",
+          "Validate 8+ risks documented: verify 'Risk [0-9]+:' count >= 8",
+          "Validate quarterly milestones: verify Q1-Q8 or Month 1-24 references",
+          "Validate quantified targets: verify all success criteria have numbers (users, MRR, conversion %)"
+        ],
+        "logic_flow": [
+          "Run grep validation commands from acceptance criteria",
+          "Count phases, KPI entries, risk sections, quarterly references",
+          "Verify all phases have quantified success criteria (users, MRR, conversion, technical metrics)",
+          "Verify all risks have likelihood, impact, and mitigation strategies",
+          "Cross-check MRR targets and user growth projections are consistent across sections",
+          "Generate validation report with pass/fail status"
+        ],
+        "depends_on": [2],
+        "output": "roadmap_validation_report"
+      }
+    ],
+    "target_files": [
+      "docs/PRD-Implementation-Roadmap.md"
+    ]
+  }
+}

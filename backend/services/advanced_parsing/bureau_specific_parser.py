@@ -12,6 +12,10 @@ from datetime import datetime, date
 
 from core.logging.logger import get_logger
 
+# Shared date parser utility
+from utils.date_parser import CreditReportDateParser
+from services.advanced_parsing.negative_tradeline_classifier import NegativeTradelineClassifier
+
 logger = get_logger(__name__)
 
 @dataclass
@@ -38,6 +42,7 @@ class TradelineData:
     
     # Confidence and metadata
     extraction_confidence: float = 0.0
+    negative_confidence: float = 0.0
     parsing_method: str = ""
     raw_data: Dict[str, Any] = None
     
@@ -63,6 +68,9 @@ class BureauParser(ABC):
         self.bureau_name = bureau_name
         self.patterns = self._load_patterns()
         self.field_mappings = self._load_field_mappings()
+        # Initialize shared date parser
+        self.date_parser = CreditReportDateParser()
+        self.negative_classifier = NegativeTradelineClassifier()
         
     @abstractmethod
     def _load_patterns(self) -> Dict[str, re.Pattern]:
@@ -93,53 +101,84 @@ class BureauParser(ABC):
         return value
     
     def _parse_date(self, date_str: str) -> str:
-        """Parse various date formats to standard format."""
+        """
+        Parse various date formats to standard MM/DD/YYYY format.
+        Uses shared date parser for consistent handling across all parsers.
+        Handles month-name formats, ISO dates, MM/DD/YY, MM/DD/YYYY,
+        MM-YY, MM-YYYY, and partial dates with sensible defaults.
+        """
         if not date_str:
             return ""
         
-        date_patterns = [
-            r'(\d{1,2})/(\d{1,2})/(\d{4})',  # MM/DD/YYYY
-            r'(\d{1,2})/(\d{1,2})/(\d{2})',  # MM/DD/YY
-            r'(\d{4})-(\d{1,2})-(\d{1,2})',  # YYYY-MM-DD
-            r'(\d{1,2})-(\d{1,2})-(\d{4})',  # MM-DD-YYYY
-            r'(\d{2})/(\d{4})',              # MM/YYYY
-        ]
-        
-        for pattern in date_patterns:
-            match = re.search(pattern, date_str)
-            if match:
-                try:
-                    groups = match.groups()
-                    if len(groups) == 2:  # MM/YYYY format
-                        return f"{groups[0]}/01/{groups[1]}"
-                    elif len(groups) == 3:
-                        month, day, year = groups
-                        if len(year) == 2:
-                            year = f"20{year}" if int(year) < 50 else f"19{year}"
-                        return f"{month.zfill(2)}/{day.zfill(2)}/{year}"
-                except ValueError:
-                    continue
-        
-        return date_str  # Return original if no pattern matches
+        result = self.date_parser.parse_date(date_str)
+        return result if result else date_str  # Return original if no pattern matches
     
-    def _parse_currency(self, amount_str: str) -> str:
-        """Parse currency amounts to standard format."""
+    def _parse_currency(self, amount_str: str, field_name: str = "") -> str:
+        """Parse currency amounts to standard format with negative account handling."""
         if not amount_str:
             return ""
         
+        # Apply OCR error corrections
+        amount_str = amount_str.replace('O', '0').replace('l', '1').replace('S', '5')
+        
+        # Try to extract charge-off or collection amounts first
+        charge_off_match = re.search(r'(?i)charge[d]?\s*off\s*amount[:\s]+\$?([\d,.-]+)', amount_str)
+        if charge_off_match:
+            amount_str = charge_off_match.group(1)
+        
+        collection_match = re.search(r'(?i)collection\s*amount[:\s]+\$?([\d,.-]+)', amount_str)
+        if collection_match:
+            amount_str = collection_match.group(1)
+        
+        # Handle parenthetical negatives: ($1,234) or (1234)
+        paren_match = re.search(r'\(?\$?([\d,]+\.?\d*)\)?', amount_str)
+        is_negative = '(' in amount_str and ')' in amount_str
+        
         # Remove currency symbols and clean
-        cleaned = re.sub(r'[$,\s]', '', amount_str)
+        cleaned = re.sub(r'[$,\s()]', '', amount_str)
         
         # Handle negative amounts
-        if '(' in amount_str or amount_str.startswith('-'):
-            cleaned = f"-{cleaned.replace('(', '').replace(')', '').replace('-', '')}"
+        if is_negative or amount_str.startswith('-'):
+            cleaned = cleaned.replace('-', '')
+            cleaned = f"-{cleaned}"
         
-        # Validate it's a number
+        # Validate it's a number and in reasonable range (0-999999)
         try:
-            float(cleaned)
-            return cleaned
+            amount = float(cleaned)
+            abs_amount = abs(amount)
+            
+            # Validate reasonable range
+            if abs_amount > 999999:
+                logger.warning(f"Amount {abs_amount} exceeds reasonable range, may be OCR error")
+            
+            # Apply field-specific formatting
+            if field_name == "monthly_payment":
+                formatted = f"${abs_amount:.2f}"
+            elif field_name in ["credit_limit", "account_balance"]:
+                formatted = f"${int(round(abs_amount))}"
+            else:
+                formatted = f"${abs_amount:.2f}" if abs_amount % 1 else f"${int(abs_amount)}"
+            
+            return f"-{formatted}" if amount < 0 else formatted
         except ValueError:
             return amount_str  # Return original if not parseable
+
+    def _evaluate_negative_tradeline(self, tradeline: TradelineData, section: str) -> Tuple[bool, float]:
+        """
+        Evaluate if a tradeline is negative using the unified classifier.
+        """
+        # Convert dataclass to dict for classifier
+        tradeline_dict = {
+            'account_status': tradeline.account_status,
+            'payment_history': tradeline.payment_history,
+            'account_balance': tradeline.account_balance,
+            'credit_limit': tradeline.credit_limit,
+            'creditor_name': tradeline.creditor_name,
+            'comments': tradeline.comments
+        }
+        
+        result = self.negative_classifier.classify(tradeline_dict)
+        return result.is_negative, result.confidence
 
 class ExperianParser(BureauParser):
     """Experian-specific credit report parser."""
@@ -159,7 +198,16 @@ class ExperianParser(BureauParser):
             'payment': re.compile(r'(?i)(monthly\s+payment|payment\s+amount)[:\s]+\$?([\d,.-]+)', re.MULTILINE),
             'status': re.compile(r'(?i)(account\s+status|status|condition)[:\s]+(.*?)(?=\n|$)', re.MULTILINE),
             'opened': re.compile(r'(?i)(date\s+opened|opened|open\s+date)[:\s]+([\d/\-]+)', re.MULTILINE),
-            'payment_history': re.compile(r'(?i)(payment\s+history|history)[:\s]+(.*?)(?=\n\n|\Z)', re.MULTILINE | re.DOTALL),
+            'payment_history': re.compile(r'(?i)(status\s+history|payment\s+history|history)[:\s]+(.*?)(?=\n\n|\Z)', re.MULTILINE | re.DOTALL),
+            'comments': re.compile(r'(?i)(comments|remarks)[:\s]+(.*?)(?=\n|$)', re.MULTILINE),
+            'dispute_markers': re.compile(r'(?i)(consumer\s+disputes|account\s+in\s+dispute)', re.MULTILINE),
+            # Negative account-specific patterns
+            'charge_off_amount': re.compile(r'(?i)(charge\s*off\s*amount|charged\s*off)[:\s]+\$?([\d,.-]+)', re.MULTILINE),
+            'collection_amount': re.compile(r'(?i)(collection\s*amount|amount\s*in\s*collection)[:\s]+\$?([\d,.-]+)', re.MULTILINE),
+            'past_due_amount': re.compile(r'(?i)(past\s*due\s*amount|amount\s*past\s*due)[:\s]+\$?([\d,.-]+)', re.MULTILINE),
+            'negative_status': re.compile(r'(?i)(charge\s*off|collection|delinquent|default|repossession|foreclosure|bankruptcy)', re.MULTILINE),
+            'late_payment_count': re.compile(r'(?i)(30|60|90|120)\s*days?\s*(late|past\s*due)', re.MULTILINE),
+            'settlement_amount': re.compile(r'(?i)settled\s*for[:\s]+\$?([\d,.-]+)', re.MULTILINE),
         }
     
     def _load_field_mappings(self) -> Dict[str, str]:
@@ -296,9 +344,15 @@ class ExperianParser(BureauParser):
                     tradeline.date_opened = self._parse_date(matches[0][1] if isinstance(matches[0], tuple) else matches[0])
                 elif pattern_name == 'payment_history':
                     tradeline.payment_history = self._clean_field_value(matches[0][1] if isinstance(matches[0], tuple) else matches[0])
+                elif pattern_name == 'comments':
+                    tradeline.comments = self._clean_field_value(matches[0][1] if isinstance(matches[0], tuple) else matches[0])
+        
+        # Check for disputes
+        if self.patterns['dispute_markers'].search(section):
+            tradeline.dispute_count = 1
         
         # Determine if it's negative
-        tradeline.is_negative = self._is_negative_tradeline(tradeline, section)
+        tradeline.is_negative, tradeline.negative_confidence = self._is_negative_tradeline(tradeline, section)
         
         # Calculate confidence for this tradeline
         tradeline.extraction_confidence = self._calculate_tradeline_confidence(tradeline)
@@ -308,19 +362,9 @@ class ExperianParser(BureauParser):
         
         return tradeline
     
-    def _is_negative_tradeline(self, tradeline: TradelineData, section: str) -> bool:
-        """Determine if a tradeline is negative/derogatory."""
-        negative_indicators = [
-            'charge off', 'collection', 'foreclosure', 'repossession',
-            'bankruptcy', 'late payment', 'delinquent', 'default',
-            'closed', 'settled', 'paid charge off'
-        ]
-        
-        section_lower = section.lower()
-        status_lower = tradeline.account_status.lower()
-        
-        return any(indicator in section_lower or indicator in status_lower 
-                  for indicator in negative_indicators)
+    def _is_negative_tradeline(self, tradeline: TradelineData, section: str) -> Tuple[bool, float]:
+        """Determine if a tradeline is negative/derogatory with scoring."""
+        return self._evaluate_negative_tradeline(tradeline, section)
     
     def _calculate_tradeline_confidence(self, tradeline: TradelineData) -> float:
         """Calculate confidence score for individual tradeline."""
@@ -373,6 +417,16 @@ class EquifaxParser(BureauParser):
             'status': re.compile(r'(?i)(status|account\s+condition)[:\s]+(.*?)(?=\n|$)', re.MULTILINE),
             'opened': re.compile(r'(?i)(date\s+opened|open\s+date)[:\s]+([\d/\-]+)', re.MULTILINE),
             'responsibility': re.compile(r'(?i)(responsibility|liable\s+party)[:\s]+(.*?)(?=\n|$)', re.MULTILINE),
+            'payment_history': re.compile(r'(?i)(payment\s+pattern|payment\s+history)[:\s]+(.*?)(?=\n\n|\Z)', re.MULTILINE | re.DOTALL),
+            'comments': re.compile(r'(?i)(comments|remarks)[:\s]+(.*?)(?=\n|$)', re.MULTILINE),
+            'dispute_markers': re.compile(r'(?i)(consumer\s+disputes|account\s+in\s+dispute)', re.MULTILINE),
+            # Negative account-specific patterns
+            'charge_off_amount': re.compile(r'(?i)(charge\s*off\s*amount|charged\s*off)[:\s]+\$?([\d,.-]+)', re.MULTILINE),
+            'collection_amount': re.compile(r'(?i)(collection\s*amount|amount\s*in\s*collection)[:\s]+\$?([\d,.-]+)', re.MULTILINE),
+            'past_due_amount': re.compile(r'(?i)(past\s*due\s*amount|amount\s*past\s*due)[:\s]+\$?([\d,.-]+)', re.MULTILINE),
+            'negative_status': re.compile(r'(?i)(charge\s*off|collection|delinquent|default|repossession|foreclosure|bankruptcy)', re.MULTILINE),
+            'late_payment_count': re.compile(r'(?i)(30|60|90|120)\s*days?\s*(late|past\s*due)', re.MULTILINE),
+            'settlement_amount': re.compile(r'(?i)settled\s*for[:\s]+\$?([\d,.-]+)', re.MULTILINE),
         }
     
     def _load_field_mappings(self) -> Dict[str, str]:
@@ -507,12 +561,24 @@ class EquifaxParser(BureauParser):
                     tradeline.date_opened = self._parse_date(value)
                 elif pattern_name == 'responsibility':
                     tradeline.responsibility = self._clean_field_value(value)
+                elif pattern_name == 'payment_history':
+                    tradeline.payment_history = self._clean_field_value(value)
+                elif pattern_name == 'comments':
+                    tradeline.comments = self._clean_field_value(value)
         
-        tradeline.is_negative = self._is_negative_tradeline(tradeline, section)
+        # Check for disputes
+        if self.patterns['dispute_markers'].search(section):
+            tradeline.dispute_count = 1
+        
+        tradeline.is_negative, tradeline.negative_confidence = self._is_negative_tradeline(tradeline, section)
         tradeline.extraction_confidence = self._calculate_tradeline_confidence(tradeline)
         tradeline.raw_data = {'raw_section': section}
         
         return tradeline
+
+    def _is_negative_tradeline(self, tradeline: TradelineData, section: str) -> Tuple[bool, float]:
+        """Determine if a tradeline is negative/derogatory with scoring."""
+        return self._evaluate_negative_tradeline(tradeline, section)
 
 class TransUnionParser(BureauParser):
     """TransUnion-specific credit report parser."""
@@ -532,6 +598,16 @@ class TransUnionParser(BureauParser):
             'status': re.compile(r'(?i)(account\s+status|status)[:\s]+(.*?)(?=\n|$)', re.MULTILINE),
             'opened': re.compile(r'(?i)(date\s+opened|opened)[:\s]+([\d/\-]+)', re.MULTILINE),
             'terms': re.compile(r'(?i)(terms|payment\s+terms)[:\s]+(.*?)(?=\n|$)', re.MULTILINE),
+            'payment_history': re.compile(r'(?i)(payment\s+history)[:\s]+(.*?)(?=\n\n|\Z)', re.MULTILINE | re.DOTALL),
+            'comments': re.compile(r'(?i)(remarks|comments)[:\s]+(.*?)(?=\n|$)', re.MULTILINE),
+            'dispute_markers': re.compile(r'(?i)(consumer\s+disputes|account\s+in\s+dispute)', re.MULTILINE),
+            # Negative account-specific patterns
+            'charge_off_amount': re.compile(r'(?i)(charge\s*off\s*amount|charged\s*off)[:\s]+\$?([\d,.-]+)', re.MULTILINE),
+            'collection_amount': re.compile(r'(?i)(collection\s*amount|amount\s*in\s*collection)[:\s]+\$?([\d,.-]+)', re.MULTILINE),
+            'past_due_amount': re.compile(r'(?i)(past\s*due\s*amount|amount\s*past\s*due)[:\s]+\$?([\d,.-]+)', re.MULTILINE),
+            'negative_status': re.compile(r'(?i)(charge\s*off|collection|delinquent|default|repossession|foreclosure|bankruptcy)', re.MULTILINE),
+            'late_payment_count': re.compile(r'(?i)(30|60|90|120)\s*days?\s*(late|past\s*due)', re.MULTILINE),
+            'settlement_amount': re.compile(r'(?i)settled\s*for[:\s]+\$?([\d,.-]+)', re.MULTILINE),
         }
     
     def _load_field_mappings(self) -> Dict[str, str]:
@@ -661,12 +737,24 @@ class TransUnionParser(BureauParser):
                     tradeline.date_opened = self._parse_date(value)
                 elif pattern_name == 'terms':
                     tradeline.terms = self._clean_field_value(value)
+                elif pattern_name == 'payment_history':
+                    tradeline.payment_history = self._clean_field_value(value)
+                elif pattern_name == 'comments':
+                    tradeline.comments = self._clean_field_value(value)
         
-        tradeline.is_negative = self._is_negative_tradeline(tradeline, section)
+        # Check for disputes
+        if self.patterns['dispute_markers'].search(section):
+            tradeline.dispute_count = 1
+        
+        tradeline.is_negative, tradeline.negative_confidence = self._is_negative_tradeline(tradeline, section)
         tradeline.extraction_confidence = self._calculate_tradeline_confidence(tradeline)
         tradeline.raw_data = {'raw_section': section}
         
         return tradeline
+
+    def _is_negative_tradeline(self, tradeline: TradelineData, section: str) -> Tuple[bool, float]:
+        """Determine if a tradeline is negative/derogatory with scoring."""
+        return self._evaluate_negative_tradeline(tradeline, section)
 
 class UniversalBureauParser:
     """Universal parser that handles all three bureaus."""

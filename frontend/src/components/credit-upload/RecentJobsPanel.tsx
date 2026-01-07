@@ -37,7 +37,7 @@ export const RecentJobsPanel: React.FC<RecentJobsPanelProps> = ({ userId, onResu
 
   useEffect(() => {
     loadJobs();
-    const id = setInterval(loadJobs, 30000); // refresh every 30s
+    const id = setInterval(loadJobs, 120000); // refresh every 2 minutes
     return () => clearInterval(id);
   }, [loadJobs]);
 

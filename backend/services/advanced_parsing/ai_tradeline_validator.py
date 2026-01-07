@@ -11,20 +11,40 @@ import asyncio
 from datetime import datetime
 import numpy as np
 
-# AI/ML Libraries
-from transformers import pipeline, AutoTokenizer, AutoModelForTokenClassification
-import torch
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-import openai
-
-# Custom imports
+# Custom imports first to get logger
 from .bureau_specific_parser import TradelineData, ParsingResult
 from core.config import get_settings
 from core.logging.logger import get_logger
 
+# Shared date parser utility
+from utils.date_parser import CreditReportDateParser, DateParseResult, validate_date_logic
+
 logger = get_logger(__name__)
 settings = get_settings()
+
+# AI/ML Libraries - with optional imports (after logger is defined)
+try:
+    from transformers import pipeline, AutoTokenizer, AutoModelForTokenClassification
+    import torch
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
+    logger.warning("Transformers library not available. AI validation features will be limited.")
+
+try:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+    logger.warning("Scikit-learn not available. Some ML features will be limited.")
+
+try:
+    import openai
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    logger.warning("OpenAI library not available. GPT validation features disabled.")
 
 @dataclass
 class ValidationResult:
@@ -65,6 +85,9 @@ class AITradelineValidator:
             'field_correction_rates': {}
         }
         
+        # Initialize shared date parser
+        self.date_parser = CreditReportDateParser()
+        
         # Initialize AI models
         asyncio.create_task(self._initialize_ai_models())
     
@@ -73,23 +96,36 @@ class AITradelineValidator:
         try:
             logger.info("Initializing AI models for tradeline validation...")
             
-            # Named Entity Recognition for tradeline data
-            self.ner_pipeline = pipeline(
-                "ner", 
-                model="dbmdz/bert-large-cased-finetuned-conll03-english",
-                aggregation_strategy="simple"
-            )
-            
-            # Text classification for tradeline validation
-            self.classification_pipeline = pipeline(
-                "text-classification",
-                model="distilbert-base-uncased-finetuned-sst-2-english"
-            )
+            # Named Entity Recognition for tradeline data (only if transformers available)
+            if TRANSFORMERS_AVAILABLE:
+                try:
+                    self.ner_pipeline = pipeline(
+                        "ner", 
+                        model="dbmdz/bert-large-cased-finetuned-conll03-english",
+                        aggregation_strategy="simple"
+                    )
+                    
+                    # Text classification for tradeline validation
+                    self.classification_pipeline = pipeline(
+                        "text-classification",
+                        model="distilbert-base-uncased-finetuned-sst-2-english"
+                    )
+                    logger.info("Transformers models loaded successfully")
+                except Exception as e:
+                    logger.warning(f"Transformers models failed to load: {e}")
+                    self.ner_pipeline = None
+                    self.classification_pipeline = None
+            else:
+                logger.info("Transformers not available, using fallback validation methods")
+                self.ner_pipeline = None
+                self.classification_pipeline = None
             
             # OpenAI client if available
-            if hasattr(settings, 'openai_api_key') and settings.openai_api_key:
+            if OPENAI_AVAILABLE and hasattr(settings, 'openai_api_key') and settings.openai_api_key:
                 openai.api_key = settings.openai_api_key
                 self.openai_client = openai
+            else:
+                self.openai_client = None
             
             # Load reference data for validation
             await self._load_reference_data()
@@ -124,17 +160,21 @@ class AITradelineValidator:
                 ]
             }
             
-            # Create TF-IDF vectorizer for similarity matching
-            all_reference_text = []
-            for category, items in self.reference_data.items():
-                all_reference_text.extend(items)
-            
-            self.tfidf_vectorizer = TfidfVectorizer(
-                lowercase=True,
-                ngram_range=(1, 2),
-                max_features=1000
-            )
-            self.tfidf_vectorizer.fit(all_reference_text)
+            # Create TF-IDF vectorizer for similarity matching (only if sklearn available)
+            if SKLEARN_AVAILABLE:
+                all_reference_text = []
+                for category, items in self.reference_data.items():
+                    all_reference_text.extend(items)
+                
+                self.tfidf_vectorizer = TfidfVectorizer(
+                    lowercase=True,
+                    ngram_range=(1, 2),
+                    max_features=1000
+                )
+                self.tfidf_vectorizer.fit(all_reference_text)
+            else:
+                self.tfidf_vectorizer = None
+                logger.info("Scikit-learn not available, similarity matching disabled")
             
         except Exception as e:
             logger.error(f"Failed to load reference data: {e}")
@@ -166,6 +206,7 @@ class AITradelineValidator:
             field_validations.extend(await self._validate_creditor_name(corrected_tradeline, context_text))
             field_validations.extend(await self._validate_account_type(corrected_tradeline, context_text))
             field_validations.extend(await self._validate_account_status(corrected_tradeline, context_text))
+            field_validations.extend(await self._validate_negative_flag(corrected_tradeline, context_text))
             field_validations.extend(await self._validate_financial_amounts(corrected_tradeline, context_text))
             field_validations.extend(await self._validate_dates(corrected_tradeline, context_text))
             field_validations.extend(await self._validate_account_number(corrected_tradeline, context_text))
@@ -449,6 +490,132 @@ class AITradelineValidator:
                 return standard_status
         
         return status.title()  # Default to title case
+
+    async def _validate_negative_flag(
+        self,
+        tradeline: TradelineData,
+        context: str
+    ) -> List[FieldValidation]:
+        """Validate and correct negative flag using cross-field signals."""
+        validations = []
+        
+        status_lower = tradeline.account_status.lower() if tradeline.account_status else ""
+        payment_history_lower = tradeline.payment_history.lower() if tradeline.payment_history else ""
+        creditor_lower = tradeline.creditor_name.lower() if tradeline.creditor_name else ""
+        context_lower = context.lower() if context else ""
+        
+        negative_keywords = [
+            'charge off', 'charged off', 'chargeoff', 'charge-off', 'paid charge off',
+            'collection', 'collections', 'in collection', 'placed for collection',
+            'delinquent', 'delinquency', 'default', 'defaulted',
+            'repossession', 'repo', 'foreclosure', 'bankruptcy', 'settlement',
+            'late 30', 'late 60', 'late 90', 'late 120', 'past due'
+        ]
+        positive_keywords = ['paid as agreed', 'good standing', 'satisfactory', 'never late', 'paid in full']
+        collection_creditor_tokens = ['collection', 'recovery', 'receivable']
+        
+        def _to_float(amount: str) -> Optional[float]:
+            try:
+                return float(re.sub(r'[$,]', '', amount))
+            except Exception:
+                return None
+        
+        balance_val = _to_float(tradeline.account_balance) if tradeline.account_balance else None
+        limit_val = _to_float(tradeline.credit_limit) if tradeline.credit_limit else None
+        
+        signals = 0.0
+        should_be_negative = False
+        
+        # Enhanced negative detection rules
+        # 1. If account_status contains charge off or collection
+        if 'charge off' in status_lower or 'collection' in status_lower:
+            should_be_negative = True
+            signals += 0.5
+            confidence = 1.0
+            reason = 'account_status indicates charge off or collection'
+        # 2. If account_status is closed AND account_balance > 0
+        elif 'closed' in status_lower and balance_val is not None and balance_val > 0:
+            should_be_negative = True
+            signals += 0.3
+            confidence = 0.9
+            reason = 'closed with positive balance'
+        # 3. If balance exceeds credit limit by >10%
+        elif balance_val is not None and limit_val is not None and balance_val > limit_val * 1.1:
+            should_be_negative = True
+            signals += 0.2
+            confidence = 0.8
+            reason = 'balance exceeds credit limit by >10%'
+        # 4. If creditor name contains collection agency keywords
+        elif any(token in creditor_lower for token in collection_creditor_tokens):
+            should_be_negative = True
+            signals += 0.25
+            confidence = 0.85
+            reason = 'creditor name indicates collection agency'
+        # 5. Other negative signals
+        elif any(term in status_lower for term in negative_keywords):
+            should_be_negative = True
+            signals += 0.15
+            confidence = min(1.0, 0.5 + signals)
+            reason = 'other negative status keywords'
+        elif any(token in payment_history_lower for token in ['30', '60', '90', '120']):
+            should_be_negative = True
+            signals += 0.1
+            confidence = min(1.0, 0.5 + signals)
+            reason = 'late payment history'
+        elif 'bankruptcy' in status_lower or 'bankruptcy' in context_lower:
+            should_be_negative = True
+            signals += 0.1
+            confidence = min(1.0, 0.5 + signals)
+            reason = 'bankruptcy keyword'
+        else:
+            confidence = min(1.0, 0.5 + signals)
+            reason = 'no strong negative evidence'
+
+        # Charge-off must have a balance
+        if should_be_negative and 'charge off' in status_lower and (balance_val is None or balance_val == 0):
+            validations.append(FieldValidation(
+                field_name='account_balance',
+                original_value=tradeline.account_balance,
+                corrected_value=tradeline.account_balance,
+                confidence=0.3,
+                correction_method='charge_off_missing_balance',
+                is_corrected=False
+            ))
+            reason += '; charge-off missing balance (flag for manual review)'
+
+        # Collection should have non-zero balance
+        if should_be_negative and 'collection' in status_lower and (balance_val is None or balance_val == 0):
+            validations.append(FieldValidation(
+                field_name='account_balance',
+                original_value=tradeline.account_balance,
+                corrected_value=tradeline.account_balance,
+                confidence=0.3,
+                correction_method='collection_missing_balance',
+                is_corrected=False
+            ))
+            reason += '; collection missing balance (flag for manual review)'
+
+        # Set negative flag
+        original_value = tradeline.is_negative
+        corrected_value = should_be_negative if should_be_negative != tradeline.is_negative else tradeline.is_negative
+        is_corrected = corrected_value != tradeline.is_negative
+        if is_corrected:
+            logger.info(
+                f"Adjusting is_negative for {tradeline.creditor_name or 'unknown creditor'} "
+                f"from {tradeline.is_negative} to {corrected_value} based on cross-field validation: {reason}"
+            )
+            tradeline.is_negative = corrected_value
+
+        validations.append(FieldValidation(
+            field_name='is_negative',
+            original_value=original_value,
+            corrected_value=corrected_value,
+            confidence=confidence,
+            correction_method='negative_flag_rules',
+            is_corrected=is_corrected
+        ))
+
+        return validations
     
     async def _validate_financial_amounts(
         self, 
@@ -517,8 +684,13 @@ class AITradelineValidator:
         tradeline: TradelineData, 
         context: str
     ) -> List[FieldValidation]:
-        """Validate date fields."""
+        """
+        Validate date fields using shared date parser with cross-field checks.
+        Normalizes to MM/DD/YYYY, rejects future dates, enforces year range,
+        and ensures logical date ordering.
+        """
         validations = []
+        parsed_dates = {}  # Store parsed dates for cross-field validation
         
         date_fields = [
             ('date_opened', 'Date Opened'),
@@ -529,64 +701,77 @@ class AITradelineValidator:
         for field_name, field_display in date_fields:
             field_value = getattr(tradeline, field_name, "")
             if field_value:
-                cleaned_date = self._clean_date(field_value)
-                is_valid = self._validate_date_format(cleaned_date)
+                # Use shared date parser for comprehensive parsing
+                parse_result: DateParseResult = self.date_parser.parse_date_with_details(field_value)
                 
-                validations.append(FieldValidation(
-                    field_name=field_name,
-                    original_value=field_value,
-                    corrected_value=cleaned_date,
-                    confidence=0.9 if is_valid else 0.4,
-                    correction_method='date_standardization',
-                    is_corrected=cleaned_date != field_value
-                ))
+                if parse_result.value:
+                    # Successful parse - calculate confidence based on parse quality
+                    confidence = parse_result.confidence
+                    if parse_result.is_partial:
+                        confidence *= 0.9  # Slight penalty for partial dates
+                    
+                    parsed_dates[field_name] = parse_result.value
+                    
+                    validations.append(FieldValidation(
+                        field_name=field_name,
+                        original_value=field_value,
+                        corrected_value=parse_result.value,
+                        confidence=confidence,
+                        correction_method=f'shared_parser_{parse_result.parse_method}',
+                        is_corrected=parse_result.value != field_value
+                    ))
+                else:
+                    # Failed to parse - flag for manual review
+                    validations.append(FieldValidation(
+                        field_name=field_name,
+                        original_value=field_value,
+                        corrected_value="",  # Clear invalid date
+                        confidence=0.2,  # Low confidence - needs manual review
+                        correction_method='parse_failed_manual_review',
+                        is_corrected=True
+                    ))
+                    logger.warning(f"Date parse failed for {field_name}: '{field_value}' - flagged for manual review")
+        
+        # Cross-field validation using shared utility
+        if parsed_dates:
+            is_valid, errors = validate_date_logic(
+                date_opened=parsed_dates.get('date_opened'),
+                date_closed=parsed_dates.get('date_closed'),
+                last_payment=parsed_dates.get('last_payment_date')
+            )
+            
+            if not is_valid:
+                for error in errors:
+                    logger.warning(f"Date logic validation failed: {error}")
+                    # Reduce confidence for affected fields
+                    for validation in validations:
+                        if validation.field_name in error:
+                            validation.confidence *= 0.5
+                            # Add note about the validation failure
+                            if not hasattr(validation, 'validation_notes'):
+                                validation.validation_notes = []
+                            validation.validation_notes.append(error)
         
         return validations
     
     def _clean_date(self, date_str: str) -> str:
-        """Clean and standardize date format."""
-        if not date_str:
-            return ""
-        
-        # Common date patterns and their standardized formats
-        patterns = [
-            (r'(\d{1,2})/(\d{1,2})/(\d{4})', r'\1/\2/\3'),      # MM/DD/YYYY
-            (r'(\d{1,2})/(\d{1,2})/(\d{2})', self._expand_year), # MM/DD/YY
-            (r'(\d{4})-(\d{1,2})-(\d{1,2})', r'\2/\3/\1'),      # YYYY-MM-DD to MM/DD/YYYY
-            (r'(\d{1,2})-(\d{1,2})-(\d{4})', r'\1/\2/\3'),      # MM-DD-YYYY to MM/DD/YYYY
-            (r'(\d{2})/(\d{4})', r'\1/01/\2'),                   # MM/YYYY to MM/01/YYYY
-        ]
-        
-        for pattern, replacement in patterns:
-            if callable(replacement):
-                match = re.search(pattern, date_str)
-                if match:
-                    return replacement(match)
-            else:
-                result = re.sub(pattern, replacement, date_str)
-                if result != date_str:
-                    return result
-        
-        return date_str
-    
-    def _expand_year(self, match) -> str:
-        """Expand 2-digit year to 4-digit."""
-        month, day, year = match.groups()
-        year_int = int(year)
-        full_year = 2000 + year_int if year_int < 50 else 1900 + year_int
-        return f"{month}/{day}/{full_year}"
+        """
+        Clean and standardize date format using shared date parser.
+        Returns normalized MM/DD/YYYY or empty string on failure.
+        """
+        result = self.date_parser.parse_date(date_str)
+        return result if result else ""
     
     def _validate_date_format(self, date_str: str) -> bool:
-        """Validate date format."""
+        """
+        Validate date format using shared date parser.
+        Returns True if date is valid and parseable.
+        """
         if not date_str:
             return False
         
-        date_patterns = [
-            r'^\d{1,2}/\d{1,2}/\d{4}$',  # MM/DD/YYYY
-            r'^\d{2}/\d{4}$',            # MM/YYYY
-        ]
-        
-        return any(re.match(pattern, date_str) for pattern in date_patterns)
+        result = self.date_parser.parse_date_with_details(date_str)
+        return result.value is not None
     
     async def _validate_account_number(
         self, 
@@ -727,9 +912,33 @@ class AITradelineValidator:
             # Simple relevance check
             context_score = min(1.0, context.lower().count(tradeline.creditor_name.lower()) / 10)
         
+        # Negative account completeness and consistency factors
+        negative_completeness = 1.0
+        negative_consistency = 1.0
+        penalty = 0.0
+        bonus = 0.0
+        if getattr(tradeline, 'is_negative', False):
+            # Completeness: status, balance, date_opened must be present
+            required_fields = [tradeline.account_status, tradeline.account_balance, tradeline.date_opened]
+            negative_completeness = sum(1 for f in required_fields if f and str(f).strip()) / 3.0
+            # Consistency: status matches other fields
+            status = (tradeline.account_status or '').lower()
+            balance = tradeline.account_balance or ''
+            if ('charge off' in status or 'collection' in status) and (not balance or balance == '$0'):
+                negative_consistency = 0.0
+            # Penalize if missing critical fields
+            if negative_completeness < 1.0:
+                penalty += 0.2
+            # Bonus if all required fields and consistent
+            if negative_completeness == 1.0 and negative_consistency == 1.0:
+                bonus += 0.15
         # Weighted final score
         final_score = (base_score * 0.5 + completeness_score * 0.3 + context_score * 0.2)
-        
+        # Add negative account factors
+        final_score = final_score * (1 - penalty) + bonus
+        # Require higher threshold for negative accounts
+        if getattr(tradeline, 'is_negative', False) and final_score < 0.75:
+            final_score = min(final_score, 0.74)
         return min(1.0, final_score)
     
     def _calculate_similarity(self, text: str, reference_list: List[str]) -> float:

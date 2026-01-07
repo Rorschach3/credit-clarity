@@ -16,7 +16,7 @@ from httpx import AsyncClient
 # Set testing environment
 os.environ["ENVIRONMENT"] = "testing"
 
-from main_modular import app
+from main import app
 from core.config import get_settings
 from core.logging.logger import get_logger
 from services.cache_service import cache

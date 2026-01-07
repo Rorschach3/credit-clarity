@@ -32,6 +32,23 @@ describe('ChatbotWidget', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (global.fetch as jest.Mock).mockClear();
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/api/chat/history/')) {
+        return Promise.resolve({
+          json: async () => ({ success: true, history: [] }),
+        });
+      }
+
+      if (url.includes('/api/chat/suggestions/')) {
+        return Promise.resolve({
+          json: async () => ({ success: true, suggestions: [] }),
+        });
+      }
+
+      return Promise.resolve({
+        json: async () => ({ success: true }),
+      });
+    });
   });
 
   it('renders chat button when closed', () => {
@@ -39,7 +56,7 @@ describe('ChatbotWidget', () => {
     
     const chatButton = screen.getByRole('button');
     expect(chatButton).toBeInTheDocument();
-    expect(chatButton).toHaveAttribute('disabled', 'false');
+    expect(chatButton).not.toBeDisabled();
   });
 
   it('opens chat window when button is clicked', async () => {
@@ -62,12 +79,32 @@ describe('ChatbotWidget', () => {
   });
 
   it('allows user to type and send messages', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      json: async () => ({
-        success: true,
-        response: 'Thank you for your question about credit scores.',
-        timestamp: new Date().toISOString(),
-      }),
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/api/chat/history/')) {
+        return Promise.resolve({
+          json: async () => ({ success: true, history: [] }),
+        });
+      }
+
+      if (url.includes('/api/chat/suggestions/')) {
+        return Promise.resolve({
+          json: async () => ({ success: true, suggestions: [] }),
+        });
+      }
+
+      if (url === '/api/chat') {
+        return Promise.resolve({
+          json: async () => ({
+            success: true,
+            response: 'Thank you for your question about credit scores.',
+            timestamp: new Date().toISOString(),
+          }),
+        });
+      }
+
+      return Promise.resolve({
+        json: async () => ({ success: true }),
+      });
     });
 
     render(<ChatbotWidget />);
@@ -81,26 +118,52 @@ describe('ChatbotWidget', () => {
     await userEvent.type(textArea, 'What is a good credit score?');
     await userEvent.click(sendButton);
     
-    expect(global.fetch).toHaveBeenCalledWith('/api/chat', {
+    const chatCall = (global.fetch as jest.Mock).mock.calls.find(
+      ([url]) => url === '/api/chat'
+    );
+    expect(chatCall).toBeDefined();
+
+    const [, chatOptions] = chatCall ?? [];
+    expect(chatOptions).toMatchObject({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        userId: mockUser.id,
-        message: 'What is a good credit score?',
-        conversationHistory: expect.any(Array),
-      }),
     });
+
+    const parsedBody = JSON.parse((chatOptions as RequestInit).body as string);
+    expect(parsedBody.userId).toBe(mockUser.id);
+    expect(parsedBody.message).toBe('What is a good credit score?');
+    expect(Array.isArray(parsedBody.conversationHistory)).toBe(true);
   });
 
   it('displays user message immediately after sending', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      json: async () => ({
-        success: true,
-        response: 'Thank you for your question.',
-        timestamp: new Date().toISOString(),
-      }),
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/api/chat/history/')) {
+        return Promise.resolve({
+          json: async () => ({ success: true, history: [] }),
+        });
+      }
+
+      if (url.includes('/api/chat/suggestions/')) {
+        return Promise.resolve({
+          json: async () => ({ success: true, suggestions: [] }),
+        });
+      }
+
+      if (url === '/api/chat') {
+        return Promise.resolve({
+          json: async () => ({
+            success: true,
+            response: 'Thank you for your question.',
+            timestamp: new Date().toISOString(),
+          }),
+        });
+      }
+
+      return Promise.resolve({
+        json: async () => ({ success: true }),
+      });
     });
 
     render(<ChatbotWidget />);
@@ -118,12 +181,32 @@ describe('ChatbotWidget', () => {
   });
 
   it('displays bot response after successful API call', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      json: async () => ({
-        success: true,
-        response: 'A good credit score is typically 700 or above.',
-        timestamp: new Date().toISOString(),
-      }),
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/api/chat/history/')) {
+        return Promise.resolve({
+          json: async () => ({ success: true, history: [] }),
+        });
+      }
+
+      if (url.includes('/api/chat/suggestions/')) {
+        return Promise.resolve({
+          json: async () => ({ success: true, suggestions: [] }),
+        });
+      }
+
+      if (url === '/api/chat') {
+        return Promise.resolve({
+          json: async () => ({
+            success: true,
+            response: 'A good credit score is typically 700 or above.',
+            timestamp: new Date().toISOString(),
+          }),
+        });
+      }
+
+      return Promise.resolve({
+        json: async () => ({ success: true }),
+      });
     });
 
     render(<ChatbotWidget />);
@@ -143,9 +226,27 @@ describe('ChatbotWidget', () => {
   });
 
   it('shows loading state while waiting for response', async () => {
-    (global.fetch as jest.Mock).mockImplementationOnce(
-      () => new Promise(resolve => setTimeout(resolve, 1000))
-    );
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/api/chat/history/')) {
+        return Promise.resolve({
+          json: async () => ({ success: true, history: [] }),
+        });
+      }
+
+      if (url.includes('/api/chat/suggestions/')) {
+        return Promise.resolve({
+          json: async () => ({ success: true, suggestions: [] }),
+        });
+      }
+
+      if (url === '/api/chat') {
+        return new Promise(resolve => setTimeout(resolve, 1000)) as Promise<any>;
+      }
+
+      return Promise.resolve({
+        json: async () => ({ success: true }),
+      });
+    });
 
     render(<ChatbotWidget />);
     
@@ -162,7 +263,27 @@ describe('ChatbotWidget', () => {
   });
 
   it('handles API errors gracefully', async () => {
-    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/api/chat/history/')) {
+        return Promise.resolve({
+          json: async () => ({ success: true, history: [] }),
+        });
+      }
+
+      if (url.includes('/api/chat/suggestions/')) {
+        return Promise.resolve({
+          json: async () => ({ success: true, suggestions: [] }),
+        });
+      }
+
+      if (url === '/api/chat') {
+        return Promise.reject(new Error('Network error'));
+      }
+
+      return Promise.resolve({
+        json: async () => ({ success: true }),
+      });
+    });
 
     render(<ChatbotWidget />);
     
@@ -206,12 +327,32 @@ describe('ChatbotWidget', () => {
   });
 
   it('sends message when Enter key is pressed', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      json: async () => ({
-        success: true,
-        response: 'Thank you for your question.',
-        timestamp: new Date().toISOString(),
-      }),
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/api/chat/history/')) {
+        return Promise.resolve({
+          json: async () => ({ success: true, history: [] }),
+        });
+      }
+
+      if (url.includes('/api/chat/suggestions/')) {
+        return Promise.resolve({
+          json: async () => ({ success: true, suggestions: [] }),
+        });
+      }
+
+      if (url === '/api/chat') {
+        return Promise.resolve({
+          json: async () => ({
+            success: true,
+            response: 'Thank you for your question.',
+            timestamp: new Date().toISOString(),
+          }),
+        });
+      }
+
+      return Promise.resolve({
+        json: async () => ({ success: true }),
+      });
     });
 
     render(<ChatbotWidget />);
@@ -238,7 +379,10 @@ describe('ChatbotWidget', () => {
     await userEvent.type(textArea, 'Test message');
     await userEvent.keyboard('{Shift>}{Enter}{/Shift}');
     
-    expect(global.fetch).not.toHaveBeenCalled();
+    const chatCalls = (global.fetch as jest.Mock).mock.calls.filter(
+      ([url]) => url === '/api/chat'
+    );
+    expect(chatCalls).toHaveLength(0);
   });
 
   it('loads conversation history when opened', async () => {
@@ -302,7 +446,7 @@ describe('ChatbotWidget', () => {
     const chatButton = screen.getByRole('button');
     await userEvent.click(chatButton);
     
-    const closeButton = screen.getByRole('button', { name: /close/i });
+    const closeButton = screen.getByRole('button', { name: 'X' });
     await userEvent.click(closeButton);
     
     expect(screen.queryByText('Credit Clarity AI')).not.toBeInTheDocument();

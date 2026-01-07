@@ -1,0 +1,102 @@
+[
+  {
+    "id": "EP-001",
+    "title": "Rate Limiting Counter Drift Risk - Alignment Needed Between Technical Implementation and Business Model",
+    "affected_roles": ["product-manager", "system-architect", "data-architect"],
+    "category": "Risk",
+    "current_state": "System Architect specifies hybrid middleware + Redis with 5-minute sync interval, accepting 'max 5 minutes counter drift' as acceptable. Product Manager defines strict freemium limits (2 uploads/month, 3 letters/month) as critical conversion trigger. No explicit SLA defined for rate limit accuracy.",
+    "enhancement": "Define explicit tolerance for rate limit drift with business impact analysis. If 5-minute drift allows 1-2 extra requests during sync window, document business acceptance criteria. Consider reducing sync interval to 1 minute for launch until user behavior validates acceptable drift threshold. Add monitoring alerts for drift exceeding defined tolerance.",
+    "rationale": "Business model depends on freemium conversion driven by rate limits hitting (10-15% target). Technical 'acceptable drift' without business validation risks either (1) user frustration from false rate limit errors, or (2) revenue loss from users exceeding limits without payment. Gap between technical 'acceptable' and business requirement needs explicit reconciliation.",
+    "priority": "High"
+  },
+  {
+    "id": "EP-002",
+    "title": "USPS Migration Cost Assumptions - Discrepancy Between Product and System Architecture",
+    "affected_roles": ["product-manager", "system-architect"],
+    "category": "Feasibility",
+    "current_state": "Product Manager projects 40-60% cost reduction ($1-2 Lob → $0.40-0.80 USPS) driving margin expansion from 60-80% to 80-95%. System Architect flags USPS integration complexity (no managed SDK, manual certified mail setup, CASS certification required) with 2-3 month delay risk (60% probability). No fallback cost model if USPS migration delayed beyond Month 12.",
+    "enhancement": "Develop contingency pricing model for extended Lob.com usage through Month 18 if USPS migration delayed. Calculate break-even point: at what user volume does Lob cost exceed USPS integration engineering cost? Document decision tree: if <500 paying users by Month 12, delay USPS migration to Month 18-24. Add Phase 2 milestone: USPS proof-of-concept in Month 7-8 to validate cost assumptions before committing to full migration.",
+    "rationale": "Revenue projections assume USPS cost savings materialize in Phase 2 (Month 10-12), but technical risk assessment shows 60% probability of 2-3 month delay. Product roadmap has no contingency for delayed margin expansion. If USPS migration delayed and user growth exceeds projections, Lob costs could consume 40-50% of revenue instead of projected 15-20%, threatening profitability timeline.",
+    "priority": "High"
+  },
+  {
+    "id": "EP-003",
+    "title": "AI Classification Accuracy Threshold Gap - Different Standards Across Roles",
+    "affected_roles": ["product-manager", "system-architect", "data-architect"],
+    "category": "Requirements",
+    "current_state": "Product Manager requires 95%+ negative item detection accuracy as MVP success criteria. System Architect specifies 95%+ detection rate with 97% precision/95% recall validated against 500 manually labeled tradelines. Data Architect defines 95%+ accuracy target but lacks specificity on precision vs recall trade-off. No documented user acceptance threshold for false positives vs false negatives.",
+    "enhancement": "Clarify accuracy metrics with user impact analysis: (1) False positives (flagging positive items as negative) → user annoyance, manual exclusion required. (2) False negatives (missing negative items) → lost dispute opportunity, revenue impact. Define separate thresholds: Precision ≥97% (minimize false positives for user trust), Recall ≥92% (acceptable miss rate with manual add capability). Document MVP acceptance: if accuracy <95% but >90%, launch with 'AI-Assisted' label and prominent manual review step.",
+    "rationale": "Generic '95% accuracy' target masks critical trade-off between precision and recall. User experience differs significantly: false positives create friction in free tier (user must exclude items), false negatives reduce conversion (user doesn't see dispute opportunities). System Architect's 97%/95% split is reasonable but not validated with Product Manager's business requirements or user acceptance criteria.",
+    "priority": "Medium"
+  },
+  {
+    "id": "EP-004",
+    "title": "TimescaleDB Implementation Timing Ambiguity - Conflicting Phase Assignments",
+    "affected_roles": ["system-architect", "data-architect", "product-manager"],
+    "category": "Decisions",
+    "current_state": "Data Architect recommends TimescaleDB implementation 'from start' to avoid future migration complexity. System Architect assigns TimescaleDB to Phase 2 (Month 11-12) with 'testing and validation' but no user-facing features. Product Manager's roadmap shows historical score tracking as Phase 3 feature (Month 14-15) with no Phase 1-2 dependencies on TimescaleDB. Unclear if TimescaleDB setup blocks MVP launch or can be deferred.",
+    "enhancement": "Clarify TimescaleDB implementation strategy with three-option decision: (1) Phase 1 infrastructure setup only (tables created, no data ingestion) if zero engineering overhead, (2) Phase 2 full setup (Month 11-12) with retrospective score import from existing credit_reports, (3) Phase 3 just-in-time setup if migration cost acceptable. Document decision criteria: choose Option 1 if Supabase TimescaleDB extension available with <1 week setup, otherwise Option 2. Remove 'from start' language from Data Architect recommendation if not blocking MVP.",
+    "rationale": "Data Architect's 'easier to build right from beginning' principle conflicts with Product Manager's MVP speed-to-market priority (6-month launch). System Architect's Phase 2 assignment suggests non-critical infrastructure. Need explicit decision on trade-off: invest 1-2 weeks in Phase 1 for future-proofing vs defer to Phase 2-3 to hit revenue validation faster. Current ambiguity risks scope creep or last-minute architectural changes.",
+    "priority": "Medium"
+  },
+  {
+    "id": "EP-005",
+    "title": "OCR Bureau Response Feature Scope Confusion - Optional vs Required Across Roles",
+    "affected_roles": ["product-manager", "system-architect", "data-architect"],
+    "category": "Requirements",
+    "current_state": "Product Manager labels OCR bureau response as 'optional convenience feature' with 40% opt-in projection and Phase 2 timeline (Month 8-10). System Architect flags 50% probability of <80% accuracy for some bureau formats, recommending manual updates as 'always available' primary method. Data Architect includes bureau_response_url in schema but doesn't specify OCR as required for Phase 1. No documented user workflow for manual status updates as primary method.",
+    "enhancement": "Explicitly define manual status update as primary Phase 1-2 workflow with detailed UX specification: dropdown selection of 8 status types, optional file upload of bureau letter (no OCR), text field for resolution notes. Document OCR as Phase 2 experimental feature with opt-in beta testing (target 50 users). Define Phase 2 success criteria for OCR: if accuracy >85% and opt-in rate >50%, promote to default with manual override. If accuracy <80%, keep manual as primary through Phase 3.",
+    "rationale": "Product Manager treats manual updates as fallback but doesn't specify primary workflow UX. System Architect focuses on OCR technical risks without detailing manual method implementation. Risk: manual updates poorly designed as 'temporary solution' create user friction, reducing engagement. Need explicit investment in manual update UX (Month 1-2) as permanent primary method, with OCR as additive enhancement if successful.",
+    "priority": "Medium"
+  },
+  {
+    "id": "EP-006",
+    "title": "Conversion Funnel Optimization Missing Technical Implementation Details",
+    "affected_roles": ["product-manager", "system-architect"],
+    "category": "Requirements",
+    "current_state": "Product Manager specifies detailed conversion optimization tactics (A/B testing pricing $7 vs $10, social proof messaging, bundle discounts, time value calculator) with target 10-15% conversion rate. System Architect focuses on technical pipeline (AI classification → letter generation → Lob mailing) but no mention of A/B testing infrastructure, conversion tracking, or messaging variations. No documented technical requirements for conversion optimization tools.",
+    "enhancement": "Define Phase 1 technical requirements for conversion optimization: (1) A/B testing framework (feature flags for pricing tiers, messaging variants), (2) Conversion funnel analytics (Mixpanel/Amplitude integration tracking signup → upload → generate → pay), (3) Social proof data pipeline (aggregate mailing counts per day/week for 'X users mailed letters' display), (4) Time value calculator as frontend component with backend hourly rate assumptions. Assign engineering effort (2-3 person-weeks) to Phase 1 roadmap.",
+    "rationale": "Product Manager's 10-15% conversion target depends on A/B testing and messaging optimization, but System Architect roadmap has no corresponding technical infrastructure. Risk: launch with fixed pricing/messaging, discover <8% conversion, lack tools to rapidly iterate. Conversion optimization requires technical foundation (experimentation platform, analytics pipeline) designed into Phase 1 architecture, not added reactively in Phase 2.",
+    "priority": "High"
+  },
+  {
+    "id": "EP-007",
+    "title": "Multi-Bureau Duplicate Detection Logic Missing from AI Pipeline",
+    "affected_roles": ["system-architect", "data-architect"],
+    "category": "Architecture",
+    "current_state": "Data Architect specifies duplicate detection logic for multi-bureau tradelines: match on account_name + account_number_last_4 + user_id, reuse existing tradeline_id if found in multiple reports. System Architect's AI pipeline (Document AI → Gemini → Classifier → Save) has no documented step for duplicate detection or bureau merge. Unclear if duplicate check happens during tradeline save or requires separate post-processing step.",
+    "enhancement": "Add explicit duplicate detection step to AI pipeline between 'Negative Classification' and 'Save to Database': (1) For each extracted tradeline, query existing tradelines table for same user_id + account_name + last_4 digits. (2) If match found, reuse tradeline_id and update tradeline_details JSONB with bureau-specific data. (3) If no match, insert new tradeline record. Document bureau merge logic: if same tradeline extracted from Equifax and TransUnion reports, create single tradeline_id with two dispute_tracking records (one per bureau). Add integration test: upload two reports with overlapping tradelines, verify single tradeline_id created.",
+    "rationale": "Data Architect defines duplicate detection requirement but System Architect's pipeline lacks implementation specification. Without explicit step, risk: same tradeline uploaded twice creates duplicate records, breaking multi-bureau dashboard design. Need end-to-end pipeline specification including duplicate handling, not just data model definition.",
+    "priority": "Medium"
+  },
+  {
+    "id": "EP-008",
+    "title": "FCRA Legal Review Timing Inconsistency - Pre-Launch vs Post-Development",
+    "affected_roles": ["product-manager", "system-architect"],
+    "category": "Process",
+    "current_state": "Product Manager lists 'FCRA Legal Review' as immediate post-analysis action (before implementation planning) and Month 1-2 timeline for letter template legal review. System Architect includes FCRA compliance as Phase 1 feature requirement (letter templates, disclaimer language, user consent workflow) but schedules legal consultation as risk mitigation 'pre-launch' (Month 5-6). Gap: legal review happens after templates developed vs before development starts.",
+    "enhancement": "Mandate FCRA legal consultation in Week 1 of implementation planning (before any letter template creation): (1) Engage credit repair attorney to review planned service model (automated mailing on user behalf), (2) Obtain sample FCRA-compliant letter templates or approval criteria, (3) Document legal requirements for user consent, disclaimers, and record-keeping before UI/backend development. Treat legal review as Phase 1 pre-requisite, not launch gate. Budget 1-2 weeks for legal iteration on templates before finalizing letter generation service.",
+    "rationale": "Developing letter templates and consent workflows before legal review risks major rework if attorney identifies FCRA violations (10% probability per Product Manager risk assessment, but 'Critical' impact). Product Manager's 'immediate action' timing aligns with risk mitigation best practice, but System Architect's Phase 1 features assume templates ready for development. Need single source of truth: legal review blocks template development start, not launch.",
+    "priority": "High"
+  },
+  {
+    "id": "EP-009",
+    "title": "Premium Tier Feature Definitions Incomplete for Phase 3 Planning",
+    "affected_roles": ["product-manager", "system-architect", "data-architect"],
+    "category": "Requirements",
+    "current_state": "Product Manager defines premium tier ($15-20/month) with four bundled features: credit score prediction, personalized improvement plans, financial chatbot, unlimited letter generation. System Architect provides detailed architecture for score prediction (hybrid rules + ML) and chatbot (RAG + Pinecone), but 'personalized improvement plans' has no technical specification. Data Architect schema includes TimescaleDB for score history but no data model for 'improvement plans'. Unclear what this feature entails technically.",
+    "enhancement": "Define 'personalized improvement plans' as concrete feature specification: (1) Rule-based recommendation engine analyzing user's credit profile (payment history, utilization, derogatory marks) to generate prioritized action list (e.g., 'Pay down Chase card to 30% utilization for +15 point estimated impact'), (2) Timeline projection showing monthly score improvements if recommendations followed, (3) Integration with chatbot to explain each recommendation. Document as System Architect Feature 21 with 4-week engineering effort (Month 17-18). Add data model to Data Architect schema: improvement_recommendations table with user_id, recommendation_type, priority, estimated_impact.",
+    "rationale": "Product Manager includes feature in premium tier value proposition but no role defines technical implementation. Risk: Phase 3 planning discovers feature requires 6-8 weeks (not budgeted), delaying premium tier launch from Month 18 to Month 20-22. Need detailed feature specification in PRD phase to validate feasibility and engineering estimates.",
+    "priority": "Medium"
+  },
+  {
+    "id": "EP-010",
+    "title": "Viral Growth Assumptions Lack Technical Enablement Requirements",
+    "affected_roles": ["product-manager", "system-architect"],
+    "category": "Requirements",
+    "current_state": "Product Manager's GTM strategy relies on viral growth (1.2-1.5x viral coefficient) via SEO content marketing (10-15 articles) and referral program (Month 7-9, 'Refer 3 friends, get 1 free mailing'). System Architect roadmap includes referral program as Phase 2 feature with tracking infrastructure (unique referral links, reward application logic). No technical requirements for SEO optimization (URL structure, meta tags, sitemap, page speed), content management system, or organic social sharing features (pre-filled tweets, email templates).",
+    "enhancement": "Define Phase 1 SEO technical foundation: (1) Next.js static site generation for content hub with optimized URL structure (/guides/remove-late-payments), (2) OpenGraph meta tags and structured data for social sharing, (3) Sitemap generation and Google Search Console integration, (4) Page speed optimization (target: <2s load time, >90 Lighthouse score). Add Feature 22 to System Architect roadmap: SEO Infrastructure (2 person-weeks, Month 1-2). Document content publication workflow: Markdown files in /content directory, automated build pipeline, CMS optional for Phase 2.",
+    "rationale": "Product Manager's revenue projections assume SEO drives 100 users by Month 6, 1,000 by Month 12, but System Architect has no corresponding technical SEO requirements. Modern SEO success requires technical foundation (fast page speed, mobile responsiveness, structured data) beyond content quality. Risk: publish 15 articles with poor technical SEO, achieve <20% of projected organic traffic, miss Month 12 revenue targets. Need explicit SEO technical specification as Phase 1 requirement.",
+    "priority": "Medium"
+  }
+]

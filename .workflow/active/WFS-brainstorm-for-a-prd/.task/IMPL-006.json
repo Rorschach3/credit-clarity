@@ -1,0 +1,194 @@
+{
+  "id": "IMPL-006",
+  "title": "Create Master PRD Index and Cross-Reference Document",
+  "status": "completed",
+  "context_package_path": ".workflow/active/WFS-brainstorm-for-a-prd/.process/context-package.json",
+  "meta": {
+    "type": "docs",
+    "agent": "@code-developer",
+    "execution_group": null
+  },
+  "context": {
+    "requirements": [
+      "Create 1 master PRD index document (3-5 pages) serving as navigation hub for all PRD sections",
+      "Document 5 PRD sections: Executive Summary, Technical Architecture, Feature Specifications, Data Architecture, Implementation Roadmap",
+      "Include 1 comprehensive decision tracking table with 25 decisions cross-referenced to PRD sections",
+      "Create 1 artifact reference map linking 18 brainstorming analysis files to PRD sections",
+      "Include navigation structure with quick links to all sections and subsections",
+      "Integrate metadata: version control, approval workflow, change log"
+    ],
+    "focus_paths": [
+      "docs/",
+      ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/"
+    ],
+    "acceptance": [
+      "1 master index created: verify by ls docs/PRD-Master-Index.md",
+      "5 PRD sections linked: verify by grep -c 'docs/PRD-.*\\.md' docs/PRD-Master-Index.md = 5",
+      "25 decisions cross-referenced: verify by grep -c 'D-0[0-2][0-9]' docs/PRD-Master-Index.md = 25",
+      "18 artifact references mapped: verify by grep -c '@.*\\.brainstorming.*\\.md' docs/PRD-Master-Index.md >= 18",
+      "Navigation structure present: verify by grep -c '###.*Table of Contents\\|Quick Links' docs/PRD-Master-Index.md >= 1"
+    ],
+    "depends_on": ["IMPL-001", "IMPL-002", "IMPL-003", "IMPL-004", "IMPL-005"],
+    "inherited": {
+      "from": "IMPL-001",
+      "context": ["All 5 PRD sections completed", "Decision tracking established", "Artifact references documented"]
+    },
+    "shared_context": {
+      "tech_stack": ["Markdown", "Documentation"],
+      "document_structure": "Master index → Section links → Subsection quick links → Decision tracking → Artifact map",
+      "conventions": ["Use markdown TOC links", "Include relative path references", "Add version history", "Document approval workflow"]
+    },
+    "artifacts": [
+      {
+        "type": "topic_framework",
+        "source": "brainstorm_framework",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/guidance-specification.md",
+        "priority": "highest",
+        "usage": "Decision tracking table (Appendix) with 25 decisions to cross-reference",
+        "contains": "Decision ID, Category, Question, Selected Answer, Phase, Rationale for all 25 decisions"
+      },
+      {
+        "type": "synthesis_specification",
+        "source": "brainstorm_clarification",
+        "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/",
+        "priority": "high",
+        "usage": "Artifact catalog with 18 analysis files across 3 roles (product-manager, system-architect, data-architect)",
+        "contains": "Role analysis files with detailed specifications feeding into PRD sections"
+      }
+    ]
+  },
+  "flow_control": {
+    "pre_analysis": [
+      {
+        "step": "load_context_package",
+        "action": "Load context package for artifact paths and smart context",
+        "commands": ["Read(.workflow/active/WFS-brainstorm-for-a-prd/.process/context-package.json)"],
+        "output_to": "context_package",
+        "on_error": "fail"
+      },
+      {
+        "step": "load_guidance_specification",
+        "action": "Load guidance-specification.md for decision tracking table",
+        "commands": ["Read(.workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/guidance-specification.md)"],
+        "output_to": "guidance_spec",
+        "on_error": "fail"
+      },
+      {
+        "step": "verify_prd_sections_exist",
+        "action": "Verify all 5 PRD section documents have been created",
+        "commands": [
+          "bash(ls -la docs/PRD-*.md)"
+        ],
+        "output_to": "prd_sections",
+        "on_error": "fail"
+      },
+      {
+        "step": "catalog_brainstorming_artifacts",
+        "action": "List all brainstorming artifact files for reference mapping",
+        "commands": [
+          "bash(find .workflow/active/WFS-brainstorm-for-a-prd/.brainstorming -name '*.md' -type f | wc -l)",
+          "bash(find .workflow/active/WFS-brainstorm-for-a-prd/.brainstorming -name 'analysis*.md' -type f)"
+        ],
+        "output_to": "artifact_catalog",
+        "on_error": "skip_optional"
+      }
+    ],
+    "implementation_approach": [
+      {
+        "step": 1,
+        "title": "Load and synthesize master index content",
+        "description": "Extract navigation structure, decision tracking, and artifact references for master index",
+        "modification_points": [
+          "Load guidance-specification.md: extract 25 decisions from decision tracking table",
+          "Verify 5 PRD section documents exist: PRD-Executive-Summary.md, PRD-Technical-Architecture.md, PRD-Feature-Specifications.md, PRD-Data-Architecture.md, PRD-Implementation-Roadmap.md",
+          "Catalog 18 brainstorming artifact files: 6 product-manager, 6 system-architect, 6 data-architect analyses",
+          "Map decisions to PRD sections: identify which sections reference which D-XXX decisions",
+          "Build navigation tree: section → subsection → page numbers/anchors"
+        ],
+        "logic_flow": [
+          "Read guidance-specification.md decision tracking table (25 decisions)",
+          "Read all 5 PRD section documents to extract table of contents structure",
+          "List all .brainstorming/*.md files to build artifact reference map",
+          "Create decision-to-section mapping: D-001 to D-025 → PRD sections",
+          "Create artifact-to-section mapping: analysis files → PRD sections they inform",
+          "Build hierarchical navigation structure with markdown TOC links",
+          "Synthesize into master index template with version control metadata"
+        ],
+        "depends_on": [],
+        "output": "master_index_structure"
+      },
+      {
+        "step": 2,
+        "title": "Create master PRD index document",
+        "description": "Write comprehensive master index with navigation, decision tracking, artifact references, and metadata",
+        "modification_points": [
+          "Create 1 new file: docs/PRD-Master-Index.md (estimated 400-600 lines)",
+          "Include 7 main sections: Document Overview, PRD Sections (5), Decision Tracking Cross-Reference, Artifact Reference Map, Navigation Guide, Version History, Approval Workflow",
+          "Document 5 PRD section links with brief descriptions and TOC",
+          "Include 1 decision tracking table with 25 decisions cross-referenced to PRD sections where documented",
+          "Include 1 artifact reference map with 18 analysis files mapped to consuming PRD sections",
+          "Add version control metadata: version number, last updated, authors, approval status"
+        ],
+        "logic_flow": [
+          "Create docs/PRD-Master-Index.md with proper frontmatter",
+          "Write Document Overview section (0.5 page):",
+          "  - PRD purpose and scope",
+          "  - Target audience (executives, product team, engineering)",
+          "  - Document organization overview",
+          "Write PRD Sections section (1.5 pages):",
+          "  - Section 1: Executive Summary (link, description, key topics)",
+          "  - Section 2: Technical Architecture (link, description, key components)",
+          "  - Section 3: Feature Specifications (link, description, 20 features summary)",
+          "  - Section 4: Data Architecture (link, description, database design)",
+          "  - Section 5: Implementation Roadmap (link, description, 4 phases)",
+          "Write Decision Tracking Cross-Reference section (1 page):",
+          "  - Table with columns: Decision ID, Category, Question, PRD Section(s), Page Reference",
+          "  - All 25 decisions (D-001 to D-025) with links to PRD sections",
+          "Write Artifact Reference Map section (0.5 page):",
+          "  - Table mapping 18 analysis files to PRD sections",
+          "  - Columns: Artifact Path, Role, PRD Section(s), Usage",
+          "Write Navigation Guide section (0.5 page):",
+          "  - Quick links to major sections",
+          "  - Search keywords for finding specific topics",
+          "  - Cross-reference index",
+          "Write Version History section (0.5 page):",
+          "  - Version 1.0: Initial PRD based on brainstorming session WFS-brainstorm-for-a-prd",
+          "  - Change log format for future updates",
+          "Write Approval Workflow section (0.5 page):",
+          "  - Review process: product team → engineering → executive approval",
+          "  - Sign-off checklist",
+          "Validate all relative links work correctly"
+        ],
+        "depends_on": [1],
+        "output": "master_index_document"
+      },
+      {
+        "step": 3,
+        "title": "Validate master index completeness and link integrity",
+        "description": "Verify all sections linked, decisions cross-referenced, artifacts mapped, and navigation functional",
+        "modification_points": [
+          "Validate 5 PRD section links: verify all docs/PRD-*.md files referenced",
+          "Validate 25 decision cross-references: verify D-001 to D-025 present",
+          "Validate 18 artifact references: verify .brainstorming/*.md paths present",
+          "Validate navigation links: verify all markdown TOC links use valid anchors",
+          "Validate metadata completeness: verify version, authors, date present"
+        ],
+        "logic_flow": [
+          "Run grep validation commands from acceptance criteria",
+          "Count PRD section links (should be 5)",
+          "Count decision references (should be 25: D-001 to D-025)",
+          "Count artifact references (should be 18+ analysis files)",
+          "Verify all relative markdown links point to existing files",
+          "Verify all anchor links in TOC match actual section headings",
+          "Validate version control metadata fields are populated",
+          "Generate validation report with link integrity check results"
+        ],
+        "depends_on": [2],
+        "output": "master_index_validation_report"
+      }
+    ],
+    "target_files": [
+      "docs/PRD-Master-Index.md"
+    ]
+  }
+}

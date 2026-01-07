@@ -35,7 +35,7 @@ export const ACCOUNT_PATTERNS = {
   
   // Alternative header patterns for different formats
   headerPatterns: [
-    /^([A-Z][A-Z\s&'-]+(?:BANK|CARD|CREDIT|FINANCIAL|CORP|INC|LLC|CO|CAPITAL|CHASE|WELLS|CITI|DISCOVER|AMEX|AMERICAN\s+EXPRESS))/gim,
+    /^([A-Z][A-Z\s&'-]+(?:\bBANK\b|\bCARD\b|\bCREDIT\b|\bFINANCIAL\b|\bCORP\b|\bINC\b|\bLLC\b|\bCAPITAL\b|\bCHASE\b|\bWELLS\b|\bCITI\b|\bDISCOVER\b|\bAMEX\b|AMERICAN\s+EXPRESS))/gim,
     /^([A-Z\s&'-]{4,})\s+Account/gim,
     /Company:\s*([A-Z][A-Z\s&'-]+)/gi,
     /Creditor:\s*([A-Z][A-Z\s&'-]+)/gi
@@ -139,7 +139,7 @@ export const ACCOUNT_DELIMITERS = {
   ],
   
   // Minimum content requirements for valid account block
-  minContentLength: 100,
+  minContentLength: 60,
   requiredFields: ['creditor_name', 'account_number']
 };
 
@@ -199,16 +199,16 @@ export class EnhancedCreditReportParser {
       
       switch (current.type) {
         case 'negativeItems':
-          segments.negativeItems += sectionText + '\\n';
+          segments.negativeItems += sectionText + '\n';
           break;
         case 'goodStanding':
-          segments.goodStanding += sectionText + '\\n';
+          segments.goodStanding += sectionText + '\n';
           break;
         case 'inquiries':
-          segments.inquiries += sectionText + '\\n';
+          segments.inquiries += sectionText + '\n';
           break;
         case 'personalInfo':
-          segments.personalInfo += sectionText + '\\n';
+          segments.personalInfo += sectionText + '\n';
           break;
       }
     }
@@ -233,16 +233,28 @@ export class EnhancedCreditReportParser {
     
     // Use account delimiter heuristic to split text into account blocks
     const accountBlocks: string[] = [];
-    const lines = sectionText.split('\\n');
+    const normalizedText = sectionText.replace(/\\n/g, '\n');
+    const lines = normalizedText.split(/\r\n|\r|\n/);
     let currentBlock = '';
     let inAccountBlock = false;
     
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
+      const line = this.normalizeLine(lines[i]);
       if (!line) continue;
       
       // Check if this line starts a new account block
-      const isAccountStart = this.isAccountDelimiter(line);
+      const isHeaderLine = this.isAccountHeaderLine(line) || this.isPossibleHeaderLine(line);
+      const isAccountStart = isHeaderLine || (!inAccountBlock && this.isAccountDelimiter(line));
+
+      if (process.env.PARSER_DEBUG) {
+        console.log('parseAccountBlocks line', {
+          index: i,
+          line,
+          isHeaderLine,
+          isAccountStart,
+          inAccountBlock
+        });
+      }
       
       if (isAccountStart) {
         // Save previous block if it exists and meets minimum requirements
@@ -264,8 +276,16 @@ export class EnhancedCreditReportParser {
       accountBlocks.push(currentBlock.trim());
     }
     
-    console.log(`📊 Found ${accountBlocks.length} account blocks in section`);
-    return accountBlocks;
+    const splitBlocks = this.splitMergedBlocks(accountBlocks);
+    const headerSplitBlocks = splitBlocks.length <= 1
+      ? this.splitByHeaderIndices(normalizedText)
+      : [];
+    const finalBlocks = headerSplitBlocks.length > splitBlocks.length
+      ? headerSplitBlocks
+      : splitBlocks;
+
+    console.log(`📊 Found ${finalBlocks.length} account blocks in section`);
+    return finalBlocks;
   }
   
   /**
@@ -281,6 +301,9 @@ export class EnhancedCreditReportParser {
     
     // Extract creditor name using header patterns
     details.creditor_name = this.extractCreditorName(accountBlock);
+    if (process.env.PARSER_DEBUG && !details.creditor_name) {
+      console.log('missing creditor name block', accountBlock);
+    }
     
     // Extract account number
     details.account_number = this.extractWithPatterns(accountBlock, ACCOUNT_PATTERNS.accountNumber);
@@ -330,8 +353,8 @@ export class EnhancedCreditReportParser {
     // JUL CO  
     // JUN OK
     
-    const yearPattern = /\\b(20\\d{2})\\b/g;
-    const monthStatusPattern = /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\\s+([A-Z]{2,4}|\\d{2,3})/gi;
+    const yearPattern = /\b(20\d{2})\b/g;
+    const monthStatusPattern = /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+([A-Z]{2,4}|\d{2,3})/gi;
     
     let currentYear = '';
     const yearMatches = [...paymentHistoryText.matchAll(yearPattern)];
@@ -426,22 +449,188 @@ export class EnhancedCreditReportParser {
   // Helper methods
   
   private isAccountDelimiter(line: string): boolean {
-    return ACCOUNT_DELIMITERS.patterns.some(pattern => pattern.test(line));
+    const normalizedLine = this.normalizeLine(line);
+    if (!normalizedLine) {
+      return false;
+    }
+
+    const patterns = [
+      ...ACCOUNT_DELIMITERS.patterns,
+      ACCOUNT_PATTERNS.accountHeader,
+      ...ACCOUNT_PATTERNS.headerPatterns
+    ];
+
+    return patterns.some(pattern => this.matchesPattern(normalizedLine, pattern));
+  }
+
+  private isAccountHeaderLine(line: string): boolean {
+    const normalizedLine = this.normalizeLine(line);
+    if (!normalizedLine) {
+      return false;
+    }
+
+    const upperLine = normalizedLine.toUpperCase();
+    const isSectionHeader = /(POTENTIALLY NEGATIVE ITEMS|NEGATIVE ACCOUNTS|ACCOUNTS WITH NEGATIVE PAYMENT HISTORY|ACCOUNTS IN GOOD STANDING|SATISFACTORY ACCOUNTS|ACCOUNTS CURRENT|POSITIVE ACCOUNTS)/.test(upperLine);
+    const isLabelLine = /^(ADDRESS|ACCOUNT NUMBER|ACCOUNT #|ACCT NUMBER|ACCT #|ACCOUNT STATUS|ACCOUNT BALANCE|STATUS|BALANCE|CREDIT LIMIT|MONTHLY PAYMENT|DATE OPENED)/.test(upperLine);
+
+    if (isSectionHeader || isLabelLine) {
+      return false;
+    }
+
+    const patterns = [ACCOUNT_PATTERNS.accountHeader, ...ACCOUNT_PATTERNS.headerPatterns];
+    if (patterns.some(pattern => this.matchesPattern(normalizedLine, pattern))) {
+      return true;
+    }
+
+    const isUppercase = normalizedLine.length > 3 && normalizedLine === upperLine;
+    const hasKeyword = /(BANK|CARD|CREDIT|FINANCIAL|CORP|INC|LLC|CO|CAPITAL|CHASE|WELLS|CITI|DISCOVER|AMEX|EXPRESS|AUTO|LOAN|SERVICES)/.test(upperLine);
+    const isLabel = /^(ADDRESS|ACCOUNT|STATUS|BALANCE|CREDIT LIMIT|MONTHLY PAYMENT)/.test(upperLine);
+
+    return isUppercase && hasKeyword && !isLabel;
+  }
+
+  private normalizeLine(line: string): string {
+    return line.replace(/\s+/g, ' ').trim();
+  }
+
+  private splitMergedBlocks(blocks: string[]): string[] {
+    const splitBlocks: string[] = [];
+
+    for (const block of blocks) {
+      const split = this.splitMergedBlock(block);
+      if (split.length > 1) {
+        splitBlocks.push(...split);
+      } else if (block.trim()) {
+        splitBlocks.push(block);
+      }
+    }
+
+    return splitBlocks;
+  }
+
+  private splitMergedBlock(block: string): string[] {
+    const lines = block.split(/\r\n|\r|\n/);
+    const splitBlocks: string[] = [];
+    let currentBlock = '';
+
+    for (const rawLine of lines) {
+      const line = this.normalizeLine(rawLine);
+      if (!line) {
+        continue;
+      }
+
+      const isHeaderLine = this.isAccountHeaderLine(line) || this.isPossibleHeaderLine(line);
+      if (isHeaderLine && currentBlock) {
+        if (currentBlock.length > ACCOUNT_DELIMITERS.minContentLength) {
+          splitBlocks.push(currentBlock.trim());
+        }
+        currentBlock = `${line}\n`;
+        continue;
+      }
+
+      currentBlock += `${line}\n`;
+    }
+
+    if (currentBlock.length > ACCOUNT_DELIMITERS.minContentLength) {
+      splitBlocks.push(currentBlock.trim());
+    }
+
+    return splitBlocks.length > 0 ? splitBlocks : [block];
+  }
+
+  private isPossibleHeaderLine(line: string): boolean {
+    const normalizedLine = this.normalizeLine(line);
+    if (!normalizedLine) {
+      return false;
+    }
+
+    const upperLine = normalizedLine.toUpperCase();
+    const isSectionHeader = /(POTENTIALLY NEGATIVE ITEMS|NEGATIVE ACCOUNTS|ACCOUNTS WITH NEGATIVE PAYMENT HISTORY|ACCOUNTS IN GOOD STANDING|SATISFACTORY ACCOUNTS|ACCOUNTS CURRENT|POSITIVE ACCOUNTS)/.test(upperLine);
+    const isLabelLine = /^(ADDRESS|ACCOUNT NUMBER|ACCOUNT #|ACCT NUMBER|ACCT #|ACCOUNT STATUS|ACCOUNT BALANCE|STATUS|BALANCE|CREDIT LIMIT|MONTHLY PAYMENT|DATE OPENED)/.test(upperLine);
+
+    if (isSectionHeader || isLabelLine || normalizedLine.includes(':')) {
+      return false;
+    }
+
+    return /(BANK|CARD|CREDIT|FINANCIAL|CORP|INC|LLC|CO|CAPITAL|CHASE|WELLS|CITI|DISCOVER|AMEX|EXPRESS|AUTO|LOAN|SERVICES)/.test(upperLine);
+  }
+
+  private splitByHeaderIndices(text: string): string[] {
+    const lines = text.split(/\r\n|\r|\n|\\n/);
+    const headerIndices: Array<{ index: number; line: string }> = [];
+    let cursor = 0;
+
+    for (const rawLine of lines) {
+      const trimmedLine = this.normalizeLine(rawLine);
+      if (trimmedLine) {
+        const leadingWhitespaceIndex = rawLine.search(/\S/);
+        const lineStartIndex = leadingWhitespaceIndex >= 0
+          ? cursor + leadingWhitespaceIndex
+          : cursor;
+        const isHeaderCandidate = this.isAccountHeaderLine(trimmedLine) || this.isPossibleHeaderLine(trimmedLine);
+
+        if (isHeaderCandidate) {
+          headerIndices.push({
+            index: lineStartIndex,
+            line: trimmedLine
+          });
+        }
+      }
+
+      cursor += rawLine.length + 1;
+    }
+
+    if (headerIndices.length < 2) {
+      return [];
+    }
+
+    headerIndices.sort((a, b) => a.index - b.index);
+    const blocks: string[] = [];
+
+    for (let i = 0; i < headerIndices.length; i++) {
+      const start = headerIndices[i].index;
+      const end = headerIndices[i + 1]?.index ?? text.length;
+      const block = text.slice(start, end).trim();
+
+      if (block.length > ACCOUNT_DELIMITERS.minContentLength) {
+        blocks.push(block);
+      }
+    }
+
+    return blocks;
+  }
+
+  private matchesPattern(text: string, pattern: RegExp): boolean {
+    const flags = pattern.flags.replace('g', '');
+    const safePattern = flags === pattern.flags ? pattern : new RegExp(pattern.source, flags);
+    return safePattern.test(text);
   }
   
   private extractCreditorName(text: string): string {
     // Try account header pattern first
-    const headerMatch = text.match(ACCOUNT_PATTERNS.accountHeader);
+    const headerMatch = this.matchPatternGroup(text, ACCOUNT_PATTERNS.accountHeader);
     if (headerMatch) {
-      return this.cleanCreditorName(headerMatch[1]);
+      return this.cleanCreditorName(headerMatch);
     }
     
     // Try alternative header patterns
     for (const pattern of ACCOUNT_PATTERNS.headerPatterns) {
-      const match = text.match(pattern);
+      const match = this.matchPatternGroup(text, pattern);
       if (match) {
-        return this.cleanCreditorName(match[1]);
+        return this.cleanCreditorName(match);
       }
+    }
+
+    const lines = text.split(/\r\n|\r|\n/);
+    for (const rawLine of lines) {
+      if (this.isAccountHeaderLine(rawLine) || this.isPossibleHeaderLine(rawLine)) {
+        return this.cleanCreditorName(rawLine);
+      }
+    }
+
+    const fallbackLine = lines.map(line => this.normalizeLine(line)).find(Boolean);
+    if (fallbackLine) {
+      return this.cleanCreditorName(fallbackLine);
     }
     
     return '';
@@ -449,17 +638,24 @@ export class EnhancedCreditReportParser {
   
   private cleanCreditorName(name: string): string {
     return name
-      .replace(/[^A-Za-z0-9\\s&'-]/g, ' ')
-      .replace(/\\s+/g, ' ')
+      .replace(/[^A-Za-z0-9\s&'-]/g, ' ')
+      .replace(/\s+/g, ' ')
       .trim()
       .toUpperCase();
+  }
+
+  private matchPatternGroup(text: string, pattern: RegExp): string | null {
+    const flags = pattern.flags.replace('g', '');
+    const safePattern = flags === pattern.flags ? pattern : new RegExp(pattern.source, flags);
+    const match = safePattern.exec(text);
+    return match && match[1] ? match[1] : null;
   }
   
   private extractWithPatterns(text: string, patterns: RegExp[]): string {
     for (const pattern of patterns) {
-      const match = text.match(pattern);
-      if (match && match[1]) {
-        return match[1].replace(/[^\\d.,]/g, '');
+      const match = this.matchPatternGroup(text, pattern);
+      if (match) {
+        return match.replace(/[^\d.,]/g, '');
       }
     }
     return '';

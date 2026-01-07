@@ -1,24 +1,42 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { renderHook, act } from '@testing-library/react';
-import { useAuth } from '../use-auth';
+import { createElement } from 'react';
+import type { ReactNode } from 'react';
+import { AuthProvider, useAuth } from '../use-auth';
 
 // Mock Supabase client
-const mockSupabase = {
+var mockSupabase: {
   auth: {
-    getSession: jest.fn(),
-    getUser: jest.fn(),
-    signInWithPassword: jest.fn(),
-    signUp: jest.fn(),
-    signOut: jest.fn(),
-    onAuthStateChange: jest.fn(),
-  },
+    getSession: jest.Mock;
+    getUser: jest.Mock;
+    signInWithPassword: jest.Mock;
+    signUp: jest.Mock;
+    signOut: jest.Mock;
+    onAuthStateChange: jest.Mock;
+  };
 };
 
-jest.mock('@/integrations/supabase/client', () => ({
-  supabase: mockSupabase,
-}));
+jest.mock('@/integrations/supabase/client', () => {
+  mockSupabase = {
+    auth: {
+      getSession: jest.fn(),
+      getUser: jest.fn(),
+      signInWithPassword: jest.fn(),
+      signUp: jest.fn(),
+      signOut: jest.fn(),
+      onAuthStateChange: jest.fn(),
+    },
+  };
+
+  return {
+    supabase: mockSupabase,
+  };
+});
 
 describe('useAuth Hook', () => {
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(AuthProvider, null, children);
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -33,10 +51,10 @@ describe('useAuth Hook', () => {
       return { data: { subscription: { unsubscribe: jest.fn() } } };
     });
 
-    const { result } = renderHook(() => useAuth());
+    const { result } = renderHook(() => useAuth(), { wrapper });
 
     expect(result.current.user).toBeNull();
-    expect(result.current.loading).toBe(true);
+    expect(result.current.isLoading).toBe(true);
   });
 
   it('should set user when session exists', async () => {
@@ -66,7 +84,7 @@ describe('useAuth Hook', () => {
       return { data: { subscription: { unsubscribe: jest.fn() } } };
     });
 
-    const { result } = renderHook(() => useAuth());
+    const { result } = renderHook(() => useAuth(), { wrapper });
 
     // Wait for async operations to complete
     await act(async () => {
@@ -74,7 +92,7 @@ describe('useAuth Hook', () => {
     });
 
     expect(result.current.user).toEqual(mockUser);
-    expect(result.current.loading).toBe(false);
+    expect(result.current.isLoading).toBe(false);
   });
 
   it('should handle sign in successfully', async () => {
@@ -103,11 +121,11 @@ describe('useAuth Hook', () => {
       return { data: { subscription: { unsubscribe: jest.fn() } } };
     });
 
-    const { result } = renderHook(() => useAuth());
+    const { result } = renderHook(() => useAuth(), { wrapper });
 
     await act(async () => {
-      const response = await result.current.signIn('test@example.com', 'password123');
-      expect(response).toEqual({ user: mockUser, error: null });
+      const response = await result.current.login('test@example.com', 'password123');
+      expect(response).toEqual({});
     });
 
     expect(mockSupabase.auth.signInWithPassword).toHaveBeenCalledWith({
@@ -133,11 +151,11 @@ describe('useAuth Hook', () => {
       return { data: { subscription: { unsubscribe: jest.fn() } } };
     });
 
-    const { result } = renderHook(() => useAuth());
+    const { result } = renderHook(() => useAuth(), { wrapper });
 
     await act(async () => {
-      const response = await result.current.signIn('test@example.com', 'wrongpassword');
-      expect(response).toEqual({ user: null, error: mockError });
+      const response = await result.current.login('test@example.com', 'wrongpassword');
+      expect(response).toEqual({ error: mockError });
     });
   });
 
@@ -161,11 +179,11 @@ describe('useAuth Hook', () => {
       return { data: { subscription: { unsubscribe: jest.fn() } } };
     });
 
-    const { result } = renderHook(() => useAuth());
+    const { result } = renderHook(() => useAuth(), { wrapper });
 
     await act(async () => {
-      const response = await result.current.signUp('test@example.com', 'password123');
-      expect(response).toEqual({ user: mockUser, error: null });
+      const response = await result.current.signup('test@example.com', 'password123');
+      expect(response).toEqual({});
     });
 
     expect(mockSupabase.auth.signUp).toHaveBeenCalledWith({
@@ -191,11 +209,11 @@ describe('useAuth Hook', () => {
       return { data: { subscription: { unsubscribe: jest.fn() } } };
     });
 
-    const { result } = renderHook(() => useAuth());
+    const { result } = renderHook(() => useAuth(), { wrapper });
 
     await act(async () => {
-      const response = await result.current.signUp('test@example.com', 'password123');
-      expect(response).toEqual({ user: null, error: mockError });
+      const response = await result.current.signup('test@example.com', 'password123');
+      expect(response).toEqual({ error: mockError });
     });
   });
 
@@ -218,11 +236,10 @@ describe('useAuth Hook', () => {
       return { data: { subscription: { unsubscribe: jest.fn() } } };
     });
 
-    const { result } = renderHook(() => useAuth());
+    const { result } = renderHook(() => useAuth(), { wrapper });
 
     await act(async () => {
-      const response = await result.current.signOut();
-      expect(response).toEqual({ error: null });
+      await result.current.signOut();
     });
 
     expect(mockSupabase.auth.signOut).toHaveBeenCalled();
@@ -244,11 +261,10 @@ describe('useAuth Hook', () => {
       return { data: { subscription: { unsubscribe: jest.fn() } } };
     });
 
-    const { result } = renderHook(() => useAuth());
+    const { result } = renderHook(() => useAuth(), { wrapper });
 
     await act(async () => {
-      const response = await result.current.signOut();
-      expect(response).toEqual({ error: mockError });
+      await result.current.signOut();
     });
   });
 
@@ -275,7 +291,7 @@ describe('useAuth Hook', () => {
       return { data: { subscription: { unsubscribe: jest.fn() } } };
     });
 
-    const { result } = renderHook(() => useAuth());
+    const { result } = renderHook(() => useAuth(), { wrapper });
 
     // Simulate auth state change
     await act(async () => {
@@ -283,7 +299,7 @@ describe('useAuth Hook', () => {
     });
 
     expect(result.current.user).toEqual(mockUser);
-    expect(result.current.loading).toBe(false);
+    expect(result.current.isLoading).toBe(false);
 
     // Simulate sign out
     await act(async () => {
@@ -291,7 +307,7 @@ describe('useAuth Hook', () => {
     });
 
     expect(result.current.user).toBeNull();
-    expect(result.current.loading).toBe(false);
+    expect(result.current.isLoading).toBe(false);
   });
 
   it('should cleanup subscription on unmount', () => {
@@ -306,7 +322,7 @@ describe('useAuth Hook', () => {
       return { data: { subscription: { unsubscribe: mockUnsubscribe } } };
     });
 
-    const { unmount } = renderHook(() => useAuth());
+    const { unmount } = renderHook(() => useAuth(), { wrapper });
 
     unmount();
 

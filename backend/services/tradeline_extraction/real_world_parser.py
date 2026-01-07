@@ -34,7 +34,14 @@ class RealWorldTransUnionParser(TransUnionTradelineParser):
             'credit_limit': re.compile(r'Credit Limit[:\s]+\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE),
             'date_opened': re.compile(r'Date Opened[:\s]+(\d{1,2}/\d{1,2}/\d{4})', re.IGNORECASE),
             'monthly_payment': re.compile(r'Monthly Payment[:\s]+\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE),
-            'account_status': re.compile(r'Account Status[:\s]+(\w+)', re.IGNORECASE)
+            'account_status': re.compile(r'Account Status[:\s]+(\w+)', re.IGNORECASE),
+            # Negative account extraction patterns
+            'charge_off_amount': re.compile(r'Charge[- ]?Off(?:\s+Amount)?[:\s]+\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE),
+            'collection_amount': re.compile(r'Collection(?:\s+Amount)?[:\s]+\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE),
+            'past_due_amount': re.compile(r'Past\s*Due(?:\s+Amount)?[:\s]+\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE),
+            'settlement_amount': re.compile(r'Settlement(?:\s+Amount)?[:\s]+\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE),
+            'negative_status': re.compile(r'(?:Account\s+)?Status[:\s]+((?:Charged[- ]?Off|Collection|Delinquent|Default(?:ed)?|Past\s*Due|Settled|Foreclosure|Repossession|Bankruptcy))', re.IGNORECASE),
+            'late_payment_count': re.compile(r'(?:Late\s+Payments?|Times\s+(?:30|60|90|120)\+?\s*Days?\s*Late)[:\s]+(\d+)', re.IGNORECASE)
         }
         
         # Pattern to clean encoded characters
@@ -172,9 +179,21 @@ class RealWorldTransUnionParser(TransUnionTradelineParser):
         
         # Basic info from section metadata
         tradeline.creditor_name = section_data['creditor_name']
-        tradeline.account_number = section_data['account']
+        
+        # Clean account number - remove asterisks, X's, dots, dashes
+        # Keep only alphanumeric characters per user requirement
+        raw_account = section_data['account']
+        tradeline.account_number = self._clean_account_number(raw_account)
         
         section_text = section_data['text']
+        
+        # Try to find unmasked account number in text if current is masked
+        if tradeline.account_number and len(tradeline.account_number) < 8:
+            unmasked_match = re.search(r'\b[A-Z0-9]{8,20}\b', section_text)
+            if unmasked_match:
+                potential_account = self._clean_account_number(unmasked_match.group(0))
+                if potential_account and len(potential_account) > len(tradeline.account_number):
+                    tradeline.account_number = potential_account
         
         # Extract additional information using patterns
         for field, pattern in self.info_patterns.items():
@@ -185,15 +204,37 @@ class RealWorldTransUnionParser(TransUnionTradelineParser):
                 if field == 'account_type':
                     tradeline.account_type = self._normalize_account_type(value)
                 elif field == 'balance':
-                    tradeline.account_balance = self._format_currency(value)
+                    tradeline.account_balance = self._format_currency(value, field_name="account_balance")
                 elif field == 'credit_limit':
-                    tradeline.credit_limit = self._format_currency(value)
+                    tradeline.credit_limit = self._format_currency(value, field_name="credit_limit")
                 elif field == 'date_opened':
                     tradeline.date_opened = self._format_date(value)
                 elif field == 'monthly_payment':
-                    tradeline.monthly_payment = self._format_currency(value)
+                    tradeline.monthly_payment = self._format_currency(value, field_name="monthly_payment")
                 elif field == 'account_status':
                     tradeline.account_status = self._normalize_account_status(value)
+                # Negative account fields
+                elif field == 'charge_off_amount':
+                    tradeline.charge_off_amount = self._format_currency(value, field_name="charge_off_amount")
+                elif field == 'collection_amount':
+                    tradeline.collection_amount = self._format_currency(value, field_name="collection_amount")
+                elif field == 'past_due_amount':
+                    tradeline.past_due_amount = self._format_currency(value, field_name="past_due_amount")
+                elif field == 'settlement_amount':
+                    tradeline.settlement_amount = self._format_currency(value, field_name="settlement_amount")
+                elif field == 'negative_status':
+                    tradeline.negative_status = self._normalize_negative_status(value)
+                elif field == 'late_payment_count':
+                    tradeline.late_payment_count = int(value) if value.isdigit() else None
+        
+        # Mark tradeline as negative if negative indicators are present
+        if any([
+            tradeline.charge_off_amount,
+            tradeline.collection_amount,
+            tradeline.past_due_amount,
+            getattr(tradeline, 'negative_status', None)
+        ]):
+            tradeline.is_negative = True
         
         return tradeline
     
@@ -205,8 +246,11 @@ class RealWorldTransUnionParser(TransUnionTradelineParser):
         if not tradeline.creditor_name or not tradeline.account_number:
             return False
         
-        # Account number should end with ****
-        if not tradeline.account_number.endswith('****'):
+        # Account number should be alphanumeric only and at least 4 chars
+        if not re.match(r'^[A-Za-z0-9]+$', tradeline.account_number):
+            return False
+        
+        if len(tradeline.account_number) < 4:
             return False
         
         # Creditor name should be reasonable length
@@ -214,6 +258,30 @@ class RealWorldTransUnionParser(TransUnionTradelineParser):
             return False
         
         return True
+    
+    def _clean_account_number(self, account_num: str) -> Optional[str]:
+        """
+        Clean account number - remove all special characters.
+        Returns alphanumeric-only account number.
+        """
+        if not account_num:
+            return None
+        
+        # Remove ALL special characters (asterisks, X's, dots, dashes, etc.)
+        cleaned = re.sub(r'[^A-Za-z0-9]', '', account_num)
+        
+        # Validate: Must be at least 4 characters and contain at least one digit
+        if not cleaned or len(cleaned) < 4:
+            return None
+        
+        if not any(c.isdigit() for c in cleaned):
+            return None
+        
+        # Validate reasonable length (4-20 characters)
+        if len(cleaned) > 20:
+            cleaned = cleaned[:20]
+        
+        return cleaned
     
     def _normalize_account_type(self, account_type: str) -> Optional[str]:
         """
@@ -253,12 +321,55 @@ class RealWorldTransUnionParser(TransUnionTradelineParser):
         
         return status_mappings.get(status_clean, status)
     
-    def _format_currency(self, amount: str) -> Optional[str]:
+    def _normalize_negative_status(self, status: str) -> Optional[str]:
         """
-        Format currency from real PDF (handles commas, etc.)
+        Normalize negative account status from real PDF
+        """
+        if not status:
+            return None
+        
+        status_clean = status.lower().strip().replace('-', ' ').replace('  ', ' ')
+        
+        # Map various negative status formats to standardized values
+        negative_status_mappings = {
+            'charged off': 'Charged Off',
+            'charge off': 'Charged Off',
+            'chargedoff': 'Charged Off',
+            'collection': 'Collection',
+            'in collection': 'Collection',
+            'collections': 'Collection',
+            'delinquent': 'Delinquent',
+            'default': 'Default',
+            'defaulted': 'Default',
+            'past due': 'Past Due',
+            'pastdue': 'Past Due',
+            'settled': 'Settled',
+            'settlement': 'Settled',
+            'foreclosure': 'Foreclosure',
+            'repossession': 'Repossession',
+            'repo': 'Repossession',
+            'bankruptcy': 'Bankruptcy'
+        }
+        
+        return negative_status_mappings.get(status_clean, status.title())
+    
+    def _format_currency(self, amount: str, field_name: str = "") -> Optional[str]:
+        """
+        Format currency from real PDF with field-specific rules: always $X,XXX.XX.
         """
         if not amount:
             return None
+
+        # Handle explicit $0 or 0 - format based on field type
+        amount_stripped = amount.strip().lower()
+        if amount_stripped in ['$0', '0', '0.00', '$0.00']:
+            return '$0.00'
+        
+        # Apply OCR error corrections
+        amount = amount.replace('O', '0').replace('l', '1').replace('S', '5')
+        
+        # Handle parenthetical negatives
+        is_negative = '(' in amount and ')' in amount or amount.startswith('-')
         
         # Remove non-numeric characters except decimal point
         cleaned = re.sub(r'[^\d.]', '', amount)
@@ -268,14 +379,9 @@ class RealWorldTransUnionParser(TransUnionTradelineParser):
         
         try:
             value = float(cleaned)
-            
-            # Format as currency
-            if value == 0:
-                return '$0'
-            elif value >= 1000:
-                return f"${value:,.0f}"
-            else:
-                return f"${value:.0f}"
+            abs_value = abs(value)
+            formatted = f"${abs_value:,.2f}"
+            return f"-{formatted}" if is_negative else formatted
         except ValueError:
             return None
     

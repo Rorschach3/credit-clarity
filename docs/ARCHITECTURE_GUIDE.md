@@ -207,8 +207,7 @@ pytest tests/ -v --cov=. --cov-report=html
 pytest tests/unit/ -m unit
 pytest tests/integration/ -m integration
 
-# Performance testing
-locust -f performance_tests.py --host=http://localhost:8000
+# Performance testinglocust -f performance_tests.py --host=http://localhost:8000
 ```
 
 ## 🔄 **Deployment Process**
@@ -228,6 +227,7 @@ locust -f performance_tests.py --host=http://localhost:8000
 ### **Configuration Validation**
 - **Required variables** check per environment
 - **Database connectivity** validation
+
 - **External service** health checks
 - **Security settings** verification
 

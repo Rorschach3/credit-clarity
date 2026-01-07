@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     database_url: Optional[str] = Field(default=None, env="DATABASE_URL")
     supabase_url: Optional[str] = Field(default=None, env="SUPABASE_URL")
     supabase_anon_key: Optional[str] = Field(default=None, env="SUPABASE_ANON_KEY")
+    supabase_service_role_key: Optional[str] = Field(default=None, env="SUPABASE_SERVICE_ROLE_KEY")
+    supabase_jwt_jwk: Optional[str] = Field(default=None, env="SUPABASE_JWT_JWK")
+    supabase_jwt_jwks: Optional[str] = Field(default=None, env="SUPABASE_JWT_JWKS")
+    supabase_jwt_issuer: Optional[str] = Field(default=None, env="SUPABASE_JWT_ISSUER")
+    supabase_jwt_audience: Optional[str] = Field(default="authenticated", env="SUPABASE_JWT_AUDIENCE")
     
     # Security
     jwt_secret: Optional[str] = Field(default=None, env="JWT_SECRET")
@@ -48,8 +53,14 @@ class Settings(BaseSettings):
     
     # Performance
     redis_url: Optional[str] = Field(default=None, env="REDIS_URL")
+    redis_db: int = Field(default=0, env="REDIS_DB")
     cache_ttl: int = Field(default=3600, env="CACHE_TTL")
     max_workers: int = Field(default=3, env="MAX_WORKERS")
+    
+    # Job Queue
+    job_timeout_minutes: int = Field(default=30, env="JOB_TIMEOUT_MINUTES")
+    max_retries: int = Field(default=3, env="MAX_RETRIES")
+    retry_delay_seconds: int = Field(default=60, env="RETRY_DELAY_SECONDS")
     
     # File Processing
     max_file_size_mb: int = Field(default=50, env="MAX_FILE_SIZE_MB")
@@ -74,7 +85,9 @@ class Settings(BaseSettings):
     @validator('admin_emails', pre=True)
     def parse_admin_emails(cls, v):
         if isinstance(v, str):
-            return [email.strip() for email in v.split(',')]
+            if not v.strip():  # Handle empty string
+                return []
+            return [email.strip() for email in v.split(',') if email.strip()]
         return v
     
     @validator('environment')
@@ -119,7 +132,7 @@ class Settings(BaseSettings):
         return {
             "database_url": self.database_url,
             "supabase_url": self.supabase_url,
-            "supabase_key": self.supabase_anon_key
+            "supabase_key": self.supabase_service_role_key or self.supabase_anon_key
         }
     
     def get_cache_config(self) -> Dict[str, Any]:

@@ -25,6 +25,9 @@ from services.monitoring import (
     track_performance
 )
 from services.ab_testing import ab_test_manager, TestVariant, track_pipeline_performance
+from services.storage_service import storage_service
+from services.virus_scanner import virus_scanner
+from services.audit_service import audit_service
 
 router = APIRouter(prefix="/processing", tags=["Processing"])
 logger = logging.getLogger(__name__)
@@ -72,6 +75,22 @@ async def process_credit_report(
     # Validate PDF format
     if not file_content.startswith(b'%PDF'):
         raise HTTPException(status_code=400, detail="Invalid PDF file format")
+    
+    # Check for duplicate file
+    file_hash = await storage_service.calculate_file_hash(file_content)
+    is_duplicate = await storage_service.check_duplicate_hash(file_hash, user_id)
+    duplicate_warning = None
+    if is_duplicate:
+        duplicate_warning = "This file appears to be a duplicate of a previously uploaded file."
+        logger.info(f"Duplicate file detected for user {user_id}: {file_hash[:16]}...")
+    
+    # Scan file for viruses
+    scan_result = await virus_scanner.scan_file(file_content, file.filename)
+    if not scan_result.clean:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"File security check failed: {scan_result.details}"
+        )
     
     # A/B Testing: Assign user to test variant
     test_variant = ab_test_manager.assign_variant(user_id, file_size_mb)

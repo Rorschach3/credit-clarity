@@ -4,16 +4,99 @@ import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import type { Database } from '@/integrations/supabase/types';
 
-// Import business logic types and validation schemas
-import {
-  APITradeline,
-  ParsedTradeline,
-  TradelineUpdate,
-  PaginationOptions,
-  PaginatedTradelinesResponse,
-  APITradelineSchema,
-  ParsedTradelineSchema
-} from '@/utils/tradeline-types';
+// ==================== TYPE DEFINITIONS ====================
+
+// API tradeline from backend
+export interface APITradeline {
+  creditor_name: string;
+  account_number: string;
+  account_balance: string;
+  account_status: string;
+  account_type: string;
+  date_opened: string;
+  credit_limit: string;
+  credit_bureau: string;
+  monthly_payment: string;
+  is_negative?: boolean;
+  dispute_count?: number;
+}
+
+// Parsed tradeline for frontend
+export interface ParsedTradeline {
+  id: string;
+  user_id: string;
+  creditor_name: string;
+  account_number: string;
+  account_balance: string;
+  account_status: string;
+  account_type: string;
+  date_opened: string;
+  is_negative: boolean;
+  dispute_count: number;
+  created_at: string;
+  credit_limit: string;
+  credit_bureau: string;
+  monthly_payment: string;
+}
+
+// Update interface for tradeline modifications
+export interface TradelineUpdate {
+  id: string;
+  updates: Partial<ParsedTradeline>;
+}
+
+// Pagination options
+export interface PaginationOptions {
+  page?: number;
+  pageSize?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+// Paginated response
+export interface PaginatedTradelinesResponse {
+  data: ParsedTradeline[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalCount: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrevious: boolean;
+  };
+}
+
+// Zod schemas for validation
+export const APITradelineSchema = z.object({
+  creditor_name: z.string().min(1),
+  account_number: z.string().min(1),
+  account_balance: z.string().default('$0'),
+  account_status: z.string().default(''),
+  account_type: z.string().min(1),
+  date_opened: z.string().nullable().default(''),
+  credit_limit: z.string().default('$0'),
+  credit_bureau: z.string().default(''),
+  monthly_payment: z.string().default('$0'),
+  is_negative: z.boolean().default(false),
+  dispute_count: z.number().int().min(0).default(0)
+});
+
+export const ParsedTradelineSchema = z.object({
+  id: z.string().min(1),
+  user_id: z.string().min(1),
+  creditor_name: z.string().min(1),
+  account_number: z.string().min(1),
+  account_balance: z.string().default('$0'),
+  account_status: z.string().default(''),
+  account_type: z.string().min(1),
+  date_opened: z.string().default(''),
+  is_negative: z.boolean().default(false),
+  dispute_count: z.number().int().min(0).default(0),
+  created_at: z.string().min(1),
+  credit_limit: z.string().default('$0'),
+  credit_bureau: z.string().default(''),
+  monthly_payment: z.string().default('$0')
+});
 
 // ==================== DATABASE TYPE DEFINITIONS ====================
 

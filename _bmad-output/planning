@@ -1,0 +1,1560 @@
+---
+stepsCompleted: ["step-01-init", "step-03-create-stories", "step-04-final-validation"]
+workflowType: 'create-epics-and-stories'
+inputDocuments:
+  - _bmad-output/planning-artifacts/prd.md
+  - _bmad-output/planning-artifacts/architecture.md
+generated: '2026-01-07T09:40:00Z'
+status: 'complete'
+validatedAt: '2026-01-07T09:45:00Z'
+---
+
+# Epics and User Stories - credit-clarity
+
+**Project:** Credit Clarity - Bureau-Agnostic Credit Report Analysis & Dispute Platform  
+**Author:** BMAD Workflow  
+**Date:** 2026-01-07  
+**Version:** 1.0
+
+---
+
+## Epic Overview
+
+| Epic ID | Name | Priority | Story Count | Estimated Sprints |
+|---------|------|----------|-------------|-------------------|
+| EPIC-01 | User Authentication & Onboarding | P0 | 4 | Sprint 1 |
+| EPIC-02 | Credit Report Upload & Ingestion | P0 | 4 | Sprint 1 |
+| EPIC-03 | Tradeline Extraction & Confidence Scoring | P0 | 6 | Sprint 1-2 |
+| EPIC-04 | Data Normalization & Validation | P0 | 5 | Sprint 2 |
+| EPIC-05 | Dispute Packet Generation | P0 | 6 | Sprint 2-3 |
+| EPIC-06 | Document Upload & Verification | P1 | 4 | Sprint 3 |
+| EPIC-07 | Dispute Monitoring & Status Tracking | P1 | 4 | Sprint 3 |
+| EPIC-08 | Paid Fulfillment Workflow | P2 | 5 | Sprint 4 |
+| EPIC-09 | Admin Dashboard & Operations | P1 | 5 | Sprint 4 |
+| EPIC-10 | Mailing Operator Tools | P1 | 4 | Sprint 4 |
+| EPIC-11 | Developer Tools & Testing | P2 | 4 | Sprint 5 |
+| EPIC-12 | Notifications System | P1 | 4 | Sprint 3 |
+
+---
+
+## EPIC-01: User Authentication & Onboarding
+
+**Priority:** P0 (Must Have)  
+**Description:** Core authentication infrastructure enabling users to create accounts, authenticate securely, and manage their profile for the credit repair workflow.  
+**Business Value:** Enables user identity management, data security, and personalized experience. Critical for all downstream features.  
+**Dependencies:** Supabase Auth, Supabase Postgres (RLS policies)
+
+### US-01: User Account Registration
+
+**As a** new user,  
+**I want to** create an account with my email and password,  
+**So that** I can access the credit analysis and dispute features.
+
+**Acceptance Criteria:**
+- [ ] User can register with email, password, and name
+- [ ] Email verification is sent to user's email
+- [ ] User cannot register with existing email
+- [ ] Password meets minimum security requirements (8+ chars, mixed case, numbers)
+- [ ] User is redirected to onboarding or dashboard after successful registration
+
+**Technical Notes:**
+- Endpoint: `POST /api/v1/auth/register`
+- Use Supabase Auth for user creation
+- Trigger email verification flow
+
+**Estimation:** 3 story points
+
+---
+
+### US-02: User Authentication (Login)
+
+**As a** registered user,  
+**I want to** log in with my email and password,  
+**So that** I can access my account and credit data securely.
+
+**Acceptance Criteria:**
+- [ ] User can log in with email and password
+- [ ] JWT token is returned and stored securely
+- [ ] Invalid credentials show appropriate error message
+- [ ] Session persists across browser restarts (refresh token)
+- [ ] Rate limiting prevents brute force attacks
+
+**Technical Notes:**
+- Endpoint: `POST /api/v1/auth/login`
+- Supabase Auth token management
+- Redis-backed rate limiting (10 attempts/minute)
+
+**Estimation:** 3 story points
+
+---
+
+### US-03: Password Reset Flow
+
+**As a** user who forgot my password,  
+**I want to** reset my password via email,  
+**So that** I can regain access to my account.
+
+**Acceptance Criteria:**
+- [ ] User can request password reset with email
+- [ ] Reset link sent to registered email (expires in 1 hour)
+- [ ] User can set new password via reset link
+- [ ] Previous sessions are invalidated after password change
+- [ ] Security event is logged
+
+**Technical Notes:**
+- Endpoint: `POST /api/v1/auth/password-reset/request`
+- Endpoint: `POST /api/v1/auth/password-reset/confirm`
+- Use Supabase Auth password reset
+
+**Estimation:** 2 story points
+
+---
+
+### US-04: User Profile Management
+
+**As a** authenticated user,  
+**I want to** view and update my profile information,  
+**So that** I can keep my account details accurate.
+
+**Acceptance Criteria:**
+- [ ] User can view their profile (email, name, created date)
+- [ ] User can update their name and contact information
+- [ ] Email changes require verification
+- [ ] Profile updates are logged in audit trail
+- [ ] Changes reflect immediately in the UI
+
+**Technical Notes:**
+- Endpoint: `GET /api/v1/users/me`
+- Endpoint: `PATCH /api/v1/users/me`
+- RLS policy: Users can only update their own profile
+
+**Estimation:** 2 story points
+
+---
+
+## EPIC-02: Credit Report Upload & Ingestion
+
+**Priority:** P0 (Must Have)  
+**Description:** PDF credit report upload pipeline with async processing, status tracking, and error handling for bureau-agnostic analysis.  
+**Business Value:** Core ingestion point for all downstream analysis. Must handle heterogeneous PDF formats reliably.  
+**Dependencies:** Supabase Storage, Redis Queue, Document AI/OCR
+
+### US-05: Credit Report PDF Upload
+
+**As a** user,  
+**I want to** upload my credit report PDF file,  
+**So that** the system can begin analyzing my credit data.
+
+**Acceptance Criteria:**
+- [ ] User can select and upload PDF files (max 10MB)
+- [ ] Supported formats: PDF only
+- [ ] File upload progress indicator shown
+- [ ] Duplicate file detection with warning
+- [ ] File stored in Supabase Storage with user association
+- [ ] Upload confirmation with report ID returned
+
+**Technical Notes:**
+- Endpoint: `POST /api/v1/reports/upload`
+- Multipart/form-data upload
+- Virus scanning on upload
+- Generate idempotency key for deduplication
+
+**Estimation:** 5 story points
+
+---
+
+### US-06: Upload Status Tracking
+
+**As a** user who uploaded a report,  
+**I want to** check the processing status of my upload,  
+**So that** I know when analysis is complete.
+
+**Acceptance Criteria:**
+- [ ] User can view list of their uploaded reports
+- [ ] Each report shows status: uploading, processing, completed, failed
+- [ ] Processing progress indicator shown for in-progress reports
+- [ ] Failed uploads show error reason
+- [ ] Status updates in real-time (WebSocket or polling)
+
+**Technical Notes:**
+- Endpoint: `GET /api/v1/reports`
+- Endpoint: `GET /api/v1/reports/{id}`
+- WebSocket endpoint: `ws/reports/{id}/status`
+
+**Estimation:** 3 story points
+
+---
+
+### US-07: Report Processing Pipeline
+
+**As a** system,  
+**I want to** process uploaded credit reports asynchronously,  
+**So that** users aren't blocked during long-running OCR operations.
+
+**Acceptance Criteria:**
+- [ ] Upload triggers async job in Redis queue
+- [ ] Job stages: upload → OCR extraction → parsing → tradeline detection → complete
+- [ ] Each stage updates job status with progress
+- [ ] Processing timeout after 5 minutes (with error)
+- [ ] Failed jobs can be retried with same file
+- [ ] Audit log captures processing metadata
+
+**Technical Notes:**
+- Redis job queue with status tracking
+- Background worker for Document AI processing
+- Retry mechanism with exponential backoff
+- Job timeout enforcement
+
+**Estimation:** 8 story points
+
+---
+
+### US-08: Upload Error Handling
+
+**As a** user who encountered an upload error,  
+**I want to** receive clear error messages and guidance,  
+**So that** I can resolve the issue and successfully upload my report.
+
+**Acceptance Criteria:**
+- [ ] Invalid file types show clear rejection message
+- [ ] Files exceeding size limit show appropriate error
+- [ ] Corrupt/unreadable PDFs are rejected with guidance
+- [ ] Network failures allow retry without data loss
+- [ ] All errors logged with request_id for support
+- [ ] Error messages are user-friendly, not technical
+
+**Technical Notes:**
+- Validation at upload endpoint
+- Graceful error envelope with `request_id`
+- Frontend displays localized error messages
+
+**Estimation:** 3 story points
+
+---
+
+## EPIC-03: Tradeline Extraction & Confidence Scoring
+
+**Priority:** P0 (Must Have)  
+**Description:** Bureau-agnostic tradeline extraction with confidence scoring, enabling accurate data capture across heterogeneous PDF layouts with auditability.  
+**Business Value:** Core differentiating feature. 98% accuracy target for required fields, 100% for critical fields.  
+**Dependencies:** Document AI/OCR, Normalization Service
+
+### US-09: Tradeline Detection
+
+**As a** system processing a credit report,  
+**I want to** identify and segment individual tradelines within the document,  
+**So that** each credit account can be analyzed separately.
+
+**Acceptance Criteria:**
+- [ ] System detects tradeline sections across bureau formats (Experian, Equifax, TransUnion, CreditKarma)
+- [ ] Handles multi-page reports with tradelines spanning pages
+- [ ] Rejects non-credit-report documents with clear message
+- [ ] Extracts all tradelines (minimum 90% recall)
+- [ ] Processing completes within 2 minutes per PDF
+
+**Technical Notes:**
+- Document AI custom parser
+- Layout analysis for section detection
+- Configurable patterns for bureau detection
+
+**Estimation:** 8 story points
+
+---
+
+### US-10: Critical Field Extraction
+
+**As a** system extracting tradeline data,  
+**I want to** capture critical fields with 100% accuracy,  
+**So that** dispute letters contain no incorrect bureau or account data.
+
+**Acceptance Criteria:**
+- [ ] Bureau name extracted correctly (Experian, Equifax, TransUnion, etc.)
+- [ ] Creditor name extracted with high accuracy
+- [ ] Account number captured (masked appropriately for display)
+- [ ] Account type identified (credit card, loan, mortgage, etc.)
+- [ ] Account status extracted (open, closed, charged off, etc.)
+- [ ] Critical field accuracy: 100%
+
+**Technical Notes:**
+- Priority fields: bureau, creditor, account_number, balance
+- Validation rules for field correctness
+- Integration with known bureau name patterns
+
+**Estimation:** 8 story points
+
+---
+
+### US-11: Standard Field Extraction
+
+**As a** system extracting tradeline data,  
+**I want to** capture all required fields with 98% accuracy,  
+**So that** users have complete credit data for review.
+
+**Acceptance Criteria:**
+- [ ] Current balance extracted (dollar amount)
+- [ ] Credit limit/pull amount extracted (where applicable)
+- [ ] Date opened extracted (MM/YYYY format)
+- [ ] Positive/negative indicator identified (payment history based)
+- [ ] Monthly payment amount extracted (where available)
+- [ ] Per-field accuracy: 98% across all required fields
+
+**Technical Notes:**
+- Secondary extraction priority
+- Currency normalization
+- Date format standardization
+
+**Estimation:** 5 story points
+
+---
+
+### US-12: Confidence Scoring
+
+**As a** system,  
+**I want to** assign confidence scores to each extracted field,  
+**So that** users can focus review on low-confidence items.
+
+**Acceptance Criteria:**
+- [ ] Each extracted field has confidence score (0-100%)
+- [ ] High confidence: 90-100% (auto-approved)
+- [ ] Medium confidence: 70-89% (review recommended)
+- [ ] Low confidence: <70% (user review required)
+- [ ] Confidence score based on OCR quality, pattern matching, cross-validation
+- [ ] Confidence factors are logged for debugging
+
+**Technical Notes:**
+- Confidence scoring service
+- Threshold configuration
+- Audit trail for low-confidence extractions
+
+**Estimation:** 5 story points
+
+---
+
+### US-13: Low-Confidence Review UI
+
+**As a** user reviewing extracted data,  
+**I want to** see which fields need my attention,  
+**So that** I can correct low-confidence extractions efficiently.
+
+**Acceptance Criteria:**
+- [ ] Low-confidence fields highlighted in tradeline view
+- [ ] User can click to edit individual fields
+- [ ] Original extraction shown alongside editable field
+- [ ] Clear indicators for each confidence level
+- [ ] Review progress tracked (items remaining)
+- [ ] Bulk approve high-confidence items
+
+**Technical Notes:**
+- Frontend component: `ConfidenceIndicator`
+- Edit modal for field correction
+- Progress tracking in user session
+
+**Estimation:** 5 story points
+
+---
+
+### US-14: Tradeline Display & Editing
+
+**As a** user reviewing my extracted tradelines,  
+**I want to** view and edit all tradeline data in a clear format,  
+**So that** I can verify accuracy and make corrections.
+
+**Acceptance Criteria:**
+- [ ] Tradelines displayed in sortable table format
+- [ ] Each tradeline expandable for full details
+- [ ] Individual fields editable inline or in modal
+- [ ] Changes saved with version tracking
+- [ ] Undo/redo support for edits
+- [ ] Keyboard navigation for efficiency
+
+**Technical Notes:**
+- Frontend: `TradelineTable` component
+- Endpoint: `PATCH /api/v1/tradelines/{id}`
+- Optimistic UI updates
+
+**Estimation:** 5 story points
+
+---
+
+## EPIC-04: Data Normalization & Validation
+
+**Priority:** P0 (Must Have)  
+**Description:** Data quality controls ensuring consistent formats, detecting anomalies, and maintaining data integrity across extraction pipeline.  
+**Business Value:** Ensures downstream dispute processes use accurate, consistent data.  
+**Dependencies:** Tradeline Extraction, Database
+
+### US-15: Data Normalization Service
+
+**As a** system,  
+**I want to** normalize extracted data into consistent formats,  
+**So that** all tradelines follow the same structure regardless of source format.
+
+**Acceptance Criteria:**
+- [ ] Currency values normalized to USD with consistent formatting
+- [ ] Dates standardized to ISO-8601 (YYYY-MM-DD)
+- [ ] Account types mapped to canonical values
+- [ ] Status values normalized (open → active, etc.)
+- [ ] Creditor names cleaned and standardized
+- [ ] Missing fields handled consistently (null vs empty string)
+
+**Technical Notes:**
+- Normalization pipeline in `backend/services/normalization/`
+- Pydantic schemas for validation
+- Mapping tables for bureau-specific values
+
+**Estimation:** 5 story points
+
+---
+
+### US-16: Missing Field Detection
+
+**As a** system,  
+**I want to** identify missing or incomplete fields in extracted data,  
+**So that** users are aware of data gaps that may affect disputes.
+
+**Acceptance Criteria:**
+- [ ] Missing critical fields flagged immediately
+- [ ] Missing standard fields flagged with severity level
+- [ ] User notified of missing required data
+- [ ] Guidance provided for manual entry
+- [ ] Missing data tracked for accuracy metrics
+- [ ] Report includes completeness score
+
+**Technical Notes:**
+- Field requirement configuration
+- Notification trigger for missing data
+- Manual entry form for missing fields
+
+**Estimation:** 3 story points
+
+---
+
+### US-17: Data Validation Rules
+
+**As a** system,  
+**I want to** validate extracted data against business rules,  
+**So that** errors and inconsistencies are caught before dispute generation.
+
+**Acceptance Criteria:**
+- [ ] Balance amounts are non-negative (except for negative balances)
+- [ ] Date opened is not in the future
+- [ ] Credit limit >= current balance (where applicable)
+- [ ] Account numbers pass format validation
+- [ ] Creditor names meet minimum length
+- [ ] Validation errors surfaced to user for correction
+
+**Technical Notes:**
+- Pydantic validators in schema definitions
+- Custom validation rules in normalization service
+- Validation result in API response
+
+**Estimation:** 3 story points
+
+---
+
+### US-18: Data Lineage Tracking
+
+**As a** system maintaining auditability,  
+**I want to** track each field back to its source in the original PDF,  
+**So that** disputes can cite original data and errors can be traced.
+
+**Acceptance Criteria:**
+- [ ] Each extracted field linked to source PDF location
+- [ ] Original OCR text preserved for audit
+- [ ] Extraction version tracking for each tradeline
+- [ ] User can view source context for any field
+- [ ] Lineage data included in export/reports
+- [ ] Compliance with data retention requirements
+
+**Technical Notes:**
+- Lineage table in database
+- PDF chunk storage with reference
+- Source viewer UI component
+
+**Estimation:** 5 story points
+
+---
+
+### US-19: Quality Indicators
+
+**As a** system,  
+**I want to** expose quality metrics for extracted data,  
+**So that** users and admins can assess reliability.
+
+**Acceptance Criteria:**
+- [ ] Overall extraction quality score per report
+- [ ] Per-field quality breakdown available
+- [ ] Comparison to benchmark accuracy
+- [ ] Quality trends over multiple reports
+- [ ] Admin dashboard shows aggregate quality metrics
+- [ ] Quality data included in dispute audit trail
+
+**Technical Notes:**
+- Quality scoring algorithm
+- Aggregation service for metrics
+- Admin analytics endpoint
+
+**Estimation:** 3 story points
+
+---
+
+## EPIC-05: Dispute Packet Generation
+
+**Priority:** P0 (Must Have)  
+**Description:** Automated dispute letter and packet generation with 100% data correctness, document assembly, and download capability.  
+**Business Value:** Core value delivery - generates ready-to-mail dispute packets from credit data.  
+**Dependencies:** Tradeline Extraction, Document Upload, Notification Service
+
+### US-20: Dispute Letter Template System
+
+**As a** system generating disputes,  
+**I want to** use configurable letter templates,  
+**So that** dispute letters meet legal requirements and are customized per situation.
+
+**Acceptance Criteria:**
+- [ ] Template engine supports variable substitution
+- [ ] Templates include required legal language
+- [ ] Multiple template types (personal, business, rapid)
+- [ ] Template versioning with audit trail
+- [ ] Admin can manage template content
+- [ ] Templates support bureau-specific variations
+
+**Technical Notes:**
+- Template storage in database
+- Jinja2 or similar templating engine
+- Template validation on save
+
+**Estimation:** 5 story points
+
+---
+
+### US-21: Automated Letter Generation
+
+**As a** user,  
+**I want to** generate dispute letters for selected tradelines,  
+**So that** I can dispute inaccurate information on my credit report.
+
+**Acceptance Criteria:**
+- [ ] User can select tradelines for dispute
+- [ ] System generates letter with dispute language
+- [ ] Letter includes user info, bureau info, tradeline details
+- [ ] Generation completes within 1 minute
+- [ ] Preview available before finalizing
+- [ ] Rate limit: 3 generations per user per day
+
+**Technical Notes:**
+- Endpoint: `POST /api/v1/disputes/letters`
+- Letter generation service
+- PDF generation via pdf-lib or jspdf
+
+**Estimation:** 8 story points
+
+---
+
+### US-22: Data Correctness Validation
+
+**As a** system generating dispute letters,  
+**I want to** validate all data before letter creation,  
+**So that** dispute letters contain no incorrect information.
+
+**Acceptance Criteria:**
+- [ ] All critical fields verified before generation
+- [ ] Any discrepancy blocks generation with explanation
+- [ ] Validation report shown to user
+- [ ] Low-confidence fields require explicit confirmation
+- [ ] Generation blocked if required data missing
+- [ ] Audit log of validation decisions
+
+**Technical Notes:**
+- Pre-generation validation service
+- Block mechanism with error response
+- User confirmation flow for edge cases
+
+**Estimation:** 5 story points
+
+---
+
+### US-23: Packet Assembly
+
+**As a** system,  
+**I want to** assemble complete dispute packets with all required documents,  
+**So that** users have everything needed for mailing.
+
+**Acceptance Criteria:**
+- [ ] Packet includes: dispute letter, copy of credit report, ID documents, cover letter
+- [ ] Documents organized in correct order
+- [ ] Bureau-specific labels and addressing
+- [ ] Page numbering and table of contents
+- [ ] Checklists included for operator review
+- [ ] Packet generation timestamp recorded
+
+**Technical Notes:**
+- PDF assembly service
+- Document ordering logic
+- Template for packet structure
+
+**Estimation:** 5 story points
+
+---
+
+### US-24: Packet Download
+
+**As a** DIY user,  
+**I want to** download my complete dispute packet,  
+**So that** I can print and mail it myself.
+
+**Acceptance Criteria:**
+- [ ] Download available as PDF (zip for multi-page)
+- [ ] File size appropriate for download
+- [ ] Download includes assembly instructions
+- [ ] Download count tracked for analytics
+- [ ] Download link expires after 7 days
+- [ ] Secure download with user authentication
+
+**Technical Notes:**
+- Endpoint: `GET /api/v1/disputes/{id}/packet`
+- Signed URLs for secure download
+- CDN caching for performance
+
+**Estimation:** 3 story points
+
+---
+
+### US-25: DIY Mailing Instructions
+
+**As a** DIY user,  
+**I want to** receive clear mailing instructions with my packet,  
+**So that** I can correctly mail my dispute to the right bureau.
+
+**Acceptance Criteria:**
+- [ ] Step-by-step mailing instructions included
+- [ ] Bureau mailing addresses provided
+- [ ] Certified mail recommendations
+- [ ] Timeline expectations set
+- [ ] Tracking recommendations
+- [ ] Follow-up guidance included
+
+**Technical Notes:**
+- Instruction template
+- Bureau address database
+- Integration with USPS address verification
+
+**Estimation:** 2 story points
+
+---
+
+## EPIC-06: Document Upload & Verification
+
+**Priority:** P1 (Should Have)  
+**Description:** Identity and supporting document upload for dispute fulfillment, with storage and verification status tracking.  
+**Business Value:** Required for dispute packets. Missing documents block packet completion.  
+**Dependencies:** Supabase Storage, User Authentication
+
+### US-26: Identity Document Upload
+
+**As a** user,  
+**I want to** upload my ID and SSN card,  
+**So that** I can complete the document requirements for dispute packets.
+
+**Acceptance Criteria:**
+- [ ] User can upload government ID (front/back)
+- [ ] User can upload SSN card
+- [ ] Accepted formats: JPG, PNG, PDF (max 5MB each)
+- [ ] Documents associated with user account
+- [ ] Upload confirmation with document type
+- [ ] Duplicate detection prevents double upload
+
+**Technical Notes:**
+- Endpoint: `POST /api/v1/documents/upload`
+- Document type enumeration: id_card, ssn_card, utility_bill
+- Storage bucket: `user-documents`
+
+**Estimation:** 3 story points
+
+---
+
+### US-27: Supporting Document Upload
+
+**As a** user,  
+**I want to** upload a utility bill as proof of address,  
+**So that** I can complete my dispute packet requirements.
+
+**Acceptance Criteria:**
+- [ ] User can upload utility bill (electric, gas, water, internet)
+- [ ] Bill must be within 90 days
+- [ ] Name and address on bill must match user profile
+- [ ] Document stored securely with encryption
+- [ ] Verification status tracked
+- [ ] Rejected documents show rejection reason
+
+**Technical Notes:**
+- Document type: utility_bill
+- Date validation on upload
+- Address matching logic
+
+**Estimation:** 3 story points
+
+---
+
+### US-28: Document Verification Status
+
+**As a** user,  
+**I want to** see the status of my uploaded documents,  
+**So that** I know when my packet is complete.
+
+**Acceptance Criteria:**
+- [ ] Dashboard shows document completeness
+- [ ] Each document shows status: pending, verified, rejected
+- [ ] Rejected documents show reason and guidance
+- [ ] Missing documents clearly indicated
+- [ ] Notification when all documents verified
+- [ ] Document upload history accessible
+
+**Technical Notes:**
+- Endpoint: `GET /api/v1/documents`
+- Status tracking in database
+- Notification trigger on verification
+
+**Estimation:** 3 story points
+
+---
+
+### US-29: Document Re-upload Flow
+
+**As a** user with a rejected document,  
+**I want to** replace my rejected document,  
+**So that** I can resolve verification issues quickly.
+
+**Acceptance Criteria:**
+- [ ] User can view rejection reason
+- [ ] User can upload replacement document
+- [ ] Previous rejected document archived
+- [ ] Verification process restarts automatically
+- [ ] User notified of new verification status
+- [ ] History of all uploads preserved
+
+**Technical Notes:**
+- Document versioning
+- Archive storage for rejected docs
+- Status update notifications
+
+**Estimation:** 2 story points
+
+---
+
+## EPIC-07: Dispute Monitoring & Status Tracking
+
+**Priority:** P1 (Should Have)  
+**Description:** Dispute lifecycle tracking from generation through mailing to resolution, with timeline and history.  
+**Business Value:** Users need visibility into dispute progress. Critical for retention and trust.  
+**Dependencies:** Dispute Generation, Database
+
+### US-30: Dispute Dashboard
+
+**As a** user,  
+**I want to** see all my disputes in a single dashboard,  
+**So that** I can track progress across all my credit repair efforts.
+
+**Acceptance Criteria:**
+- [ ] All disputes listed with current status
+- [ ] Status categories: draft, ready, mailed, in-progress, resolved
+- [ ] Summary statistics (total, by status)
+- [ ] Quick actions for each dispute
+- [ ] Sortable and filterable list
+- [ ] Search functionality
+
+**Technical Notes:**
+- Endpoint: `GET /api/v1/disputes`
+- Frontend: `DisputeDashboard` page
+- React Query for data fetching
+
+**Estimation:** 5 story points
+
+---
+
+### US-31: Dispute Status Timeline
+
+**As a** user,  
+**I want to** see the detailed timeline of my dispute,  
+**So that** I understand what has happened and what comes next.
+
+**Acceptance Criteria:**
+- [ ] Timeline shows all status changes with timestamps
+- [ ] Milestone markers: created, reviewed, mailed, received, resolved
+- [ ] Expected next steps displayed
+- [ ] Resolution status when available
+- [ ] Exportable timeline for records
+- [ ] Email notifications for status changes
+
+**Technical Notes:**
+- Dispute status enum and transitions
+- Timeline table in database
+- Webhook for external status updates
+
+**Estimation:** 5 story points
+
+---
+
+### US-32: Dispute History
+
+**As a** user,  
+**I want to** access historical records of my past disputes,  
+**So that** I can reference previous credit repair efforts.
+
+**Acceptance Criteria:**
+- [ ] All past disputes archived and accessible
+- [ ] Downloadable copies of generated packets
+- [ ] Outcome tracking (success, partial, unsuccessful)
+- [ ] Historical comparison view
+- [ ] Export functionality (CSV/PDF)
+- [ ] Data retention compliance
+
+**Technical Notes:**
+- Archive storage for completed disputes
+- Long-term retention in database
+- Export service
+
+**Estimation:** 3 story points
+
+---
+
+### US-33: Resolution Tracking
+
+**As a** user,  
+**I want to** update my dispute with resolution results,  
+**So that** I can track which negative items have been removed.
+
+**Acceptance Criteria:**
+- [ ] User can mark dispute as resolved
+- [ ] Resolution options: removed, updated, no change
+- [ ] If removed, specify which tradelines
+- [ ] Updated tradelines show new status
+- [ ] Success metrics tracked
+- [ ] Before/after comparison available
+
+**Technical Notes:**
+- Resolution update endpoint
+- Tradeline status update integration
+- Metrics aggregation
+
+**Estimation:** 3 story points
+
+---
+
+## EPIC-08: Paid Fulfillment Workflow
+
+**Priority:** P2 (Nice to Have)  
+**Description:** Optional paid service for automated dispute mailing via Lob.com integration, with tracking and confirmation.  
+**Business Value:** Revenue driver. Hands-off option for users willing to pay for convenience.  
+**Dependencies:** Dispute Generation, Mailing Operator, External API (Lob.com)
+
+### US-34: Paid Service Selection
+
+**As a** user,  
+**I want to** choose paid dispute mailing service,  
+**So that** I don't have to handle printing and mailing myself.
+
+**Acceptance Criteria:**
+- [ ] Paid option presented during dispute creation
+- [ ] Pricing clearly displayed
+- [ ] Service level details explained
+- [ ] Payment flow integration
+- [ ] Order confirmation generated
+- [ ] Can upgrade existing DIY dispute to paid
+
+**Technical Notes:**
+- Pricing configuration
+- Payment gateway integration (Stripe?)
+- Order database table
+
+**Estimation:** 5 story points
+
+---
+
+### US-35: Payment Processing
+
+**As a** system,  
+**I want to** process payments for paid fulfillment,  
+**So that** I can collect revenue for the mailing service.
+
+**Acceptance Criteria:**
+- [ ] Secure payment processing
+- [ ] Payment confirmation with receipt
+- [ ] Refund policy enforced
+- [ ] Payment history tracked
+- [ ] Failed payment handling
+- [ ] PCI compliance maintained
+
+**Technical Notes:**
+- Payment gateway integration
+- Webhook for payment confirmation
+- Transaction logging
+
+**Estimation:** 5 story points
+
+---
+
+### US-36: Lob.com Mailing Integration
+
+**As a** system,  
+**I want to** send dispute packets to Lob.com for mailing,  
+**So that** paid disputes are professionally mailed.
+
+**Acceptance Criteria:**
+- [ ] API integration with Lob.com
+- [ ] Address verification before mailing
+- [ ] Certified mail tracking
+- [ ] Mailing confirmation returned
+- [ ] Cost calculation before confirmation
+- [ ] Batch mailing support
+
+**Technical Notes:**
+- Lob.com API client
+- Address validation service
+- Batch processing queue
+
+**Estimation:** 8 story points
+
+---
+
+### US-37: Mailing Tracking
+
+**As a** paid user,  
+**I want to** track the mailing status of my dispute,  
+**So that** I know when my dispute has been mailed.
+
+**Acceptance Criteria:**
+- [ ] Status updates from Lob.com reflected in system
+- [ ] Mailing confirmation notification
+- [ ] Expected delivery date shown
+- [ ] Tracking number available
+- [ ] Delivery confirmation when available
+- [ ] Communication if issues arise
+
+**Technical Notes:**
+- Lob.com webhook integration
+- Status synchronization job
+- Notification service
+
+**Estimation:** 5 story points
+
+---
+
+### US-38: Fulfillment Queue Management
+
+**As a** system,  
+**I want to** manage the queue of paid disputes awaiting mailing,  
+**So that** mailing is processed efficiently and in order.
+
+**Acceptance Criteria:**
+- [ ] Paid disputes added to fulfillment queue
+- [ ] Queue ordered by creation date
+- [ ] Batching for efficient mailing
+- [ ] Queue status visible to operators
+- [ ] Failed mailing retry handling
+- [ ] Completion confirmation flow
+
+**Technical Notes:**
+- Redis queue for fulfillment
+- Batch processing logic
+- Operator interface
+
+**Estimation:** 5 story points
+
+---
+
+## EPIC-09: Admin Dashboard & Operations
+
+**Priority:** P1 (Should Have)  
+**Description:** Administrative tools for system monitoring, issue triage, user support, and extraction diagnostics.  
+**Business Value:** Enables operations team to maintain system health and resolve user issues.  
+**Dependencies:** All other epics, Monitoring Infrastructure
+
+### US-39: System Health Dashboard
+
+**As an** admin,  
+**I want to** view system health metrics,  
+**So that** I can monitor overall system status.
+
+**Acceptance Criteria:**
+- [ ] Real-time system status (healthy/degraded/down)
+- [ ] API response time metrics
+- [ ] Error rate tracking
+- [ ] Resource utilization (CPU, memory, storage)
+- [ ] Queue depth for background jobs
+- [ ] Historical trend data
+
+**Technical Notes:**
+- Sentry/Slack integration
+- Prometheus metrics
+- Admin-only endpoint
+
+**Estimation:** 5 story points
+
+---
+
+### US-40: Report Processing Monitor
+
+**As an** admin,  
+**I want to** monitor report processing status across all users,  
+**So that** I can identify and resolve processing issues.
+
+**Acceptance Criteria:**
+- [ ] View all in-progress reports
+- [ ] Identify stuck/failed jobs
+- [ ] Retry failed jobs from admin interface
+- [ ] View processing logs for debugging
+- [ ] Queue statistics
+- [ ] Alert configuration
+
+**Technical Notes:**
+- Admin endpoints: `/api/v1/admin/reports/*`
+- Job management interface
+- Log aggregation
+
+**Estimation:** 5 story points
+
+---
+
+### US-41: Extraction Issue Triage
+
+**As an** admin,  
+**I want to** review and resolve extraction issues reported by users,  
+**So that** users receive accurate credit data.
+
+**Acceptance Criteria:**
+- [ ] List of reports with extraction errors
+- [ ] View extraction details and confidence scores
+- [ ] Access original PDF for debugging
+- [ ] Flag report for engineering review
+- [ ] Adjust extraction manually if needed
+- [ ] Communication with affected users
+
+**Technical Notes:**
+- Admin extraction review interface
+- PDF viewer integration
+- Issue tracking integration
+
+**Estimation:** 5 story points
+
+---
+
+### US-42: User Management
+
+**As an** admin,  
+**I want to** manage user accounts and access,  
+**So that** I can support users and enforce policies.
+
+**Acceptance Criteria:**
+- [ ] Search and view user accounts
+- [ ] View user activity history
+- [ ] Reset user passwords
+- [ ] Suspend/unsuspend accounts
+- [ ] View user disputes and documents
+- [ ] Export user data for support
+
+**Technical Notes:**
+- Admin user endpoints: `/api/v1/admin/users/*`
+- Role-based access control
+- Audit logging
+
+**Estimation:** 3 story points
+
+---
+
+### US-43: Content Management
+
+**As an** admin,  
+**I want to** manage system content like templates and bureau addresses,  
+**So that** I can update information without code changes.
+
+**Acceptance Criteria:**
+- [ ] Edit dispute letter templates
+- [ ] Update bureau addresses
+- [ ] Manage system messages and notifications
+- [ ] Version history for templates
+- [ ] Template preview functionality
+- [ ] Change approval workflow
+
+**Technical Notes:**
+- CMS-style content management
+- Template versioning
+- Preview endpoint
+
+**Estimation:** 5 story points
+
+---
+
+## EPIC-10: Mailing Operator Tools
+
+**Priority:** P1 (Should Have)  
+**Description:** Workflow tools for physical mailing operations including queue management, batching, verification, and shipping confirmation.  
+**Business Value:** Ensures accurate, efficient physical mailing of DIY and paid dispute packets.  
+**Dependencies:** Dispute Generation, Paid Fulfillment
+
+### US-44: Mailing Queue View
+
+**As a** mailing operator,  
+**I want to** see all packets ready for mailing,  
+**So that** I can plan my daily work.
+
+**Acceptance Criteria:**
+- [ ] Queue shows all ready-to-mail packets
+- [ ] Filter by type (DIY download ready, paid, ready to ship)
+- [ ] Sort by date, priority, bureau
+- [ ] Packet count by status
+- [ ] Exportable queue list
+- [ ] Real-time queue updates
+
+**Technical Notes:**
+- Endpoint: `GET /api/v1/mailing/queue`
+- Operator role required
+- WebSocket for real-time updates
+
+**Estimation:** 3 story points
+
+---
+
+### US-45: Bureau Label Generation
+
+**As a** mailing operator,  
+**I want to** generate labels for each packet,  
+**So that** I can correctly address and route mail.
+
+**Acceptance Criteria:**
+- [ ] Generate address labels for each packet
+- [ ] Bureau-specific formatting
+- [ ] Print-ready label format
+- [ ] QR code for tracking
+- [ ] Batch label printing
+- [ ] Label generation history
+
+**Technical Notes:**
+- Label template engine
+- PDF generation for labels
+- Zebra printer support?
+
+**Estimation:** 5 story points
+
+---
+
+### US-46: Packet Verification
+
+**As a** mailing operator,  
+**I want to** verify packet contents before shipping,  
+**So that** each packet contains all required documents.
+
+**Acceptance Criteria:**
+- [ ] Checklist of required documents per packet
+- [ ] Verification UI with item-by-item check
+- [ ] Photo documentation option
+- [ ] Verification timestamp recorded
+- [ ] Flag packets with missing items
+- [ ] Verification report generation
+
+**Technical Notes:**
+- Verification checklist schema
+- Photo storage integration
+- Verification audit trail
+
+**Estimation:** 5 story points
+
+---
+
+### US-47: Shipping Confirmation
+
+**As a** mailing operator,  
+**I want to** confirm when packets are shipped,  
+**So that** users receive tracking updates.
+
+**Acceptance Criteria:**
+- [ ] Mark packet as shipped
+- [ ] Record shipping method and date
+- [ ] Update dispute status to "mailed"
+- [ ] Trigger user notification
+- [ ] Track shipping costs
+- [ ] Batch shipping support
+
+**Technical Notes:**
+- Shipping confirmation endpoint
+- Notification service integration
+- Cost tracking
+
+**Estimation:** 3 story points
+
+---
+
+## EPIC-11: Developer Tools & Testing
+
+**Priority:** P2 (Nice to Have)  
+**Description:** Internal tooling for developers to validate extraction accuracy, test changes, and maintain system quality.  
+**Business Value:** Enables engineering team to ship improvements with confidence and maintain accuracy targets.  
+**Dependencies:** All backend services, Test Infrastructure
+
+### US-48: Sample Report Validation
+
+**As a** developer,  
+**I want to** test extraction changes against a sample report,  
+**So that** I can verify accuracy improvements before deployment.
+
+**Acceptance Criteria:**
+- [ ] Access to sample credit reports (gold standard)
+- [ ] Run extraction on sample reports
+- [ ] Compare results to expected values
+- [ ] Accuracy metrics per field
+- [ ] Diff view showing changes
+- [ ] Pass/fail criteria with threshold
+
+**Technical Notes:**
+- Sample report storage
+- Validation endpoint: `POST /api/v1/dev/validate`
+- Accuracy comparison algorithm
+
+**Estimation:** 5 story points
+
+---
+
+### US-49: Accuracy Regression Testing
+
+**As a** developer,  
+**I want to** run automated regression tests on extraction,  
+**So that** I don't accidentally reduce accuracy with new code.
+
+**Acceptance Criteria:**
+- [ ] Automated test suite for extraction
+- [ ] Tests run on every PR
+- [ ] Pass/fail gates for CI/CD
+- [ ] Historical accuracy tracking
+- [ ] Regression alerts
+- [ ] Test coverage metrics
+
+**Technical Notes:**
+- Pytest integration
+- CI/CD pipeline integration
+- Test report generation
+
+**Estimation:** 5 story points
+
+---
+
+### US-50: Debug Dashboard
+
+**As a** developer,  
+**I want to** access debugging tools for production issues,  
+**So that** I can diagnose and fix problems quickly.
+
+**Acceptance Criteria:**
+- [ ] Request ID lookup for logs
+- [ ] Full request/response logging
+- [ ] Job debugging with state inspection
+- [ ] PDF viewer with extraction overlay
+- [ ] Performance profiling tools
+- [ ] Audit log access
+
+**Technical Notes:**
+- Sentry integration
+- Log aggregation
+- Debug mode controls
+
+**Estimation:** 5 story points
+
+---
+
+### US-51: Documentation Portal
+
+**As a** developer,  
+**I want to** access API documentation and development guides,  
+**So that** I can understand how to build and maintain features.
+
+**Acceptance Criteria:**
+- [ ] Auto-generated API docs (Swagger/OpenAPI)
+- [ ] Architecture documentation
+- [ ] Setup and deployment guides
+- [ ] Code examples and patterns
+- [ ] Changelog and migration guides
+- [ ] Searchable documentation
+
+**Technical Notes:**
+- Swagger UI at `/docs`
+- Additional docs in `docs/`
+- Doc generation from code
+
+**Estimation:** 3 story points
+
+---
+
+## EPIC-12: Notifications System
+
+**Priority:** P1 (Should Have)  
+**Description:** Multi-channel notification infrastructure for user guidance, status updates, and system alerts.  
+**Business Value:** Critical for user experience and dispute completion rates. Keeps users engaged throughout workflow.  
+**Dependencies:** All user-facing features
+
+### US-52: Email Notification Service
+
+**As a** system,  
+**I want to** send email notifications to users,  
+**So that** users receive important updates about their credit repair.
+
+**Acceptance Criteria:**
+- [ ] Email delivery for key events
+- [ ] Email templates for each notification type
+- [ ] Unsubscribe functionality
+- [ ] Email delivery tracking
+- [ ] Bounce handling
+- [ ] HTML and text email formats
+
+**Technical Notes:**
+- Email provider integration (SendGrid/Postmark)
+- Template engine for emails
+- Delivery webhooks
+
+**Estimation:** 5 story points
+
+---
+
+### US-53: In-App Notification Center
+
+**As a** user,  
+**I want to** see notifications within the application,  
+**So that** I don't miss important updates.
+
+**Acceptance Criteria:**
+- [ ] Bell icon with notification count
+- [ ] Dropdown with recent notifications
+- [ ] Notification read/unread status
+- [ ] Persistent notification history
+- [ ] Notification preferences
+- [ ] Real-time notification updates
+
+**Technical Notes:**
+- WebSocket for real-time
+- Notification database table
+- Frontend notification center component
+
+**Estimation:** 5 story points
+
+---
+
+### US-54: Missing Document Notifications
+
+**As a** system,  
+**I want to** notify users when documents are missing,  
+**So that** users can complete their dispute packets.
+
+**Acceptance Criteria:**
+- [ ] Alert when required documents missing
+- [ ] Guidance on how to obtain documents
+- [ ] Reminder notifications (configurable frequency)
+- [ ] Completion celebration when all documents present
+- [ ] Document upload link in notification
+- [ ] Escalation if documents missing for extended period
+
+**Technical Notes:**
+- Missing document detection
+- Notification scheduling
+- Reminder logic
+
+**Estimation:** 3 story points
+
+---
+
+### US-55: Dispute Status Notifications
+
+**As a** system,  
+**I want to** notify users of dispute status changes,  
+**So that** users stay informed about their credit repair progress.
+
+**Acceptance Criteria:**
+- [ ] Notification when dispute packet ready
+- [ ] Notification when dispute mailed
+- [ ] Notification when dispute status changes
+- [ ] Notification when resolution received
+- [ ] User can configure notification preferences
+- [ ] Notification channels (email, in-app, SMS)
+
+**Technical Notes:**
+- Status change detection
+- Multi-channel notification
+- Preference management
+
+**Estimation:** 3 story points
+
+---
+
+## Sprint Planning
+
+### Sprint 1: Foundation & Core Ingestion (2 weeks)
+
+**Goal:** Establish authentication, upload infrastructure, and begin extraction
+
+| Epic | Story | Points |
+|------|-------|--------|
+| EPIC-01 | US-01: User Account Registration | 3 |
+| EPIC-01 | US-02: User Authentication (Login) | 3 |
+| EPIC-01 | US-03: Password Reset Flow | 2 |
+| EPIC-01 | US-04: User Profile Management | 2 |
+| EPIC-02 | US-05: Credit Report PDF Upload | 5 |
+| EPIC-02 | US-06: Upload Status Tracking | 3 |
+| EPIC-02 | US-07: Report Processing Pipeline | 8 |
+| EPIC-02 | US-08: Upload Error Handling | 3 |
+
+**Total Points:** 29  
+**Focus:** Core infrastructure and user authentication enabling downstream features.
+
+---
+
+### Sprint 2: Extraction & Normalization (2 weeks)
+
+**Goal:** Complete tradeline extraction, confidence scoring, and data normalization
+
+| Epic | Story | Points |
+|------|-------|--------|
+| EPIC-03 | US-09: Tradeline Detection | 8 |
+| EPIC-03 | US-10: Critical Field Extraction | 8 |
+| EPIC-03 | US-11: Standard Field Extraction | 5 |
+| EPIC-03 | US-12: Confidence Scoring | 5 |
+| EPIC-03 | US-13: Low-Confidence Review UI | 5 |
+| EPIC-03 | US-14: Tradeline Display & Editing | 5 |
+| EPIC-04 | US-15: Data Normalization Service | 5 |
+| EPIC-04 | US-16: Missing Field Detection | 3 |
+
+**Total Points:** 44  
+**Focus:** Core extraction engine and quality controls.
+
+---
+
+### Sprint 3: Dispute Generation & Documents (2 weeks)
+
+**Goal:** Dispute packet generation, document upload, and notifications
+
+| Epic | Story | Points |
+|------|-------|--------|
+| EPIC-04 | US-17: Data Validation Rules | 3 |
+| EPIC-04 | US-18: Data Lineage Tracking | 5 |
+| EPIC-04 | US-19: Quality Indicators | 3 |
+| EPIC-05 | US-20: Dispute Letter Template System | 5 |
+| EPIC-05 | US-21: Automated Letter Generation | 8 |
+| EPIC-05 | US-22: Data Correctness Validation | 5 |
+| EPIC-05 | US-23: Packet Assembly | 5 |
+| EPIC-05 | US-24: Packet Download | 3 |
+| EPIC-05 | US-25: DIY Mailing Instructions | 2 |
+| EPIC-06 | US-26: Identity Document Upload | 3 |
+| EPIC-06 | US-27: Supporting Document Upload | 3 |
+| EPIC-06 | US-28: Document Verification Status | 3 |
+| EPIC-06 | US-29: Document Re-upload Flow | 2 |
+| EPIC-12 | US-52: Email Notification Service | 5 |
+| EPIC-12 | US-53: In-App Notification Center | 5 |
+
+**Total Points:** 57  
+**Focus:** Complete dispute generation and document workflow.
+
+---
+
+### Sprint 4: Monitoring, Operations & Fulfillment (2 weeks)
+
+**Goal:** Dispute monitoring, admin tools, mailing operator tools, and paid fulfillment
+
+| Epic | Story | Points |
+|------|-------|--------|
+| EPIC-07 | US-30: Dispute Dashboard | 5 |
+| EPIC-07 | US-31: Dispute Status Timeline | 5 |
+| EPIC-07 | US-32: Dispute History | 3 |
+| EPIC-07 | US-33: Resolution Tracking | 3 |
+| EPIC-08 | US-34: Paid Service Selection | 5 |
+| EPIC-08 | US-35: Payment Processing | 5 |
+| EPIC-08 | US-36: Lob.com Mailing Integration | 8 |
+| EPIC-08 | US-37: Mailing Tracking | 5 |
+| EPIC-08 | US-38: Fulfillment Queue Management | 5 |
+| EPIC-09 | US-39: System Health Dashboard | 5 |
+| EPIC-09 | US-40: Report Processing Monitor | 5 |
+| EPIC-09 | US-41: Extraction Issue Triage | 5 |
+| EPIC-09 | US-42: User Management | 3 |
+| EPIC-09 | US-43: Content Management | 5 |
+| EPIC-10 | US-44: Mailing Queue View | 3 |
+| EPIC-10 | US-45: Bureau Label Generation | 5 |
+| EPIC-10 | US-46: Packet Verification | 5 |
+| EPIC-10 | US-47: Shipping Confirmation | 3 |
+| EPIC-12 | US-54: Missing Document Notifications | 3 |
+| EPIC-12 | US-55: Dispute Status Notifications | 3 |
+
+**Total Points:** 83  
+**Focus:** Operations, admin tools, and paid fulfillment.
+
+---
+
+### Sprint 5: Developer Tools & Polish (2 weeks)
+
+**Goal:** Developer tooling, testing infrastructure, and feature polish
+
+| Epic | Story | Points |
+|------|-------|--------|
+| EPIC-11 | US-48: Sample Report Validation | 5 |
+| EPIC-11 | US-49: Accuracy Regression Testing | 5 |
+| EPIC-11 | US-50: Debug Dashboard | 5 |
+| EPIC-11 | US-51: Documentation Portal | 3 |
+| - | Bug fixes and technical debt | 10 |
+| - | Performance optimization | 5 |
+| - | Security hardening | 5 |
+| - | Accessibility improvements | 3 |
+
+**Total Points:** 36  
+**Focus:** Developer tooling and quality improvements.
+
+---
+
+## Summary
+
+| Sprint | Focus | Points |
+|--------|-------|--------|
+| Sprint 1 | Foundation & Core Ingestion | 29 |
+| Sprint 2 | Extraction & Normalization | 44 |
+| Sprint 3 | Dispute Generation & Documents | 57 |
+| Sprint 4 | Monitoring, Operations & Fulfillment | 83 |
+| Sprint 5 | Developer Tools & Polish | 36 |
+| **Total** | | **249** |
+
+**Estimated Timeline:** 10 weeks (2 weeks per sprint)  
+**Team Size:** 3 developers recommended  
+**Velocity Assumption:** ~35-45 points per sprint (adjust as team establishes baseline)
+
+---
+
+## Dependencies Matrix
+
+```
+US-05 (Upload) → US-07 (Pipeline) → US-09 (Detection) → US-10 (Critical Fields)
+                                                                   ↓
+US-01 (Register) ──→ US-02 (Login) ──→ US-05 (Upload) ───────────────→ US-11 (Standard Fields)
+                                                                   ↓
+                                           US-15 (Normalization) ← US-21 (Letter Generation)
+                                                                   ↓
+US-26 (Documents) ─────────────────────────→ US-23 (Packet Assembly) → US-24 (Download)
+```
+
+---
+
+## Risk Factors
+
+1. **Extraction Accuracy (High Risk):** US-09 through US-14 are critical path. Consider spike investigation if accuracy targets at risk.
+2. **Third-Party Dependencies:** Lob.com integration (US-36) and Document AI may have availability risks.
+3. **Scope Creep:** Dispute letter templates (US-20) may require more complexity than anticipated.
+4. **Payment Integration:** US-35 requires PCI compliance and security review.
+
+---
+
+## Success Criteria per Sprint
+
+**Sprint 1:** Users can register, login, upload credit reports, and track processing status.
+
+**Sprint 2:** Users see extracted tradelines with confidence scores, can review low-confidence items, and data is normalized.
+
+**Sprint 3:** Users can generate dispute packets, upload required documents, and receive notifications.
+
+**Sprint 4:** Users can track dispute status, admins have monitoring tools, paid fulfillment works end-to-end.
+
+**Sprint 5:** Developers have testing tools, regression tests run automatically, documentation is complete.
+
+---
+
+*Document generated by BMAD Workflow - Create Epics and Stories*

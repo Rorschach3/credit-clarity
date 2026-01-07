@@ -19,15 +19,23 @@ from PIL import Image
 import cv2
 import numpy as np
 
-# AI/ML libraries
-from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
-import torch
-
 # Google Cloud Document AI
 from google.cloud import documentai
 
 from core.config import get_settings
 from core.logging.logger import get_logger
+
+logger = get_logger(__name__)
+settings = get_settings()
+
+# AI/ML libraries - with optional imports (after logger is defined)
+try:
+    from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
+    import torch
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
+    logger.warning("Transformers library not available. AI extraction features will be limited.")
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -63,6 +71,8 @@ class MultiLayerExtractor:
         self.executor = ThreadPoolExecutor(max_workers=4)
         self.document_ai_client = None
         self.ai_classifier = None
+        self._models_initialized = False
+        self._initialization_lock = threading.Lock()
         self.extraction_stats = {
             'total_extractions': 0,
             'method_success_rates': {},
@@ -70,28 +80,60 @@ class MultiLayerExtractor:
             'processing_times': {}
         }
         
-        # Initialize AI models
-        asyncio.create_task(self._initialize_ai_models())
+        # Try to schedule async initialization if event loop is running
+        # Otherwise, defer until first async call (lazy initialization)
+        try:
+            loop = asyncio.get_running_loop()
+            # Event loop is running, schedule initialization
+            asyncio.create_task(self._initialize_ai_models())
+        except RuntimeError:
+            # No event loop running, will initialize lazily on first async method call
+            logger.debug("No event loop available at init time, deferring AI model initialization")
+    
+    async def _ensure_initialized(self):
+        """Ensure AI models are initialized (lazy initialization if needed)."""
+        if self._models_initialized:
+            return
+        
+        # Thread-safe check
+        with self._initialization_lock:
+            if self._models_initialized:
+                return
+            await self._initialize_ai_models()
     
     async def _initialize_ai_models(self):
         """Initialize AI models for text classification and validation."""
+        if self._models_initialized:
+            return
+            
         try:
             # Initialize Document AI client if available
             if settings.google_cloud_project_id and settings.document_ai_processor_id:
                 self.document_ai_client = documentai.DocumentProcessorServiceClient()
                 logger.info("Document AI client initialized")
             
-            # Initialize credit report classifier
-            model_name = "microsoft/DialoGPT-medium"  # Placeholder - would use custom model
-            self.ai_classifier = pipeline(
-                "text-classification",
-                model=model_name,
-                return_all_scores=True
-            )
-            logger.info("AI classifier initialized")
+            # Initialize credit report classifier (only if transformers available)
+            if TRANSFORMERS_AVAILABLE:
+                try:
+                    model_name = "microsoft/DialoGPT-medium"  # Placeholder - would use custom model
+                    self.ai_classifier = pipeline(
+                        "text-classification",
+                        model=model_name,
+                        return_all_scores=True
+                    )
+                    logger.info("AI classifier initialized")
+                except Exception as e:
+                    logger.warning(f"AI classifier initialization failed: {e}")
+                    self.ai_classifier = None
+            else:
+                logger.info("Transformers not available, AI classifier disabled")
+                self.ai_classifier = None
+            
+            self._models_initialized = True
             
         except Exception as e:
             logger.warning(f"AI model initialization failed: {e}")
+            self._models_initialized = False  # Allow retry on next call
     
     async def extract_text_multi_layer(
         self, 
@@ -110,6 +152,9 @@ class MultiLayerExtractor:
         Returns:
             ConsolidatedResult with best consolidated text
         """
+        # Ensure AI models are initialized (lazy initialization if needed)
+        await self._ensure_initialized()
+        
         start_time = time.time()
         
         logger.info(f"Starting multi-layer extraction for {pdf_path}")
