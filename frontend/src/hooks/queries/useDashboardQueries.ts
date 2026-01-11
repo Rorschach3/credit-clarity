@@ -21,7 +21,7 @@ export const useDashboardData = () => {
 
 // Hook specifically for dashboard metrics with computed values
 export const useDashboardMetrics = () => {
-  const { data, isLoading, error } = useDashboardData();
+  const { data, isLoading, error, refetch } = useDashboardData();
   
   // Enhanced metrics computation
   const enhancedMetrics = data ? {
@@ -64,6 +64,7 @@ export const useDashboardMetrics = () => {
     rawData: data,
     isLoading,
     error,
+    refetch,
     // Convenience flags
     hasData: !!data,
     hasProfile: !!data?.profile,

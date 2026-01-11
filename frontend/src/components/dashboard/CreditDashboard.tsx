@@ -23,6 +23,7 @@ const CreditDashboard: React.FC = () => {
     rawData, 
     isLoading: loading, 
     error,
+    refetch,
     hasData,
     hasProfile,
     hasTradelines 
@@ -33,6 +34,11 @@ const CreditDashboard: React.FC = () => {
   
   // Extract disputes data for compatibility
   const disputeData = rawData?.disputes || [];
+
+  // Refresh data function
+  const refreshData = () => {
+    refetch();
+  };
 
   // Filter disputes based on current filter
   const filteredDisputes = useMemo(() => {
