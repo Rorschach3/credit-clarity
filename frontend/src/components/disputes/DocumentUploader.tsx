@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -66,9 +66,9 @@ export function DocumentUploader({
   };
   
   // Check for existing document on component mount
-  useState(() => {
+  useEffect(() => {
     fetchExistingDocument();
-  });
+  }, [user, documentType]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {

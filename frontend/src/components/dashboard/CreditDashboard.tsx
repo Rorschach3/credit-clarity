@@ -23,6 +23,7 @@ const CreditDashboard: React.FC = () => {
     rawData, 
     isLoading: loading, 
     error,
+    refetch,
     hasData,
     hasProfile,
     hasTradelines 
@@ -36,7 +37,7 @@ const CreditDashboard: React.FC = () => {
 
   // Refresh data function
   const refreshData = () => {
-    window.location.reload();
+    refetch();
   };
 
   // Filter disputes based on current filter
