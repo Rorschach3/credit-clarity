@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/auth-context';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const ProfilePage = () => {
   const { user } = useAuth();
@@ -9,17 +10,17 @@ const ProfilePage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    await supabase
+    const { error } = await supabase
       .from('profiles')
       .update({ first_name: user?.id, email: user?.email })
       .eq('id', user?.id ? user.id : '');
 
     if (error) {
-      alert('Error updating profile: ' + error.message);
+      toast.error('Error updating profile: ' + error.message);
       return;
     }
 
-    alert('Changes saved successfully!');
+    toast.success('Changes saved successfully!');
     setEditing(false);
   };
 

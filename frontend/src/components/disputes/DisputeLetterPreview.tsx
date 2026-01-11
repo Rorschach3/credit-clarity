@@ -20,7 +20,7 @@ export function DisputeLetterPreview({ letterContent, bureau }: DisputeLetterPre
             <style>
               body {
                 font-family: Arial, sans-serif;
-                tradeline-height: 1.5;
+                line-height: 1.5;
                 margin: 40px;
               }
               pre {

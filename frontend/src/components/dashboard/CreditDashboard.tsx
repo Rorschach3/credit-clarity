@@ -34,6 +34,11 @@ const CreditDashboard: React.FC = () => {
   // Extract disputes data for compatibility
   const disputeData = rawData?.disputes || [];
 
+  // Refresh data function
+  const refreshData = () => {
+    window.location.reload();
+  };
+
   // Filter disputes based on current filter
   const filteredDisputes = useMemo(() => {
     return disputeData.filter(dispute => {

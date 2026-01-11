@@ -3,6 +3,7 @@ import { ParsedTradeline } from "@/utils/tradelineParser";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 
 interface TradelineListProps {
   tradelines: ParsedTradeline[];
@@ -50,7 +51,7 @@ export const TradelineList: React.FC<TradelineListProps> = ({
                 if (e.target.value.length < 200) {
                   t.negativeReason = e.target.value;
                 } else {
-                  alert("Reason for dispute cannot exceed 200 characters.");
+                  toast.error("Reason for dispute cannot exceed 200 characters.");
                   e.target.value = t.negativeReason || "";
                 }
               }}
