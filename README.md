@@ -266,6 +266,174 @@ cd credit-clarity-ai-assist</code></pre>
 
 ---
 
+## <span style="color: #E67E22;">Usage - Credit Report Tradeline Extraction</span>
+
+### Starting the Servers
+
+#### Backend Server (FastAPI - Port 8000)
+
+```bash
+cd backend
+python3 -m venv venv  # Create virtual environment if needed
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Verify backend is running:
+```bash
+curl http://localhost:8000/api/health
+# Response: {"status":"healthy","service":"credit-report-processor"}
+```
+
+#### Frontend Server (Vite - Port 8080)
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Access the web interface at: **http://localhost:8080**
+
+---
+
+### Extracting Tradelines from Credit Reports
+
+#### Method 1: Using the Web Interface
+
+1. **Open your browser** and navigate to `http://localhost:8080`
+2. **Go to Credit Report Upload page** (typically `/upload` route)
+3. **Upload your PDF credit report** (TransUnion, Experian, or Equifax)
+4. **Select processing method**: Choose "AI Analysis (Advanced)" for best results
+5. **Monitor progress**: Watch the processing indicator
+6. **Review results**: All extracted tradelines will be displayed with the following 9 fields:
+   - `creditor_name` - Name of the creditor/lender
+   - `account_number` - Masked account number (****1234)
+   - `credit_bureau` - Credit bureau (TransUnion, Experian, Equifax)
+   - `date_opened` - Account opening date
+   - `account_balance` - Current balance owed
+   - `monthly_payment` - Monthly payment amount
+   - `account_type` - Type of account (Credit Card, Auto Loan, Mortgage, etc.)
+   - `account_status` - Account status (Open, Closed, etc.)
+   - `credit_limit` - Credit limit or high balance
+
+#### Method 2: Using the API (curl)
+
+**Quick Test - Extract Text Only:**
+```bash
+curl -X POST "http://localhost:8000/api/quick-test" \
+  -F "file=@TransUnion-06-10-2025.pdf"
+```
+
+**Full Extraction - Get All Tradelines:**
+```bash
+curl -X POST "http://localhost:8000/api/process-credit-report" \
+  -F "file=@your-credit-report.pdf" \
+  -o results.json
+
+# View results
+cat results.json | python3 -m json.tool
+```
+
+**Example Response:**
+```json
+{
+  "success": true,
+  "job_id": "847c25e8-7a59-45ee-83df-af6840fadc93",
+  "detected_bureau": "TransUnion",
+  "tradelines_count": 26,
+  "tradelines": [
+    {
+      "id": 1,
+      "creditor_name": "Capital One",
+      "account_number": "2365****",
+      "credit_bureau": "TransUnion",
+      "date_opened": "2022-10-19",
+      "account_balance": "459",
+      "monthly_payment": "28",
+      "account_type": "Credit Card",
+      "account_status": "Open",
+      "credit_limit": null,
+      "confidence_score": 0.95
+    }
+  ],
+  "message": "Successfully extracted 26 tradelines"
+}
+```
+
+---
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/health` | GET | Health check |
+| `/api/process-credit-report` | POST | Full PDF processing and tradeline extraction |
+| `/api/quick-test` | POST | Quick PDF text extraction test |
+| `/api/upload` | POST | Simple file upload |
+| `/api/llm/status` | GET | LLM service status |
+
+---
+
+### Supported Credit Bureaus
+
+- ✅ **TransUnion** - Fully tested and working
+- ✅ **Experian** - Pattern-based extraction
+- ✅ **Equifax** - Pattern-based extraction
+
+The system automatically detects which bureau your report is from and applies bureau-specific extraction rules.
+
+---
+
+### Extraction Results
+
+**Recent Test Results:**
+- **PDF**: TransUnion-06-10-2025.pdf (54 pages, 60,710 characters)
+- **Bureau Detected**: TransUnion (high confidence)
+- **Tradelines Extracted**: 26 accounts
+- **Fields Captured**: All 9 required fields per tradeline
+- **Confidence Scores**: Range 0.5 - 0.95
+
+---
+
+### Troubleshooting
+
+**Backend Server Won't Start:**
+```bash
+# Check for import errors
+cd backend
+venv/bin/python -c "from routers.parse_router import router"
+```
+
+**No Tradelines Extracted:**
+- Check PDF text extraction: Use `/api/quick-test` endpoint
+- Verify bureau detection: Look for bureau name in text preview
+- Review extraction logs: Check backend console output
+
+**Low Extraction Quality:**
+- Ensure PDF is text-based (not scanned image)
+- For image-based PDFs, consider using Document AI
+- Check that the PDF is from a supported credit bureau
+
+**Port Already in Use:**
+```bash
+# Find process using port 8000
+lsof -i :8000
+# Kill the process
+kill -9 <PID>
+```
+
+---
+
+### Documentation
+
+For detailed documentation on improvements and prompt optimization, see:
+- **[EXTRACTION_IMPROVEMENTS.md](EXTRACTION_IMPROVEMENTS.md)** - Comprehensive guide with API usage, test results, and future enhancements
+- **[ralph-loop-setup-prompt.md](ralph-loop-setup-prompt.md)** - Setup instructions for the ralph-loop method
+
+---
+
 ## <span style="color: #2E86C1;">Project Structure</span>
 
 ```text
