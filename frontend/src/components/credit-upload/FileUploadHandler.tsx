@@ -395,14 +395,14 @@ export const useFileUploadHandler = ({
       } catch (validationError) {
         const errorMessage = validationError instanceof Error ? validationError.message : "Invalid file";
         console.error('❌ File validation failed:', errorMessage);
-        sonnerToast(errorMessage, { description: "Invalid File" });
+        sonnerToast.error(errorMessage, { title: "Invalid File" });
         return;
       }
 
       // Step 2: Check authentication
       if (!user?.id) {
         console.error('❌ User not authenticated');
-        sonnerToast("Please log in to upload files.", { description: "Authentication Required" });
+        sonnerToast.error("Please log in to upload files.", { title: "Authentication Required" });
         return;
       }
 
