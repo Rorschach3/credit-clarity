@@ -44,4 +44,5 @@ mcp.json.roo/mcp.json
 .roo/mcp.json
 
 backend/service-account.json
-backend/service_account.json
+backend/service_account.jsonbackend/venv/
+frontend/node_modules/
