@@ -346,16 +346,178 @@ Return valid JSON with the tradeline extraction format.
         detected_bureau: str = "Unknown"
     ) -> str:
         """
-        Generate enhanced extraction prompt (wrapper for compatibility).
+        Generate COMPREHENSIVE extraction prompt to find ALL tradelines.
 
-        This method provides compatibility with enhanced_extraction_service.
-        For actual implementation, use the method in EnhancedExtractionService.
-
-        Args:
-            text: Document text
-            detected_bureau: Detected credit bureau
-
-        Returns:
-            Enhanced extraction prompt
+        This prompt is optimized to:
+        - Find EVERY single tradeline (not miss any accounts)
+        - Extract all 9 required fields completely
+        - Handle variations in formatting
+        - Work across all credit bureaus
         """
-        return self.get_bureau_specific_prompt(detected_bureau, text)
+
+        bureau_hints = {
+            "TransUnion": """
+TRANSUNION-SPECIFIC HINTS:
+- Look for "Account History" or "Credit Accounts" sections
+- Account numbers often in format: ****1234 or similar
+- "High Balance" = credit limit for revolving accounts
+- Payment history shown as codes (OK, 30, 60, 90, etc.)
+- Date format: typically MM/YYYY or MM/DD/YYYY
+            """,
+            "Experian": """
+EXPERIAN-SPECIFIC HINTS:
+- Look for "Account Summary" or "Credit Items" sections
+- "High Credit" = credit limit
+- Payment grid shows payment history timeline
+- Reference numbers = account numbers
+- Status field shows account status
+            """,
+            "Equifax": """
+EQUIFAX-SPECIFIC HINTS:
+- Look for "Potentially Negative Items" and "Accounts in Good Standing"
+- "Terms" indicates account type
+- Balance and limit clearly labeled
+- Detailed status information
+- Date opened and closed clearly marked
+            """
+        }
+
+        specific_hints = bureau_hints.get(detected_bureau, "")
+
+        return f"""
+You are an EXPERT credit report parser specializing in {detected_bureau} reports.
+
+YOUR CRITICAL MISSION: Extract EVERY SINGLE TRADELINE - Do not miss ANY accounts!
+
+{specific_hints}
+
+DOCUMENT TEXT TO ANALYZE:
+{text[:10000]}  # Truncated for token limits
+
+EXTRACTION REQUIREMENTS - READ CAREFULLY:
+
+**CRITICAL: You MUST find ALL tradelines, even if information is incomplete**
+
+1. FIND ALL ACCOUNTS - Look for:
+   - Bank names (Chase, Capital One, Bank of America, Wells Fargo, Citi, etc.)
+   - Store cards (Amazon, Target, Best Buy, Walmart, etc.)
+   - Auto loans (Honda Finance, Toyota Credit, Ford Credit, etc.)
+   - Mortgages (Quicken Loans, Wells Fargo Home, etc.)
+   - Student loans (Navient, Great Lakes, Nelnet, etc.)
+   - Personal loans
+   - Lines of credit
+   - ANY creditor name mentioned
+
+2. FOR EACH ACCOUNT, EXTRACT THESE 9 FIELDS:
+
+   a) **creditor_name** - EXACT name as it appears
+      - Examples: "CHASE BANK", "Capital One", "SYNCHRONY/AMAZON"
+
+   b) **account_number** - Find masked numbers
+      - Patterns: ****1234, XXXX5678, *-*-*-1234, 1234****, etc.
+      - Look for: "Account", "Acct", "Ref #", "Reference Number"
+
+   c) **account_type** - Classify as one of:
+      - Credit Card, Auto Loan, Mortgage, Student Loan, Personal Loan, Line of Credit
+
+   d) **current_balance** (becomes account_balance) - Amount owed
+      - Look for: "Balance", "Current Balance", "Amount Owed", "Outstanding"
+      - Format: Extract number, include decimals
+
+   e) **credit_limit** - Maximum credit
+      - Look for: "Limit", "Credit Limit", "High Credit", "High Balance"
+      - For installment loans, may be same as original loan amount
+
+   f) **monthly_payment** - Payment amount
+      - Look for: "Payment", "Monthly Payment", "Scheduled Payment", "Min Payment"
+
+   g) **date_opened** - When account was opened
+      - Look for: "Opened", "Date Opened", "Open Date", "Start Date"
+      - Format: MM/DD/YYYY or MM/YYYY
+
+   h) **account_status** - Current status
+      - Common values: "Open", "Closed", "Current", "Charged Off", "Collection"
+      - Look for: "Status", "Account Status"
+
+   i) **payment_status** - Payment history
+      - Values: "Current", "30 days late", "60 days late", "Charged Off", etc.
+
+3. SEARCH STRATEGIES - BE THOROUGH:
+   - Scan ENTIRE document section by section
+   - Look in tables, grids, and text blocks
+   - Check for section headers like:
+     * "Account History"
+     * "Credit Accounts"
+     * "Tradelines"
+     * "Open Accounts"
+     * "Closed Accounts"
+     * "Potentially Negative Items"
+     * "Accounts in Good Standing"
+   - Follow account details across multiple lines
+   - Don't skip accounts just because some fields are missing
+
+4. HANDLING MISSING DATA:
+   - If a field is truly not found, use: null
+   - Don't skip an account just because it's missing some fields
+   - Extract what you CAN find
+   - Mark confidence lower if many fields are missing
+
+5. CONFIDENCE SCORING (0.0 to 1.0):
+   - 0.9-1.0: All fields found clearly
+   - 0.7-0.89: Most fields found, minor uncertainties
+   - 0.5-0.69: Several fields found, some missing or unclear
+   - 0.3-0.49: Only basic info found (creditor + maybe account #)
+   - 0.0-0.29: Very little information extracted
+
+RESPONSE FORMAT - RETURN VALID JSON:
+
+{{
+  "tradelines": [
+    {{
+      "creditor_name": "CHASE BANK",
+      "account_number": "****1234",
+      "account_type": "Credit Card",
+      "current_balance": "1250.50",
+      "credit_limit": "5000.00",
+      "monthly_payment": "35.00",
+      "payment_status": "Current",
+      "account_status": "Open",
+      "date_opened": "2020-01-15",
+      "date_closed": null,
+      "confidence_score": 0.95,
+      "extraction_notes": "All fields clearly identified"
+    }},
+    {{
+      "creditor_name": "CAPITAL ONE",
+      "account_number": "****5678",
+      "account_type": "Credit Card",
+      "current_balance": "500.00",
+      "credit_limit": "2000.00",
+      "monthly_payment": null,
+      "payment_status": "Current",
+      "account_status": "Open",
+      "date_opened": "2019-06-01",
+      "date_closed": null,
+      "confidence_score": 0.85,
+      "extraction_notes": "Monthly payment not clearly stated"
+    }}
+  ],
+  "extraction_summary": {{
+    "total_found": 12,
+    "high_confidence": 8,
+    "medium_confidence": 3,
+    "low_confidence": 1,
+    "notes": "Extracted from {detected_bureau} report"
+  }}
+}}
+
+**CRITICAL SUCCESS FACTORS:**
+1. FIND EVERY SINGLE TRADELINE - This is the #1 priority
+2. Extract complete information for each field when available
+3. Don't skip accounts with partial information
+4. Provide accurate confidence scores
+5. Note any extraction challenges in extraction_notes
+
+**REMEMBER:** It's better to extract 20 tradelines with some missing fields
+than to extract only 5 tradelines with complete data. GET THEM ALL!
+"""
