@@ -225,6 +225,11 @@ async def get_current_user(authorization: str = Header(None)) -> str:
     Raises:
         HTTPException: If token is invalid or missing
     """
+    # Check if auth bypass is enabled (development only)
+    if os.getenv("BYPASS_AUTH", "false").lower() == "true":
+        logger.warning("⚠️ BYPASS_AUTH enabled - using test user ID")
+        return "test-user-bypass-12345"
+
     if not authorization:
         raise HTTPException(
             status_code=401,
@@ -2133,8 +2138,8 @@ async def get_user_jobs(user_id: str, limit: int = 10):
     """Get user's recent processing jobs"""
     try:
         from services.background_jobs import job_processor
-        
-        jobs = job_processor.job_queue.get_user_jobs(user_id, limit)
+
+        jobs = await job_processor.job_queue.get_user_jobs(user_id, limit)
         
         job_data = []
         for job in jobs:

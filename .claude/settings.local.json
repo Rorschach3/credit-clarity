@@ -57,7 +57,17 @@
       "Bash(done)",
       "Skill(workflow:execute)",
       "Bash(lsof:*)",
-      "Bash(netstat:*)"
+      "Bash(netstat:*)",
+      "Bash(python3 -m py_compile:*)",
+      "Skill(ralph-loop:ralph-loop)",
+      "Bash(pip show:*)",
+      "Bash(tee:*)",
+      "Bash(rg:*)",
+      "Bash(gemini -p \"\nPURPOSE: Analyze tradeline extraction pipeline integration architecture for task planning context\nTASK:\n• Identify all integration points where components connect \\(APIs, services, data flow\\)\n• Map how data flows through the pipeline \\(PDF → text → tradelines → validation → storage\\)\n• Document component coupling and dependencies with file:line references\n• Identify where new implementations should integrate \\(hooks, extension points\\)\nMODE: analysis\nCONTEXT: @backend/services/tradeline_extraction/**/* @backend/api/v1/routes/tradeline_extraction.py @backend/tests/advanced_parsing/**/*\nEXPECTED: Detailed integration points analysis with specific file:line locations, data flow mappings, component coupling analysis, and recommended integration strategies for new implementations\nRULES: Focus on architectural integration patterns, provide actionable file:line references for integration points, identify extension points and hooks | analysis=READ-ONLY\n\")",
+      "Bash(gemini:*)",
+      "Bash(tree:*)",
+      "Bash(python3 -m pip install:*)",
+      "Bash(python3:*)"
     ],
     "deny": []
   },

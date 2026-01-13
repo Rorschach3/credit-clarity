@@ -452,41 +452,143 @@ class EnhancedGeminiProcessor:
         """Fallback basic parsing when Gemini is not available"""
         try:
             self.logger.info("🔧 Using basic parsing fallback (Gemini unavailable)")
+            import re
 
-            # Basic pattern matching for common credit report patterns
             tradelines = []
             lines = text.split('\n')
 
-            current_tradeline = {}
-            for line in lines:
+            # State machine for parsing TransUnion format
+            current_tradeline = None
+            looking_for_details = False
+
+            for i, line in enumerate(lines):
                 line = line.strip()
                 if not line:
                     continue
 
-                # Look for creditor names (basic heuristic)
-                if any(keyword in line.lower() for keyword in ['bank', 'credit', 'card', 'loan', 'mortgage']):
-                    if 'account' in line.lower() or 'acct' in line.lower():
-                        # Try to extract basic info
-                        words = line.split()
-                        if len(words) >= 2:
+                # Detect "Account Name" header (TransUnion format)
+                if line.lower() == "account name":
+                    # Save previous tradeline if exists
+                    if current_tradeline and current_tradeline.get("creditor_name"):
+                        tradelines.append(current_tradeline)
+                        current_tradeline = None
+                        looking_for_details = False
+
+                    # Next non-empty line should be the creditor name
+                    for j in range(i+1, min(i+5, len(lines))):
+                        next_line = lines[j].strip()
+                        if next_line and not next_line.lower() in ['account information', 'address', 'phone']:
                             current_tradeline = {
-                                "creditor_name": ' '.join(words[:2]),
-                                "account_number": "Unknown",
+                                "creditor_name": next_line,
+                                "account_number": "",
                                 "account_balance": "",
                                 "credit_limit": "",
                                 "monthly_payment": "",
                                 "date_opened": "",
-                                "account_type": "Unknown",
-                                "account_status": "Unknown",
+                                "account_type": "",
+                                "account_status": "",
                                 "is_negative": False
                             }
+                            looking_for_details = True
+                            break
+                    continue  # Skip to next iteration, don't process this line for details
+
+                # Alternative pattern: Detect creditor names without "Account Name" header
+                # Pattern: ALL CAPS line with **** (account number) followed by "Account Information"
+                if re.search(r'[A-Z\s]{5,}.*\*{4}', line):
+                    # Check if "Account Information" appears within next 3 non-empty lines
+                    found_account_info = False
+                    for j in range(i+1, min(i+4, len(lines))):
+                        next_line = lines[j].strip()
+                        if next_line and 'account information' in next_line.lower():
+                            found_account_info = True
+                            break
+
+                    if found_account_info:
+                        # Save previous tradeline
+                        if current_tradeline and current_tradeline.get("creditor_name"):
                             tradelines.append(current_tradeline)
 
+                        current_tradeline = {
+                            "creditor_name": line,
+                            "account_number": "",
+                            "account_balance": "",
+                            "credit_limit": "",
+                            "monthly_payment": "",
+                            "date_opened": "",
+                            "account_type": "",
+                            "account_status": "",
+                            "is_negative": False
+                        }
+                        looking_for_details = True
+                        continue
+
+                # Extract details if we have a current tradeline
+                if current_tradeline and looking_for_details:
+                    # Account number (usually has **** or XXXX)
+                    if re.search(r'\*{4}|\bXXXX\b', line):
+                        # Extract account number from creditor name line if embedded
+                        acc_match = re.search(r'[\dX*]{4,}[\dX*-]*', line)
+                        if acc_match:
+                            current_tradeline["account_number"] = acc_match.group()
+
+                    # Balance
+                    if line.startswith('Balance'):
+                        bal_match = re.search(r'\$[\d,]+', line)
+                        if bal_match:
+                            current_tradeline["account_balance"] = bal_match.group().replace(',', '')
+
+                    # Credit Limit
+                    if 'credit limit' in line.lower() or line.startswith('Limit'):
+                        limit_match = re.search(r'\$[\d,]+', line)
+                        if limit_match:
+                            current_tradeline["credit_limit"] = limit_match.group().replace(',', '')
+
+                    # Monthly Payment
+                    if 'monthly payment' in line.lower():
+                        pay_match = re.search(r'\$[\d,]+', line)
+                        if pay_match:
+                            current_tradeline["monthly_payment"] = pay_match.group().replace(',', '')
+
+                    # Date Opened
+                    if 'date opened' in line.lower():
+                        date_match = re.search(r'\d{1,2}/\d{1,2}/\d{4}', line)
+                        if date_match:
+                            current_tradeline["date_opened"] = date_match.group()
+
+                    # Account Type
+                    if 'account type' in line.lower():
+                        # Next word after "Account Type" or rest of line
+                        type_part = line.split('Account Type', 1)[-1].strip()
+                        if type_part:
+                            current_tradeline["account_type"] = type_part
+
+                    # Loan Type
+                    if 'loan type' in line.lower():
+                        type_part = line.split('Loan Type', 1)[-1].strip()
+                        if type_part:
+                            current_tradeline["account_type"] = type_part
+
+                    # Account Status (look for charge-off, collection, etc.)
+                    status_keywords = ['charge off', 'collection', 'delinquent', 'current', 'closed', 'paid']
+                    for keyword in status_keywords:
+                        if keyword in line.lower():
+                            current_tradeline["account_status"] = line
+                            if keyword in ['charge off', 'collection', 'delinquent']:
+                                current_tradeline["is_negative"] = True
+                            break
+
+            # Don't forget the last tradeline
+            if current_tradeline and current_tradeline.get("creditor_name"):
+                tradelines.append(current_tradeline)
+
             self.logger.info(f"🔧 Basic parsing found {len(tradelines)} potential tradelines")
-            return tradelines[:10]  # Limit to 10 to avoid noise
+            return tradelines
 
         except Exception as e:
             self.logger.error(f"❌ Basic parsing fallback failed: {str(e)}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             return []
     
     def _validate_with_classifier(self, tradelines: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

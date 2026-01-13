@@ -21,7 +21,9 @@ import seaborn as sns
 
 # Import Phase 4 components
 import sys
-sys.path.append('/mnt/c/projects/credit-clarity/backend')
+from pathlib import Path
+# Add backend directory to sys.path dynamically (repo root / backend)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from services.advanced_parsing.multi_layer_extractor import (
     MultiLayerExtractor,

@@ -106,7 +106,7 @@ ${accountRows.join('\n')}`;
   return `${currentDate}
 
 ${profile.firstName} ${profile.lastName}
-${profile.address}
+${profile.fullAddress}
 ${profile.city}, ${profile.state} ${profile.zipCode}
 
 ${bureauInfo.name}
@@ -116,7 +116,7 @@ ${bureauInfo.city}, ${bureauInfo.state} ${bureauInfo.zip}
 Re: Request for Investigation of Credit Report Inaccuracies
 Consumer Name: ${profile.firstName} ${profile.lastName}
 Date of Birth: ${profile.dateOfBirth || '[Date of Birth]'}
-Social Security Number: ${profile.ssn ? `***-**-${profile.ssn.slice(-4)}` : '[SSN]'}
+Social Security Number: ${profile.lastFourSSN ? `***-**-${profile.lastFourSSN}` : '[SSN]'}
 
 Dear Sir or Madam,
 

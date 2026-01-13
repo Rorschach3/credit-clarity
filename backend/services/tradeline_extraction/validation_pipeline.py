@@ -6,8 +6,8 @@ Runs schema, business, and consistency checks to expose validation scores.
 import logging
 from typing import Dict, Any, List, Tuple
 
-from backend.services.tradeline_extraction.field_validators import FieldValidators
-from backend.services.tradeline_extraction.confidence_scorer import ConfidenceScorer
+from services.tradeline_extraction.field_validators import FieldValidators
+from services.tradeline_extraction.confidence_scorer import ConfidenceScorer
 
 logger = logging.getLogger(__name__)
 

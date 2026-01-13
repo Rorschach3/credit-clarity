@@ -9,24 +9,89 @@ from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
 import threading
+from enum import Enum
 
-# PDF processing libraries
-import fitz  # PyMuPDF
-import pdfplumber
-from pdf2image import convert_from_path
-import pytesseract
-from PIL import Image
-import cv2
-import numpy as np
+# PDF processing libraries - with optional imports
+try:
+    import fitz  # PyMuPDF
+    FITZ_AVAILABLE = True
+except ImportError:
+    FITZ_AVAILABLE = False
+    fitz = None
+
+try:
+    import pdfplumber
+    PDFPLUMBER_AVAILABLE = True
+except ImportError:
+    PDFPLUMBER_AVAILABLE = False
+    pdfplumber = None
+
+try:
+    from pdf2image import convert_from_path
+    PDF2IMAGE_AVAILABLE = True
+except ImportError:
+    PDF2IMAGE_AVAILABLE = False
+    convert_from_path = None
+
+try:
+    import pytesseract
+    PYTESSERACT_AVAILABLE = True
+except ImportError:
+    PYTESSERACT_AVAILABLE = False
+    pytesseract = None
+
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    Image = None
+
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+    cv2 = None
+
+try:
+    import numpy as np
+    NUMPY_AVAILABLE = True
+except ImportError:
+    NUMPY_AVAILABLE = False
+    np = None
 
 # Google Cloud Document AI
-from google.cloud import documentai
+try:
+    from google.cloud import documentai
+    DOCUMENTAI_AVAILABLE = True
+except ImportError:
+    DOCUMENTAI_AVAILABLE = False
+    documentai = None
 
 from core.config import get_settings
 from core.logging.logger import get_logger
 
 logger = get_logger(__name__)
 settings = get_settings()
+
+# Warn about missing dependencies
+if not FITZ_AVAILABLE:
+    logger.warning("PyMuPDF (fitz) not available. PDF extraction features will be limited.")
+if not PDFPLUMBER_AVAILABLE:
+    logger.warning("pdfplumber not available. PDF extraction features will be limited.")
+if not PDF2IMAGE_AVAILABLE:
+    logger.warning("pdf2image not available. OCR features will be limited.")
+if not PYTESSERACT_AVAILABLE:
+    logger.warning("pytesseract not available. OCR features will be limited.")
+if not PIL_AVAILABLE:
+    logger.warning("PIL not available. Image processing features will be limited.")
+if not CV2_AVAILABLE:
+    logger.warning("OpenCV (cv2) not available. Advanced OCR features will be limited.")
+if not NUMPY_AVAILABLE:
+    logger.warning("NumPy not available. Advanced processing features will be limited.")
+if not DOCUMENTAI_AVAILABLE:
+    logger.warning("Google Cloud Document AI not available. Document AI features will be disabled.")
 
 # AI/ML libraries - with optional imports (after logger is defined)
 try:
@@ -39,6 +104,15 @@ except ImportError:
 
 logger = get_logger(__name__)
 settings = get_settings()
+
+class ExtractionMethod(Enum):
+    """Enumeration of available extraction methods."""
+    PYMUPDF = "pymupdf"
+    PDFPLUMBER = "pdfplumber"
+    TESSERACT_OCR = "tesseract_ocr"
+    ADVANCED_OCR = "advanced_ocr"
+    DOCUMENT_AI = "document_ai"
+    UNKNOWN = "unknown"
 
 @dataclass
 class ExtractionResult:
@@ -54,12 +128,21 @@ class ExtractionResult:
 @dataclass
 class ConsolidatedResult:
     """Final consolidated extraction result."""
-    text: str
+    success: bool
+    consolidated_text: str
+    best_method: Optional[ExtractionMethod]
     confidence: float
     methods_used: List[str]
     processing_time: float
     quality_score: float
     metadata: Dict[str, Any]
+    error: Optional[str] = None
+
+    # Backward compatibility aliases
+    @property
+    def text(self) -> str:
+        """Alias for consolidated_text for backward compatibility."""
+        return self.consolidated_text
 
 class MultiLayerExtractor:
     """
@@ -707,9 +790,14 @@ class MultiLayerExtractor:
             if merged_text:
                 # Calculate quality score based on multiple factors
                 quality_score = self._calculate_quality_score(merged_text, sorted_results)
-                
+
+                # Map method string to ExtractionMethod enum
+                best_method = self._get_extraction_method(best_result.method)
+
                 return ConsolidatedResult(
-                    text=merged_text,
+                    success=True,
+                    consolidated_text=merged_text,
+                    best_method=best_method,
                     confidence=best_result.confidence * 1.1,  # Bonus for multi-method
                     methods_used=[r.method for r in sorted_results],
                     processing_time=sum(r.processing_time for r in results),
@@ -723,9 +811,14 @@ class MultiLayerExtractor:
         
         # Fallback to best single result
         quality_score = self._calculate_quality_score(best_result.text, [best_result])
-        
+
+        # Map method string to ExtractionMethod enum
+        best_method = self._get_extraction_method(best_result.method)
+
         return ConsolidatedResult(
-            text=best_result.text,
+            success=True,
+            consolidated_text=best_result.text,
+            best_method=best_method,
             confidence=best_result.confidence,
             methods_used=[best_result.method],
             processing_time=sum(r.processing_time for r in results),
@@ -810,11 +903,13 @@ class MultiLayerExtractor:
             enhanced_text = self._basic_text_cleanup(result.text)
             
             # Recalculate quality score
-            quality_score = max(result.quality_score, 
+            quality_score = max(result.quality_score,
                                self._calculate_quality_score(enhanced_text, []))
-            
+
             return ConsolidatedResult(
-                text=enhanced_text,
+                success=result.success,
+                consolidated_text=enhanced_text,
+                best_method=result.best_method,
                 confidence=result.confidence * 1.05,  # Small bonus for enhancement
                 methods_used=result.methods_used + ['ai_enhancement'],
                 processing_time=result.processing_time,
@@ -850,7 +945,18 @@ class MultiLayerExtractor:
         text = re.sub(r'\n\s*\n', '\n', text)
         
         return text.strip()
-    
+
+    def _get_extraction_method(self, method_str: str) -> ExtractionMethod:
+        """Map method string to ExtractionMethod enum."""
+        method_map = {
+            "pymupdf": ExtractionMethod.PYMUPDF,
+            "pdfplumber": ExtractionMethod.PDFPLUMBER,
+            "tesseract_ocr": ExtractionMethod.TESSERACT_OCR,
+            "advanced_ocr": ExtractionMethod.ADVANCED_OCR,
+            "document_ai": ExtractionMethod.DOCUMENT_AI,
+        }
+        return method_map.get(method_str, ExtractionMethod.UNKNOWN)
+
     def _update_stats(self, results: List[ExtractionResult], consolidated: ConsolidatedResult):
         """Update extraction statistics for monitoring."""
         self.extraction_stats['total_extractions'] += 1

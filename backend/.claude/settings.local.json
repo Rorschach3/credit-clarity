@@ -9,7 +9,10 @@
       "Bash(lsof:*)",
       "Bash(netstat:*)",
       "Bash(ss:*)",
-      "Bash(python3 -m pip:*)"
+      "Bash(python3 -m pip:*)",
+      "Bash(pip install:*)",
+      "Bash(source .venv/bin/activate)",
+      "Bash(python3:*)"
     ],
     "deny": []
   }

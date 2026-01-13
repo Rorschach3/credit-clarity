@@ -560,3 +560,96 @@ class TransUnionTradelineParser:
                 validation_result['warnings'].append(f"Currency field {field} should start with $: {value}")
         
         return validation_result
+
+
+class RealWorldTransUnionParser:
+    """
+    Adapter that wraps UniversalBureauParser for real-world credit report processing.
+    Converts ParsingResult (with TradelineData) to List[ParsedTradeline] format.
+    """
+
+    def __init__(self):
+        """Initialize with UniversalBureauParser from advanced_parsing module."""
+        from services.advanced_parsing.bureau_specific_parser import UniversalBureauParser
+        self.universal_parser = UniversalBureauParser()
+        self.date_parser = CreditReportDateParser()
+        logger.info("RealWorldTransUnionParser initialized with UniversalBureauParser")
+
+    def parse_tradelines_from_text(self, text: str) -> List[ParsedTradeline]:
+        """
+        Parse tradelines using UniversalBureauParser and convert to ParsedTradeline format.
+
+        Args:
+            text: Extracted text from credit report PDF
+
+        Returns:
+            List of ParsedTradeline objects matching expected format
+        """
+        try:
+            # Use UniversalBureauParser to get best parsing result
+            parsing_result = self.universal_parser.get_best_result(text)
+
+            if not parsing_result.success:
+                logger.warning(f"Universal parser reported failure: {parsing_result.errors}")
+                return []
+
+            logger.info(
+                f"Universal parser found {len(parsing_result.tradelines)} tradelines "
+                f"from {parsing_result.bureau} with confidence {parsing_result.confidence:.2f}"
+            )
+
+            # Convert TradelineData objects to ParsedTradeline objects
+            parsed_tradelines = []
+            for tradeline_data in parsing_result.tradelines:
+                parsed_tradeline = self._convert_to_parsed_tradeline(tradeline_data)
+                parsed_tradelines.append(parsed_tradeline)
+
+            # Add metadata (IDs and timestamps)
+            self._add_metadata_to_tradelines(parsed_tradelines)
+
+            logger.info(f"Converted {len(parsed_tradelines)} TradelineData to ParsedTradeline objects")
+            return parsed_tradelines
+
+        except Exception as e:
+            logger.error(f"RealWorldTransUnionParser failed: {e}", exc_info=True)
+            return []
+
+    def _convert_to_parsed_tradeline(self, tradeline_data) -> ParsedTradeline:
+        """
+        Convert TradelineData from UniversalBureauParser to ParsedTradeline format.
+
+        Args:
+            tradeline_data: TradelineData object from bureau parser
+
+        Returns:
+            ParsedTradeline object with standardized format
+        """
+        return ParsedTradeline(
+            credit_bureau=tradeline_data.credit_bureau or 'TransUnion',
+            creditor_name=tradeline_data.creditor_name or None,
+            account_number=tradeline_data.account_number or None,
+            account_status=tradeline_data.account_status or None,
+            account_type=tradeline_data.account_type or None,
+            date_opened=tradeline_data.date_opened or None,
+            monthly_payment=tradeline_data.monthly_payment or None,
+            credit_limit=tradeline_data.credit_limit or None,
+            account_balance=tradeline_data.account_balance or None,
+            user_id=None,  # Will be set by pipeline
+            id=None,  # Will be set by _add_metadata_to_tradelines
+            created_at=None,  # Will be set by _add_metadata_to_tradelines
+            updated_at=None  # Will be set by _add_metadata_to_tradelines
+        )
+
+    def _add_metadata_to_tradelines(self, tradelines: List[ParsedTradeline]):
+        """
+        Add ID and timestamp metadata to tradelines.
+
+        Args:
+            tradelines: List of ParsedTradeline objects to add metadata to
+        """
+        current_time = datetime.now().isoformat() + '+00'
+
+        for tradeline in tradelines:
+            tradeline.id = str(uuid.uuid4())
+            tradeline.created_at = current_time
+            tradeline.updated_at = current_time

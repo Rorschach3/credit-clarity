@@ -56,6 +56,11 @@ class ValidationResult:
     validation_notes: List[str]
     ai_score: float
 
+    @property
+    def corrected_tradeline(self) -> TradelineData:
+        """Alias for corrected_data for backward compatibility."""
+        return self.corrected_data
+
 @dataclass
 class FieldValidation:
     """Individual field validation result."""
@@ -70,8 +75,13 @@ class AITradelineValidator:
     """
     AI-powered tradeline validation and correction system.
     Uses multiple AI techniques for maximum accuracy.
+    Implements Sprint 0 validation rules for critical and optional fields.
     """
-    
+
+    # Sprint 0 Validation Rules
+    CRITICAL_FIELDS = ['creditor_name', 'account_number', 'account_status', 'account_type']
+    OPTIONAL_FIELDS = ['monthly_payment', 'credit_limit', 'date_opened', 'account_balance']
+
     def __init__(self):
         self.ner_pipeline = None
         self.classification_pipeline = None
@@ -84,15 +94,25 @@ class AITradelineValidator:
             'accuracy_improvements': [],
             'field_correction_rates': {}
         }
-        
+
         # Initialize shared date parser
         self.date_parser = CreditReportDateParser()
-        
-        # Initialize AI models
-        asyncio.create_task(self._initialize_ai_models())
+
+        # Initialize AI models (deferred - will be initialized on first use)
+        self._models_initialized = False
+        self._init_task = None
     
+    async def _ensure_initialized(self):
+        """Ensure AI models are initialized before use."""
+        if not self._models_initialized:
+            await self._initialize_ai_models()
+            self._models_initialized = True
+
     async def _initialize_ai_models(self):
         """Initialize AI models for validation."""
+        if self._models_initialized:
+            return
+
         try:
             logger.info("Initializing AI models for tradeline validation...")
             
@@ -180,27 +200,30 @@ class AITradelineValidator:
             logger.error(f"Failed to load reference data: {e}")
     
     async def validate_and_correct_tradeline(
-        self, 
+        self,
         tradeline: TradelineData,
         context_text: str = ""
     ) -> ValidationResult:
         """
         Validate and correct a tradeline using AI techniques.
-        
+
         Args:
             tradeline: The tradeline to validate
             context_text: Original context text for better understanding
-            
+
         Returns:
             ValidationResult with corrections and confidence scores
         """
+        # Ensure AI models are initialized
+        await self._ensure_initialized()
+
         logger.info(f"Starting AI validation for tradeline: {tradeline.creditor_name}")
-        
+
         corrected_tradeline = TradelineData(**asdict(tradeline))  # Create copy
         corrections_made = []
         validation_notes = []
         field_validations = []
-        
+
         try:
             # Validate each field
             field_validations.extend(await self._validate_creditor_name(corrected_tradeline, context_text))
@@ -800,49 +823,175 @@ class AITradelineValidator:
         """Clean account number."""
         if not number:
             return ""
-        
+
         # Remove extra spaces and standardize masking
         cleaned = re.sub(r'\s+', '', number)
-        
+
         # Standardize masking characters
         cleaned = re.sub(r'[*X#]', '*', cleaned)
-        
+
         return cleaned
-    
+
+    def _normalize_account_number(self, account: Optional[str]) -> str:
+        """
+        Normalize account number for comparison (Sprint 0 pattern).
+        Removes all non-alphanumeric characters.
+        """
+        if not account:
+            return ''
+
+        # Remove all non-alphanumeric characters
+        normalized = re.sub(r'[^a-zA-Z0-9]', '', account.upper())
+        return normalized
+
+    def _accounts_match(self, account1: str, account2: str) -> bool:
+        """
+        Check if two account numbers match (handle masking).
+        Matches exact or by last 4 digits.
+        """
+        if not account1 or not account2:
+            return False
+
+        # Exact match
+        if account1 == account2:
+            return True
+
+        # Match by last 4 digits (handling masked accounts)
+        if len(account1) >= 4 and len(account2) >= 4:
+            last4_1 = account1[-4:]
+            last4_2 = account2[-4:]
+
+            if last4_1.isdigit() and last4_2.isdigit() and last4_1 == last4_2:
+                return True
+
+        return False
+
+    def _normalize_for_comparison(self, field_name: str, value: Optional[str]) -> Optional[str]:
+        """
+        Normalize field value for comparison (Sprint 0 pattern).
+        Handles different field types with appropriate normalization.
+        """
+        if value is None or value == '':
+            return None
+
+        value_str = str(value).strip()
+
+        if field_name == 'account_number':
+            return self._normalize_account_number(value_str)
+
+        elif field_name in ['monthly_payment', 'credit_limit', 'account_balance']:
+            # Normalize currency: remove $, commas, spaces
+            clean = re.sub(r'[$,\s]', '', value_str)
+            # Convert to float and back to remove trailing zeros
+            try:
+                amount = float(clean)
+                return f"{amount:.2f}"
+            except (ValueError, TypeError):
+                return clean.upper()
+
+        elif field_name == 'date_opened':
+            # Normalize date format
+            # Support: MM/DD/YYYY, MM-DD-YYYY, YYYY-MM-DD, etc.
+            clean = re.sub(r'[^\d]', '', value_str)
+            if len(clean) == 8:
+                # Assume MMDDYYYY or YYYYMMDD
+                if int(clean[:2]) > 12:
+                    # YYYYMMDD
+                    return f"{clean[4:6]}/{clean[6:8]}/{clean[:4]}"
+                else:
+                    # MMDDYYYY
+                    return f"{clean[:2]}/{clean[2:4]}/{clean[4:]}"
+            return value_str
+
+        else:
+            # Default: uppercase and trim
+            return value_str.upper().strip()
+
     def _validate_account_number_format(self, number: str) -> bool:
         """Validate account number format."""
         if not number:
             return False
-        
+
         # Should contain at least some digits or masking characters
         return bool(re.search(r'[\d*X#]', number))
     
+    def validate_critical_fields(self, tradeline: TradelineData) -> Tuple[bool, List[str]]:
+        """
+        Validate critical fields according to Sprint 0 requirements.
+        Critical fields must have 100% accuracy: creditor_name, account_number, account_status, account_type
+
+        Returns:
+            Tuple of (all_valid, missing_fields)
+        """
+        missing_fields = []
+
+        for field_name in self.CRITICAL_FIELDS:
+            value = getattr(tradeline, field_name, None)
+            if not value or (isinstance(value, str) and len(value.strip()) < 1):
+                missing_fields.append(field_name)
+
+        all_valid = len(missing_fields) == 0
+        return all_valid, missing_fields
+
+    def validate_optional_fields(self, tradeline: TradelineData) -> Tuple[float, List[str]]:
+        """
+        Validate optional fields according to Sprint 0 requirements.
+        Optional fields should have ≥95% accuracy: monthly_payment, credit_limit, date_opened, account_balance
+
+        Returns:
+            Tuple of (match_rate, missing_fields)
+        """
+        present_fields = []
+        missing_fields = []
+
+        for field_name in self.OPTIONAL_FIELDS:
+            value = getattr(tradeline, field_name, None)
+            if value and (not isinstance(value, str) or len(value.strip()) > 0):
+                present_fields.append(field_name)
+            else:
+                missing_fields.append(field_name)
+
+        total_fields = len(self.OPTIONAL_FIELDS)
+        match_rate = (len(present_fields) / total_fields * 100.0) if total_fields > 0 else 0.0
+
+        return match_rate, missing_fields
+
     async def _cross_validate_fields(self, tradeline: TradelineData) -> List[str]:
         """Cross-validate fields for logical consistency."""
         notes = []
-        
+
+        # Validate critical fields
+        critical_valid, missing_critical = self.validate_critical_fields(tradeline)
+        if not critical_valid:
+            notes.append(f"Missing critical fields: {', '.join(missing_critical)}")
+
+        # Validate optional fields
+        optional_rate, missing_optional = self.validate_optional_fields(tradeline)
+        if optional_rate < 95.0:
+            notes.append(f"Optional field accuracy below 95%: {optional_rate:.1f}%")
+
         # Balance vs Credit Limit validation
         if tradeline.account_balance and tradeline.credit_limit:
             try:
                 balance = float(tradeline.account_balance.replace('$', '').replace(',', ''))
                 limit = float(tradeline.credit_limit.replace('$', '').replace(',', ''))
-                
+
                 if balance > limit * 1.1:  # Allow 10% over-limit
                     notes.append(f"Balance ({balance}) exceeds credit limit ({limit})")
             except ValueError:
                 pass
-        
+
         # Date consistency validation
         if tradeline.date_opened and tradeline.date_closed:
             # Check that close date is after open date
             # Implementation would parse dates and compare
             pass
-        
+
         # Account type vs creditor consistency
         if tradeline.account_type and tradeline.creditor_name:
             # Check if account type matches creditor (e.g., auto loan with car company)
             pass
-        
+
         return notes
     
     async def _openai_validate_tradeline(
@@ -1014,11 +1163,14 @@ class AITradelineValidator:
         return stats
 
     async def batch_validate_tradelines(
-        self, 
+        self,
         tradelines: List[TradelineData],
         context_text: str = ""
     ) -> List[ValidationResult]:
         """Validate multiple tradelines in batch for efficiency."""
+        # Ensure AI models are initialized
+        await self._ensure_initialized()
+
         logger.info(f"Starting batch validation of {len(tradelines)} tradelines")
         
         # Process in batches to avoid overwhelming the AI services

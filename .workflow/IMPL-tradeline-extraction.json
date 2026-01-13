@@ -1,0 +1,301 @@
+{
+  "id": "IMPL-TRADELINE-001",
+  "title": "Implement and Validate Tradeline Extraction Pipeline with Real-World Test Data",
+  "status": "pending",
+  "context_package_path": null,
+  "meta": {
+    "type": "implementation",
+    "agent": "@code-developer",
+    "execution_group": "data-extraction"
+  },
+  "context": {
+    "requirements": [
+      "Validate extraction of 10 core tradeline fields across 20 test records",
+      "Support 2 account types: Revolving (16 records) and Installment (4 records)",
+      "Handle 2 account statuses: Current (13 records) and Closed (7 records)",
+      "Implement field mapping for 3 credit bureaus (TransUnion, Experian, Equifax)",
+      "Achieve 98%+ accuracy on critical fields: creditor_name, account_number, account_balance, credit_limit"
+    ],
+    "focus_paths": [
+      "backend/services/tradeline_extraction/",
+      "backend/models/tradeline_models.py",
+      "backend/utils/credit_report_field_mappings.py",
+      "backend/tests/",
+      "backend/tradeline_test_rows.sql"
+    ],
+    "acceptance": [
+      "20 test tradelines successfully extracted: verify by SELECT COUNT(*) FROM tradeline_test = 20",
+      "10 fields populated per record: verify creditor_name, account_number, account_type, account_status, account_balance, credit_limit, monthly_payment, date_opened, credit_bureau, is_negative",
+      "16 revolving accounts identified: verify by SELECT COUNT(*) FROM tradeline_test WHERE account_type = 'Revolving' = 16",
+      "4 installment accounts identified: verify by SELECT COUNT(*) FROM tradeline_test WHERE account_type = 'Installment' = 4",
+      "Currency formatting validated: verify all account_balance and credit_limit fields match pattern '^\\$[0-9,]+(\\.[0-9]{2})?$'",
+      "Account number masking applied: verify all account_number fields end with '****'",
+      "Date format standardized: verify all date_opened fields match 'MM/DD/YYYY' pattern",
+      "13 current accounts flagged: verify by SELECT COUNT(*) FROM tradeline_test WHERE account_status = 'Current' = 13",
+      "7 closed accounts flagged: verify by SELECT COUNT(*) FROM tradeline_test WHERE account_status = 'Closed' = 7",
+      "Null handling validated: verify monthly_payment and credit_limit allow null values appropriately"
+    ],
+    "depends_on": [],
+    "inherited": {},
+    "shared_context": {
+      "tech_stack": ["Python", "PostgreSQL", "Supabase", "PyMuPDF", "pdfplumber", "Google Document AI"],
+      "data_models": ["Tradeline", "ParsedTradeline", "TradelineValidationSchema"],
+      "extraction_methods": ["PyMuPDF (fast)", "pdfplumber (tables)", "OCR (fallback)"],
+      "conventions": ["Follow backend/models/tradeline_models.py schema", "Use enhanced_tradeline_normalizer for data cleanup", "Apply credit_report_field_mappings for field variations"]
+    },
+    "artifacts": [
+      {
+        "type": "test_data",
+        "source": "sql_fixture",
+        "path": "backend/tradeline_test_rows.sql",
+        "priority": "highest",
+        "usage": "Ground truth for validation - 20 real-world tradeline records with complete field coverage",
+        "contains": "16 revolving accounts, 4 installment accounts, 13 current, 7 closed, currency formatting, date patterns, null handling"
+      },
+      {
+        "type": "data_model",
+        "source": "backend_models",
+        "path": "backend/models/tradeline_models.py",
+        "priority": "highest",
+        "usage": "Tradeline schema definition with field types, validation rules, and enums",
+        "contains": "Tradeline dataclass (10 fields), TradelineStatus enum, DocumentType enum, validation schema"
+      },
+      {
+        "type": "field_mapping",
+        "source": "utility_module",
+        "path": "backend/utils/credit_report_field_mappings.py",
+        "priority": "high",
+        "usage": "Field variation mappings for all major credit bureaus with OCR correction patterns",
+        "contains": "100+ field name variations, METRO2 account codes, OCR correction patterns, fuzzy matching algorithms"
+      },
+      {
+        "type": "extraction_pipeline",
+        "source": "service_layer",
+        "path": "backend/services/tradeline_extraction/pipeline.py",
+        "priority": "high",
+        "usage": "Main orchestrator for tradeline extraction workflow",
+        "contains": "TradelineExtractionPipeline class, validation, normalization, storage coordination"
+      },
+      {
+        "type": "parser_implementation",
+        "source": "service_layer",
+        "path": "backend/services/tradeline_extraction/real_world_parser.py",
+        "priority": "high",
+        "usage": "Real-world parser handling messy credit bureau data",
+        "contains": "RealWorldTransUnionParser, pattern matching, error tolerance, multi-line support"
+      },
+      {
+        "type": "documentation",
+        "source": "service_readme",
+        "path": "backend/services/tradeline_extraction/README.md",
+        "priority": "medium",
+        "usage": "Pipeline architecture, usage examples, configuration, debugging guides",
+        "contains": "6-stage pipeline flow, component descriptions, performance targets (98% accuracy)"
+      }
+    ]
+  },
+  "flow_control": {
+    "pre_analysis": [
+      {
+        "step": "load_test_data",
+        "action": "Load and analyze test data SQL file to understand expected field patterns",
+        "commands": [
+          "Read(backend/tradeline_test_rows.sql)"
+        ],
+        "output_to": "test_data_analysis",
+        "on_error": "fail"
+      },
+      {
+        "step": "load_data_models",
+        "action": "Load Tradeline data models to understand schema requirements",
+        "commands": [
+          "Read(backend/models/tradeline_models.py)"
+        ],
+        "output_to": "data_models",
+        "on_error": "fail"
+      },
+      {
+        "step": "load_field_mappings",
+        "action": "Load field mapping utilities for credit bureau variation handling",
+        "commands": [
+          "Read(backend/utils/credit_report_field_mappings.py)"
+        ],
+        "output_to": "field_mappings",
+        "on_error": "fail"
+      },
+      {
+        "step": "review_extraction_pipeline",
+        "action": "Review existing extraction pipeline implementation",
+        "commands": [
+          "Read(backend/services/tradeline_extraction/pipeline.py)",
+          "Read(backend/services/tradeline_extraction/README.md)"
+        ],
+        "output_to": "pipeline_review",
+        "on_error": "skip_optional"
+      },
+      {
+        "step": "analyze_parser_implementation",
+        "action": "Analyze real-world parser for pattern extraction logic",
+        "commands": [
+          "Read(backend/services/tradeline_extraction/real_world_parser.py)"
+        ],
+        "output_to": "parser_analysis",
+        "on_error": "skip_optional"
+      }
+    ],
+    "implementation_approach": [
+      {
+        "step": 1,
+        "title": "Analyze test data patterns and extraction requirements",
+        "description": "Parse tradeline_test_rows.sql to identify field patterns, data types, null handling, and validation rules",
+        "modification_points": [
+          "Extract 10 unique field patterns from 20 test records",
+          "Identify 4 currency fields requiring $ formatting: account_balance, credit_limit, monthly_payment",
+          "Identify 1 date field requiring MM/DD/YYYY parsing: date_opened",
+          "Identify 2 categorical fields: account_type (Revolving/Installment), account_status (Current/Closed)",
+          "Map 13 creditor patterns: Capital One (5), JPMCB (3), Sunrise Bank (2), others (1 each)",
+          "Document null handling rules: monthly_payment (7 nulls), credit_limit (8 nulls), date_opened (1 null)"
+        ],
+        "logic_flow": [
+          "Parse SQL INSERT statement to extract column names and data types",
+          "Group records by account_type: 16 Revolving, 4 Installment",
+          "Group records by account_status: 13 Current, 7 Closed",
+          "Identify currency formatting patterns: $0, $25, $3,000, $142,000",
+          "Identify date formatting patterns: MM/DD/YYYY (12/29/2022, 05/21/2024, etc.)",
+          "Identify account number masking pattern: variable length + ****",
+          "Calculate field population statistics: which fields allow nulls, which require values",
+          "Generate validation rules based on test data patterns"
+        ],
+        "depends_on": [],
+        "output": "test_data_pattern_analysis"
+      },
+      {
+        "step": 2,
+        "title": "Create extraction validation test suite",
+        "description": "Build comprehensive test suite validating extraction accuracy against 20 test records",
+        "modification_points": [
+          "Create 1 new test file: backend/tests/test_tradeline_extraction_validation.py",
+          "Implement 10 field-specific validation tests (one per field)",
+          "Implement 3 data type validation tests: currency formatting, date parsing, string normalization",
+          "Implement 2 business logic tests: account type classification, account status mapping",
+          "Implement 1 null handling test: verify optional fields accept nulls",
+          "Implement 1 duplicate detection test: verify account_number uniqueness",
+          "Add 20 fixture records from tradeline_test_rows.sql"
+        ],
+        "logic_flow": [
+          "Create pytest fixture loading 20 test records from tradeline_test_rows.sql",
+          "Implement test_extract_creditor_name: verify all 20 creditor names extracted correctly",
+          "Implement test_extract_account_number: verify masking pattern (****) applied to all 20",
+          "Implement test_extract_account_type: verify 16 Revolving, 4 Installment classification",
+          "Implement test_extract_account_status: verify 13 Current, 7 Closed mapping",
+          "Implement test_extract_account_balance: verify currency formatting ($X,XXX.XX) for all 20",
+          "Implement test_extract_credit_limit: verify currency formatting, handle 8 nulls",
+          "Implement test_extract_monthly_payment: verify currency formatting, handle 7 nulls",
+          "Implement test_extract_date_opened: verify MM/DD/YYYY parsing, handle 1 null",
+          "Implement test_extract_credit_bureau: verify all 20 set to 'TransUnion'",
+          "Implement test_null_handling: verify optional fields (monthly_payment, credit_limit) accept nulls",
+          "Run test suite: pytest backend/tests/test_tradeline_extraction_validation.py -v"
+        ],
+        "depends_on": [1],
+        "output": "extraction_validation_test_suite"
+      },
+      {
+        "step": 3,
+        "title": "Enhance field mapping for test data creditor variations",
+        "description": "Update credit_report_field_mappings.py to handle all creditor patterns from test data",
+        "modification_points": [
+          "Add 13 creditor name variations to field mappings",
+          "Update account type inference rules for creditor patterns (Capital One → credit_card, MOHELA → student_loan)",
+          "Enhance OCR correction patterns for observed field name variations",
+          "Add validation rules for currency range ($0 to $142,000 observed)",
+          "Add validation rules for date range (2003 to 2024 observed)"
+        ],
+        "logic_flow": [
+          "Review CreditReportFieldMapper class in credit_report_field_mappings.py",
+          "Add creditor-specific account type mappings:",
+          "  - 'CAPITAL ONE', 'JPMCB CARD SERVICES', 'BANK OF AMERICA', 'CREDIT ONE BANK', 'DISCOVER CARD' → credit_card",
+          "  - 'MOHELA/DEPT OF ED' → student_loan",
+          "  - 'LENTEGRITY LLC', 'SCHOOLSFIRST FCU', 'SUNRISE BANK', 'UPSTART' → installment",
+          "  - 'SYNCB/CARE CREDIT', 'WEBBANK/FINGERHUT', 'SELF FINANCIAL' → revolving/secured",
+          "Update _infer_account_type_from_creditor method with new patterns",
+          "Test field mapper with all 20 creditor names from test data",
+          "Validate account type inference: verify 100% accuracy on test data"
+        ],
+        "depends_on": [1],
+        "output": "enhanced_field_mappings"
+      },
+      {
+        "step": 4,
+        "title": "Validate pipeline end-to-end with test data",
+        "description": "Run full extraction pipeline against test data and verify 98%+ accuracy on critical fields",
+        "modification_points": [
+          "Load 20 test records into tradeline_test table",
+          "Run TradelineExtractionPipeline.process_credit_report() for validation",
+          "Compare extracted results against expected values from tradeline_test_rows.sql",
+          "Generate accuracy report: per-field accuracy, overall accuracy, error analysis",
+          "Verify 98%+ accuracy target met on critical fields (creditor_name, account_number, account_balance, credit_limit)"
+        ],
+        "logic_flow": [
+          "Create test database fixture: execute tradeline_test_rows.sql to populate test table",
+          "Initialize TradelineExtractionPipeline with test configuration",
+          "For each test record:",
+          "  - Extract tradeline using pipeline",
+          "  - Compare extracted values against expected SQL values",
+          "  - Calculate per-field match percentage",
+          "  - Log mismatches for error analysis",
+          "Aggregate results:",
+          "  - Calculate overall accuracy: (matched_fields / total_fields) * 100",
+          "  - Calculate per-field accuracy for 10 fields",
+          "  - Identify error patterns (OCR issues, formatting, null handling)",
+          "Generate validation report:",
+          "  - Overall accuracy score (target: 98%+)",
+          "  - Critical field accuracy (creditor_name, account_number, account_balance, credit_limit)",
+          "  - Per-field accuracy breakdown",
+          "  - Error analysis with recommended fixes",
+          "Assert all acceptance criteria met"
+        ],
+        "depends_on": [2, 3],
+        "output": "pipeline_validation_report"
+      },
+      {
+        "step": 5,
+        "title": "Document extraction patterns and update README",
+        "description": "Document observed extraction patterns, edge cases, and accuracy metrics in README",
+        "modification_points": [
+          "Update backend/services/tradeline_extraction/README.md with test results",
+          "Add section: 'Validated Field Patterns' documenting 10 field extraction patterns",
+          "Add section: 'Accuracy Metrics' showing per-field accuracy from validation",
+          "Add section: 'Edge Cases Handled' documenting null handling, date variations, currency formatting",
+          "Add section: 'Creditor-Specific Patterns' documenting 13 creditor mappings"
+        ],
+        "logic_flow": [
+          "Read existing README.md structure",
+          "Add 'Validated Field Patterns' section after 'Components' section:",
+          "  - Document 10 fields with extraction patterns and example values",
+          "  - Include regex patterns used for extraction",
+          "  - Note field population statistics (X% populated, Y% null)",
+          "Add 'Accuracy Metrics' section:",
+          "  - Overall pipeline accuracy from step 4 validation",
+          "  - Per-field accuracy breakdown",
+          "  - Critical field accuracy (creditor_name: XX%, account_number: XX%, etc.)",
+          "Add 'Edge Cases Handled' section:",
+          "  - Null value handling (monthly_payment, credit_limit, date_opened)",
+          "  - Currency formatting variations ($0, $25, $3,000, $142,000)",
+          "  - Date format variations (MM/DD/YYYY)",
+          "  - Account number masking patterns",
+          "Add 'Creditor-Specific Patterns' section:",
+          "  - Map 13 creditors to account types",
+          "  - Document inference rules",
+          "Update 'Accuracy Targets' section with validated metrics"
+        ],
+        "depends_on": [4],
+        "output": "updated_documentation"
+      }
+    ],
+    "target_files": [
+      "backend/tests/test_tradeline_extraction_validation.py",
+      "backend/utils/credit_report_field_mappings.py",
+      "backend/services/tradeline_extraction/README.md"
+    ]
+  }
+}
