@@ -38,6 +38,7 @@ from datetime import datetime
 # PDF Chunking
 from services.pdf_chunker import PDFChunker
 from core.security import verify_supabase_jwt
+from core.config import settings
 from services.advanced_parsing.negative_tradeline_classifier import NegativeTradelineClassifier
 
 # Import asyncio for timeout handling
@@ -315,16 +316,7 @@ class TradelineSchema(BaseModel):
 # Note: For production, replace localhost origins with actual domain
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",    # React default
-        "http://127.0.0.1:3000",
-        "http://localhost:5173",    # Vite default
-        "http://127.0.0.1:5173",
-        "http://localhost:8080",    # Other common ports
-        "http://127.0.0.1:8080",
-        "http://localhost:4173",    # Vite preview
-        "http://127.0.0.1:4173"
-    ],
+    allow_origins=settings.get_cors_origins(),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=[
@@ -1852,11 +1844,92 @@ def parse_tradelines_basic(text: str) -> list:
         logger.info("🔧 BASIC PARSING - INPUT DATA:")
         logger.info(f"  Text length: {len(text)} characters")
         
-        # Basic pattern matching logic here
         tradelines = []
-        # TODO: Implement basic parsing logic
-        
-        return tradelines
+        lines = text.split('\n')
+
+        # Field patterns used across credit bureaus
+        account_number_re = re.compile(r'account\s*(?:number|#|num)[:\s]+([A-Z0-9*X-]{4,20})', re.IGNORECASE)
+        balance_re = re.compile(r'balance[:\s]+\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE)
+        status_re = re.compile(r'(?:account\s+)?status[:\s]+([A-Za-z /]+)', re.IGNORECASE)
+        date_opened_re = re.compile(r'date\s+opened[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\w+\s+\d{4})', re.IGNORECASE)
+        payment_status_re = re.compile(r'payment\s+status[:\s]+([A-Za-z /]+)', re.IGNORECASE)
+
+        # Keywords that indicate a new creditor block is starting
+        creditor_keywords = ['bank', 'credit', 'card', 'loan', 'mortgage', 'financial',
+                             'capital', 'chase', 'citi', 'wells', 'american', 'discover',
+                             'synchrony', 'barclays', 'ally', 'usaa', 'navy', 'federal']
+
+        current = None
+
+        def _flush(entry):
+            """Append entry only when it has a creditor name."""
+            if entry and entry.get('creditor_name'):
+                tradelines.append(entry)
+
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+
+            line_lower = stripped.lower()
+
+            # Detect the start of a new creditor block: a line that looks like a
+            # creditor name (contains known keywords, no colon field separator,
+            # reasonably short).
+            is_new_creditor = (
+                ':' not in stripped
+                and any(kw in line_lower for kw in creditor_keywords)
+                and len(stripped) < 80
+                and any(c.isalpha() for c in stripped)
+            )
+
+            if is_new_creditor:
+                _flush(current)
+                current = {
+                    'creditor_name': stripped,
+                    'account_number': None,
+                    'balance': None,
+                    'status': None,
+                    'date_opened': None,
+                }
+                continue
+
+            if current is None:
+                # Haven't found a creditor yet; try to pick one up from
+                # "Account Number:" style lines that follow a header.
+                continue
+
+            # Account Number
+            m = account_number_re.search(stripped)
+            if m and current['account_number'] is None:
+                current['account_number'] = re.sub(r'[^A-Za-z0-9]', '', m.group(1)) or None
+
+            # Balance
+            m = balance_re.search(stripped)
+            if m and current['balance'] is None:
+                current['balance'] = m.group(1).replace(',', '')
+
+            # Payment Status takes priority over generic Status
+            m = payment_status_re.search(stripped)
+            if m:
+                current['status'] = m.group(1).strip()
+            elif current['status'] is None:
+                m = status_re.search(stripped)
+                if m:
+                    candidate = m.group(1).strip()
+                    # Reject overly long or clearly non-status matches
+                    if len(candidate) <= 30:
+                        current['status'] = candidate
+
+            # Date Opened
+            m = date_opened_re.search(stripped)
+            if m and current['date_opened'] is None:
+                current['date_opened'] = m.group(1).strip()
+
+        _flush(current)
+
+        logger.info(f"Basic parsing found {len(tradelines)} tradelines")
+        return tradelines[:20]  # cap to avoid noise
         
     except Exception as e:
         logger.error(f"❌ Basic parsing failed: {str(e)}")
