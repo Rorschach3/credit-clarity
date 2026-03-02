@@ -32,5 +32,6 @@ class MCPTool(Tool):
                     if getattr(item, "type", None) == "text":
                         return item.text
                 return "No text content in tool response"
+            return "No content in tool response"
         except Exception as e:
             return f"Error executing {self.name}: {e}"
