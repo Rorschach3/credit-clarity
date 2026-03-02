@@ -261,3 +261,6 @@ backend/__pycache__/main.cpython-313.pyc
 frontend/next-env.d.ts
 experian_test_rows.sql
 tradelines_rows (2).sql
+
+# Local Claude configuration (machine-specific)
+.claude/settings.local.json
