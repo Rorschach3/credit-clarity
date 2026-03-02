@@ -10,14 +10,14 @@ mcp = FastMCP("Calculator")
 
 
 @mcp.tool(name="calculator")
-def calculator(number1: float, number2: float = 0, operator: str) -> str:
+def calculator(number1: float, operator: str, number2: float = 0) -> str:
     """Performs basic calculations with two numbers.
 
     Args:
         number1: First number in the calculation
-        number2: Second number in the calculation
         operator: Operation symbol to perform (+, -, *, /, ^, sqrt)
                Note: Only these exact symbols are supported, not words
+        number2: Second number in the calculation
 
     Returns:
         Result of the calculation
