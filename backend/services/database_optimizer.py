@@ -182,6 +182,13 @@ class DatabaseOptimizer:
             logger.error(f"Database query failed: {e}")
             raise
     
+    # Columns that exist in the tradelines table
+    _TRADELINE_DB_COLUMNS = {
+        'id', 'user_id', 'creditor_name', 'account_number', 'account_balance',
+        'credit_limit', 'monthly_payment', 'account_type', 'account_status',
+        'credit_bureau', 'date_opened', 'is_negative', 'dispute_count', 'created_at'
+    }
+
     async def batch_insert_tradelines(
         self,
         tradelines: List[Dict[str, Any]],
@@ -192,24 +199,32 @@ class DatabaseOptimizer:
         """
         if not tradelines:
             return {'inserted': 0, 'errors': 0}
-        
+
         start_time = time.time()
         self._query_stats['batch_queries'] += 1
-        
+
         total_inserted = 0
         total_errors = 0
-        
+
         try:
             async with self.get_connection() as client:
                 # Process in batches
                 for i in range(0, len(tradelines), batch_size):
                     batch = tradelines[i:i + batch_size]
-                    
+
                     try:
-                        # Use upsert to handle duplicates
+                        # Strip extra processing fields — only send columns the DB knows about
+                        clean_batch = [
+                            {k: v for k, v in t.items() if k in self._TRADELINE_DB_COLUMNS}
+                            for t in batch
+                        ]
+
+                        # Use upsert to handle duplicates.
+                        # on_conflict must match the actual unique constraint:
+                        # unique_tradeline_per_user_bureau (user_id, account_number, creditor_name, credit_bureau)
                         response = client.table("tradelines").upsert(
-                            batch,
-                            on_conflict="user_id,creditor_name,account_number"
+                            clean_batch,
+                            on_conflict="user_id,account_number,creditor_name,credit_bureau"
                         ).execute()
                         
                         batch_inserted = len(response.data) if response.data else 0
@@ -228,7 +243,11 @@ class DatabaseOptimizer:
                         # Try individual inserts for failed batch
                         for tradeline in batch:
                             try:
-                                client.table("tradelines").upsert([tradeline]).execute()
+                                clean = {k: v for k, v in tradeline.items() if k in self._TRADELINE_DB_COLUMNS}
+                                client.table("tradelines").upsert(
+                                    [clean],
+                                    on_conflict="user_id,account_number,creditor_name,credit_bureau"
+                                ).execute()
                                 total_inserted += 1
                                 total_errors -= 1
                             except Exception as individual_error:

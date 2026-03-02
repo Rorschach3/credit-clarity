@@ -5,12 +5,23 @@ Implements the 9-step pipeline for reliable tradeline extraction with iterative 
 import asyncio
 import json
 import logging
+import os
 import re
 import shutil
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+try:
+    import google.generativeai as genai  # type: ignore
+    genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
+    _GEMINI_MODEL = genai.GenerativeModel("gemini-1.5-flash")
+    GEMINI_AVAILABLE = True
+except Exception:
+    genai = None  # type: ignore
+    _GEMINI_MODEL = None
+    GEMINI_AVAILABLE = False
 
 import cv2
 import fitz  # PyMuPDF
@@ -605,11 +616,114 @@ class RalphLoopExtractor:
     ) -> List[Tradeline]:
         """Step 6: AI extraction with LLM (schema + citations required)"""
 
-        # TODO: Implement actual LLM API call
-        # For now, return empty list (would normally call OpenAI/Anthropic)
+        if not GEMINI_AVAILABLE or _GEMINI_MODEL is None:
+            logger.warning("  Gemini not available, skipping AI extraction")
+            return []
 
-        logger.info("  AI extraction not implemented yet (would call LLM API here)")
-        return []
+        # Collect text from both OCR passes
+        def _collect_text(ocr_pass: List[Dict[str, Any]]) -> str:
+            parts = []
+            for page_data in ocr_pass:
+                page_num = page_data.get("page", "?")
+                text = page_data.get("text", "") or page_data.get("full_text", "")
+                if text:
+                    parts.append(f"[Page {page_num}]\n{text.strip()}")
+            return "\n\n".join(parts)
+
+        text_a = _collect_text(ocr_pass_a)
+        text_b = _collect_text(ocr_pass_b)
+        combined_text = "\n\n--- OCR PASS B ---\n\n".join(
+            filter(None, [text_a, text_b])
+        )
+
+        if not combined_text.strip():
+            logger.warning("  AI extraction: no OCR text available")
+            return []
+
+        prompt = f"""You are a credit report parser. Extract all tradelines from the following OCR text.
+
+Return a JSON array of objects. Each object represents one tradeline with these fields (omit missing fields):
+  - creditor_name: string
+  - account_number_masked: string (last 4 digits, e.g. "****1234")
+  - account_type: string (e.g. "Credit Card", "Mortgage", "Auto Loan")
+  - account_status: string (e.g. "Open", "Closed", "Collection")
+  - date_opened: string (MM/DD/YYYY if available)
+  - credit_limit_cents: number (dollars, not cents — the pipeline will convert)
+  - monthly_payment_cents: number (dollars)
+  - account_balance_cents: number (dollars)
+  - is_negative: boolean
+  - derogatory_flags: string (comma-separated flags, e.g. "Late 30", "Charge-off")
+  - remarks: string
+  - payment_history: string (raw payment history string)
+
+Return ONLY a valid JSON array with no commentary or markdown fences.
+
+OCR TEXT:
+{combined_text}
+"""
+
+        try:
+            response = _GEMINI_MODEL.generate_content(prompt)
+            raw = response.text.strip()
+
+            # Strip markdown fences if present
+            if raw.startswith("```"):
+                raw = re.sub(r"^```[a-z]*\n?", "", raw)
+                raw = re.sub(r"\n?```$", "", raw)
+
+            items = json.loads(raw)
+            if not isinstance(items, list):
+                raise ValueError(f"Expected JSON array, got {type(items).__name__}")
+
+        except Exception as exc:
+            logger.warning(f"  AI extraction failed: {exc}")
+            return []
+
+        tradelines: List[Tradeline] = []
+        field_map = {
+            "creditor_name": "creditor_name",
+            "account_number_masked": "account_number_masked",
+            "account_type": "account_type",
+            "account_status": "account_status",
+            "date_opened": "date_opened",
+            "credit_limit_cents": "credit_limit_cents",
+            "monthly_payment_cents": "monthly_payment_cents",
+            "account_balance_cents": "account_balance_cents",
+            "is_negative": "is_negative",
+            "derogatory_flags": "derogatory_flags",
+            "remarks": "remarks",
+            "payment_history": "payment_history",
+        }
+
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            tradeline = Tradeline()
+            for json_key, attr in field_map.items():
+                raw_val = item.get(json_key)
+                if raw_val is None:
+                    continue
+                setattr(
+                    tradeline,
+                    attr,
+                    FieldValue(
+                        value=raw_val,
+                        confidence=0.85,
+                        source_refs=[
+                            SourceRef(
+                                page=1,
+                                evidence=f"AI extracted: {json_key}={raw_val}",
+                                confidence=0.85,
+                                method="ai",
+                            )
+                        ],
+                    ),
+                )
+            if tradeline.creditor_name:
+                tradelines.append(tradeline)
+
+        logger.info(f"  AI extraction produced {len(tradelines)} tradelines")
+        return tradelines
 
     async def _merge_results(
         self,

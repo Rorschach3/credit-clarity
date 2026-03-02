@@ -1,7 +1,7 @@
 import { ParsedTradeline } from "./tradelineParser";
 import { supabase } from "@/integrations/supabase/client";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 // Processing progress interface
 export interface ProcessingProgress {

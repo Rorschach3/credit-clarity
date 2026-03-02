@@ -13,14 +13,17 @@ serve(async (req) => {
   }
 
   try {
-    const { file, mimeType } = await req.json();
+    const { base64, mimeType = 'application/pdf' } = await req.json();
 
-    if (!file || !mimeType) {
-      return new Response("Missing file or mimeType", { status: 400 });
+    if (!base64) {
+      return new Response("Missing base64", { status: 400 });
     }
 
-    const text = await processDocument(new Uint8Array(file), mimeType, PROJECT_ID, LOCATION, PROCESSOR_ID, SERVICE_ACCOUNT_KEY);
-    return new Response(JSON.stringify({ text }), {
+    const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+
+    const text = await processDocument(bytes, mimeType, PROJECT_ID, LOCATION, PROCESSOR_ID, SERVICE_ACCOUNT_KEY);
+
+    return new Response(JSON.stringify({ text, pages: 1 }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {

@@ -30,7 +30,6 @@ import App from "./App.tsx";
 import "./index.css";
 import "./styles/globals.css";
 import { ThemeProvider } from "./components/theme-provider";
-import { AuthProvider } from "./hooks/use-auth";
 import { inject } from "@vercel/analytics";
 import { HelmetProvider } from "react-helmet-async";
 
@@ -47,11 +46,9 @@ const root = createRoot(container);
 root.render(
   <React.StrictMode>
     <HelmetProvider>
-      <AuthProvider>
-        <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
-          <App />
-        </ThemeProvider>
-      </AuthProvider>
+      <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+        <App />
+      </ThemeProvider>
     </HelmetProvider>
   </React.StrictMode>
 );

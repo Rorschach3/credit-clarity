@@ -852,12 +852,63 @@ class MultiLayerExtractor:
         if len(texts) == 1:
             return texts[0]
         
-        # Simple implementation: use longest text as base and enhance with others
-        longest_text = max(texts, key=len)
-        
-        # TODO: Implement sophisticated merging algorithm
-        # For now, return the longest text
-        return longest_text
+        import difflib
+
+        # Split each text into non-empty lines, stripping trailing whitespace
+        all_line_lists = [
+            [line.rstrip() for line in text.splitlines()]
+            for text in texts
+        ]
+
+        # Collect the union of all unique lines, preserving order of first appearance.
+        # For each candidate line we also record how many texts contain it
+        # (used for majority-vote filtering) and the longest variant seen
+        # (used to prefer the most information-rich representation).
+        seen: dict = {}  # normalised_line -> {"count": int, "best": str, "first_pos": int}
+        global_pos = 0
+
+        for line_list in all_line_lists:
+            for line in line_list:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                # Normalise to lower-case for comparison only
+                key = stripped.lower()
+                if key not in seen:
+                    seen[key] = {"count": 1, "best": stripped, "first_pos": global_pos}
+                    global_pos += 1
+                else:
+                    seen[key]["count"] += 1
+                    # Keep the longer (more information-rich) variant
+                    if len(stripped) > len(seen[key]["best"]):
+                        seen[key]["best"] = stripped
+
+        if not seen:
+            # Fall back to the longest raw text
+            return max(texts, key=len)
+
+        # Majority threshold: a line must appear in at least half the inputs
+        # to be considered a "consensus" line.  Lines that appear in fewer
+        # texts are still included when they are unique to those texts
+        # (complement coverage), but lines that appear in only one text AND
+        # are very short (likely OCR noise) are discarded.
+        majority = max(1, len(texts) // 2)
+        min_unique_len = 6  # characters; shorter single-source lines are noise
+
+        merged_lines = []
+        for key, info in sorted(seen.items(), key=lambda kv: kv[1]["first_pos"]):
+            count = info["count"]
+            best = info["best"]
+            if count >= majority:
+                # Consensus line — always keep
+                merged_lines.append(best)
+            elif len(best) >= min_unique_len:
+                # Unique-to-some-texts line with enough content — keep for
+                # complement coverage (catches lines one OCR missed entirely)
+                merged_lines.append(best)
+            # else: single-source very-short line — likely OCR noise, skip
+
+        return "\n".join(merged_lines)
     
     def _calculate_quality_score(
         self, 

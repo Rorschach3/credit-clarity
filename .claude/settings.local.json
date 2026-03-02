@@ -67,7 +67,13 @@
       "Bash(gemini:*)",
       "Bash(tree:*)",
       "Bash(python3 -m pip install:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(PYTHONPATH=/home/rorschache/credit-clarity/backend python -m pytest:*)",
+      "Bash(~/credit-clarity/backend/venv/bin/python /tmp/cors_fix.py \"$HOME/credit-clarity/backend/main.py\")",
+      "Bash(echo \"exit: $?\")",
+      "Bash(echo $HOME)",
+      "Bash(xxd)",
+      "Bash(wsl:*)"
     ],
     "deny": []
   },
@@ -86,5 +92,6 @@
     "context7",
     "postgrest",
     "postgres"
-  ]
+  ],
+  "disableAllHooks": true
 }

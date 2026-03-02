@@ -226,11 +226,6 @@ async def get_current_user(authorization: str = Header(None)) -> str:
     Raises:
         HTTPException: If token is invalid or missing
     """
-    # Check if auth bypass is enabled (development only)
-    if os.getenv("BYPASS_AUTH", "false").lower() == "true":
-        logger.warning("⚠️ BYPASS_AUTH enabled - using test user ID")
-        return "test-user-bypass-12345"
-
     if not authorization:
         raise HTTPException(
             status_code=401,
@@ -2113,26 +2108,8 @@ async def _process_credit_report_core(
             
             if result['success']:
                 logger.info(f"✅ Processing completed using {result['method_used']}")
-                
-                # Save tradelines to database if available
-                tradelines = result.get('tradelines', [])
-                if tradelines and supabase:
-                    logger.info(f"💾 Saving {len(tradelines)} tradelines to database...")
-                    try:
-                        # Add user_id to each tradeline
-                        for tradeline in tradelines:
-                            tradeline['user_id'] = user_id
+                logger.info(f"📤 Returning {len(result.get('tradelines', []))} tradelines to frontend for save")
 
-                        # Insert tradelines into database
-                        insert_result = supabase.table("tradelines").insert(tradelines).execute()
-                        if insert_result.data:
-                            logger.info(f"✅ Successfully saved {len(insert_result.data)} tradelines to database for user {user_id}")
-                        else:
-                            logger.warning(f"⚠️ Database insert returned no data for user {user_id}")
-                    except Exception as db_error:
-                        logger.error(f"❌ Failed to insert tradelines into database for user {user_id}: {db_error}", exc_info=True)
-                        # Continue without failing the entire request
-                
                 return {
                     "success": True,
                     "message": f"Successfully processed {len(result['tradelines'])} tradelines",

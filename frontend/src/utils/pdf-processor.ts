@@ -20,7 +20,7 @@ export async function processPdfFile(file: File, userId: string): Promise<PDFPro
     formData.append('user_id', userId);
     
     // Vite environment variable
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const apiUrl = import.meta.env.VITE_API_URL || '';
     
     const response = await fetch(`${apiUrl}/process-credit-report`, {
       method: 'POST',

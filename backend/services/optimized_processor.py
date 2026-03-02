@@ -1131,8 +1131,11 @@ class OptimizedCreditReportProcessor:
             # Clean account number by removing special characters
             clean_account_number = re.sub(r'[*.\-\s]', '', raw_account_number).upper()
 
-            # Create unique identifier: creditor + clean_account + date + bureau
-            unique_identifier = f"{creditor_name}|{clean_account_number}|{date_opened}|{credit_bureau}"
+            # Dedup key mirrors the DB unique constraint:
+            # unique_tradeline_per_user_bureau (user_id, account_number, creditor_name, credit_bureau)
+            # Same account from different bureaus = 3 separate records (one per bureau).
+            # Same account re-uploaded from the same bureau = upsert, no duplicate.
+            unique_identifier = f"{creditor_name}|{clean_account_number}|{credit_bureau}"
 
             if unique_identifier not in seen_identifiers:
                 seen_identifiers.add(unique_identifier)
@@ -1165,7 +1168,7 @@ class OptimizedCreditReportProcessor:
                 credit_bureau_raw = tradeline.get('credit_bureau', '') or ''
                 credit_bureau = str(credit_bureau_raw).strip().upper() if credit_bureau_raw is not None else ''
 
-                identifier = f"{creditor_name}|{clean_account_number}|{date_opened}|{credit_bureau}"
+                identifier = f"{creditor_name}|{clean_account_number}|{credit_bureau}"
                 self.logger.debug(f"   {i+1}. {identifier}")
 
         return unique_tradelines

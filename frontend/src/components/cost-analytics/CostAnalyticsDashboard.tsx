@@ -76,11 +76,7 @@ export const CostAnalyticsDashboard: React.FC<CostAnalyticsDashboardProps> = ({
   const fetchCostData = async (days: number) => {
     try {
       setLoading(true);
-      // TODO: Replace with actual API call to backend
-      // const response = await fetch(`/api/cost-analytics/summary?userId=${userId}&days=${days}`);
-      // const costSummary = await response.json();
-
-      // Mock data for demonstration
+      // Mock data for demonstration (fallback when API is unavailable)
       const mockSummary: UsageSummary = {
         period_days: days,
         total_files: 45,
@@ -139,7 +135,15 @@ export const CostAnalyticsDashboard: React.FC<CostAnalyticsDashboardProps> = ({
         ]
       };
 
-      setSummary(mockSummary);
+      try {
+        const response = await fetch(`/api/cost-analytics/summary?userId=${userId}&days=${days}`);
+        if (!response.ok) throw new Error('No endpoint');
+        const costSummary: UsageSummary = await response.json();
+        setSummary(costSummary);
+      } catch {
+        console.warn('Cost analytics API not available, using demo data');
+        setSummary(mockSummary);
+      }
     } catch (error) {
       toast({
         title: 'Error',

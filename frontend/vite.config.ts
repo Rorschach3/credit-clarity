@@ -12,10 +12,7 @@ export default defineConfig(({ mode }) => {
   return {
     server: {
       host: "::",
-      port: 8080,
-      hmr: {
-        port: 8080,
-      },
+      port: 8081,
       watch: {
         ignored: ['**/.venv/**', '**/node_modules/**', '**/dist/**'],
       },
@@ -23,7 +20,6 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: 'http://localhost:8000',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, ''),
         },
       },
     },

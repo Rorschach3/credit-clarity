@@ -55,7 +55,7 @@ function App() {
         <Analytics />
         <OrganizationSchema />
         <AuthProvider>
-          <Router>
+          <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <AppContent />
           </Router>
         </AuthProvider>

@@ -33,7 +33,10 @@ gemini_model = None
 if GEMINI_AVAILABLE and GEMINI_API_KEY:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        gemini_model = genai.GenerativeModel('gemini-2.5-flash')
+        gemini_model = genai.GenerativeModel(
+            'gemini-2.5-flash',
+            generation_config=genai.GenerationConfig(temperature=0.0)
+        )
         logger.info("✅ Enhanced Gemini processor initialized")
     except Exception as e:
         logger.error(f"❌ Gemini initialization failed: {e}")
@@ -365,18 +368,28 @@ class EnhancedGeminiProcessor:
             overlap_size = 3000  # Larger overlap to prevent missing tradelines
             max_chunks = 15  # Increased limit to process more comprehensive reports
 
-            # Create overlapping chunks
-            for i in range(0, len(text), chunk_size - overlap_size):
+            # Create overlapping chunks, snapping boundaries to the nearest newline
+            # so tradeline blocks are never cut mid-record
+            i = 0
+            while i < len(text):
                 end_pos = min(i + chunk_size, len(text))
-                chunk = text[i:end_pos]
 
-                # Only add chunk if it has substantial content
+                # Snap the end boundary to the nearest newline (within last 500 chars)
+                # so we don't split in the middle of an account block
+                if end_pos < len(text):
+                    newline_pos = text.rfind('\n', end_pos - 500, end_pos)
+                    if newline_pos > i:
+                        end_pos = newline_pos + 1
+
+                chunk = text[i:end_pos]
                 if len(chunk.strip()) > 500:
                     chunks.append(chunk)
 
-                # Stop if we've reached the end
                 if end_pos >= len(text):
                     break
+
+                # Next chunk starts (overlap_size) before the end of this one
+                i = end_pos - overlap_size
 
             # Only limit chunks if we have an excessive number (>15)
             if len(chunks) > max_chunks:

@@ -90,11 +90,7 @@ export const CreditMonitoringDashboard: React.FC<CreditMonitoringDashboardProps>
   const fetchMonitoringData = async (forceRefresh = false) => {
     try {
       setRefreshing(forceRefresh);
-      // TODO: Replace with actual API call to backend
-      // const response = await fetch(`/api/users/${userId}/credit-monitoring`);
-      // const monitoringData = await response.json();
-
-      // Mock data for demonstration
+      // Mock data used as fallback when the backend endpoint is not yet available
       const mockData: CreditMonitoringData = {
         changes: [
           {
@@ -157,7 +153,16 @@ export const CreditMonitoringDashboard: React.FC<CreditMonitoringDashboardProps>
         last_updated: new Date().toISOString()
       };
 
-      setData(mockData);
+      try {
+        const response = await fetch(`/api/users/${userId}/credit-monitoring${forceRefresh ? '?refresh=true' : ''}`);
+        if (!response.ok) throw new Error('Failed to fetch');
+        const monitoringData: CreditMonitoringData = await response.json();
+        setData(monitoringData);
+      } catch {
+        // Backend endpoint not yet available — fall back to mock data so the UI
+        // remains functional during development.
+        setData(mockData);
+      }
     } catch (error) {
       toast({
         title: 'Error',
@@ -179,11 +184,21 @@ export const CreditMonitoringDashboard: React.FC<CreditMonitoringDashboardProps>
   };
 
   const handleEnrollProvider = async (providerName: string) => {
-    // TODO: Implement provider enrollment
-    toast({
-      title: 'Enrollment',
-      description: `Enrollment for ${providerName} would be implemented here`,
-    });
+    try {
+      const response = await fetch(`/api/users/${userId}/credit-monitoring/enroll`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: providerName }),
+      });
+      if (response.ok) {
+        toast({ title: 'Enrolled', description: `Successfully enrolled in ${providerName} monitoring.` });
+        fetchMonitoringData(true); // refresh
+      } else {
+        toast({ title: 'Enrollment pending', description: `${providerName} enrollment requires API configuration. Contact support.`, variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Error', description: `Failed to enroll in ${providerName}.`, variant: 'destructive' });
+    }
   };
 
   if (loading) {

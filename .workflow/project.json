@@ -7,17 +7,17 @@
       "languages": [
         {
           "name": "Python",
-          "file_count": 13633,
+          "file_count": 127,
           "primary": true
         },
         {
           "name": "TypeScript",
-          "file_count": 355,
+          "file_count": 262,
           "primary": true
         },
         {
           "name": "JavaScript",
-          "file_count": 59,
+          "file_count": 0,
           "primary": false
         }
       ],
@@ -35,12 +35,14 @@
         "npm",
         "pip",
         "concurrently",
-        "uvicorn"
+        "uvicorn",
+        "ruff"
       ],
       "test_frameworks": [
         "Jest",
         "React Testing Library",
-        "pytest (inferred)"
+        "pytest",
+        "pytest-asyncio"
       ]
     },
     "architecture": {
@@ -69,7 +71,7 @@
       {
         "name": "FastAPI Backend",
         "path": "backend/main.py",
-        "description": "Backend entry point configuring middleware, CORS, routers, and server settings for credit report processing",
+        "description": "Backend entry point configuring middleware, CORS, routers, and server settings for credit report processing with Google Document AI and Gemini fallback",
         "importance": "high"
       },
       {
@@ -81,25 +83,31 @@
       {
         "name": "Tradeline Extraction Pipeline",
         "path": "backend/services/tradeline_extraction/pipeline.py",
-        "description": "Core OCR and AI-powered tradeline parsing pipeline using Google Document AI and LLM-based extraction",
+        "description": "Core OCR and AI-powered tradeline parsing pipeline using Google Document AI and LLM-based extraction with confidence scoring and validation",
+        "importance": "high"
+      },
+      {
+        "name": "Multi-Layer Extractor",
+        "path": "backend/services/advanced_parsing/multi_layer_extractor.py",
+        "description": "Advanced multi-layer tradeline extraction system with bureau-specific parsing, AI validation, and error correction for Experian, Equifax, and TransUnion formats",
         "importance": "high"
       },
       {
         "name": "Auth Provider",
         "path": "frontend/src/hooks/use-auth.tsx",
-        "description": "Context provider managing user authentication state and session persistence with Supabase",
+        "description": "Context provider managing user authentication state and session persistence with Supabase JWT validation",
         "importance": "high"
       },
       {
         "name": "Credit Dashboard",
-        "path": "frontend/src/components/dashboard/CreditDashboard.tsx",
-        "description": "Main dashboard component displaying credit score, tradelines, and dispute tracking interface",
+        "path": "frontend/src/components/dashboard",
+        "description": "Main dashboard component set displaying credit score, tradelines, and dispute tracking interface",
         "importance": "high"
       },
       {
-        "name": "PDF Processor",
+        "name": "Enhanced PDF Processor",
         "path": "backend/services/enhanced_pdf_processor.py",
-        "description": "Enhanced PDF processing service integrating OCR, text extraction, and AI-based tradeline parsing",
+        "description": "Enhanced PDF processing service integrating OCR, text extraction, and AI-based tradeline parsing with pdfplumber and PyMuPDF",
         "importance": "high"
       },
       {
@@ -111,14 +119,8 @@
       {
         "name": "Supabase Integration",
         "path": "frontend/src/integrations/supabase",
-        "description": "Supabase client configuration and database access layer for PostgreSQL and authentication",
+        "description": "Supabase client configuration and database access layer for PostgreSQL storage and Supabase Auth",
         "importance": "high"
-      },
-      {
-        "name": "Tradeline Normalizer",
-        "path": "backend/utils/tradeline_normalizer.py",
-        "description": "Data normalization and validation utilities for extracted tradeline information",
-        "importance": "medium"
       }
     ]
   },
@@ -133,11 +135,11 @@
   "statistics": {
     "total_features": 0,
     "total_sessions": 0,
-    "last_updated": "2026-01-03T16:09:00.000Z"
+    "last_updated": "2026-03-01T10:01:00.000Z"
   },
   "_metadata": {
     "initialized_by": "cli-explore-agent",
-    "analysis_timestamp": "2026-01-03T16:09:00.000Z",
+    "analysis_timestamp": "2026-03-01T10:01:00.000Z",
     "analysis_mode": "deep-scan"
   }
 }

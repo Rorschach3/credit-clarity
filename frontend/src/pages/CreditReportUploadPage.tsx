@@ -60,6 +60,9 @@ const CreditReportUploadPage = () => {
   
   // Debounce timer for auto-save
   const debounceTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+  // Ref to scroll to tradelines section after job completes
+  const tradelinesRef = useRef<HTMLDivElement>(null);
   
   // Use persistent tradelines hook
   const {
@@ -162,7 +165,9 @@ const CreditReportUploadPage = () => {
             if (status.result && status.result.tradelines_found > 0) {
               // Refresh tradelines from database since job saved them
               await refreshTradelines();
-              
+              await loadExistingTradelines();
+              tradelinesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
               sonnerToast.success("🎉 Credit Report Processing Complete!", {
                 description: `Successfully extracted ${status.result.tradelines_found} tradeline(s) and saved to your account`,
                 duration: 5000,
@@ -461,6 +466,7 @@ const CreditReportUploadPage = () => {
         </Suspense>
 
         {/* Tradelines Display */}
+        <div ref={tradelinesRef}>
         <Suspense fallback={<ComponentLoading message="Loading tradelines..." />}>
           {usePagination ? (
             <PaginatedTradelinesList
@@ -480,6 +486,7 @@ const CreditReportUploadPage = () => {
             )
           )}
         </Suspense>
+        </div>
 
         {/* Manual Tradeline Modal */}
         {showManualModal && (

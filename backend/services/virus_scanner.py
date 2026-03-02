@@ -348,15 +348,34 @@ class VirusScanner:
                 logger.debug("ClamAV not found, skipping ClamAV scan")
                 return None
             
-            # TODO: Implement actual ClamAV scanning
-            # This would typically involve:
-            # 1. Writing file to temp location
-            # 2. Running clamscan/clamdscan
-            # 3. Parsing output
-            # 4. Cleaning up temp file
-            
-            logger.debug("ClamAV available but not yet implemented")
-            return None
+            import subprocess
+            import tempfile
+            import os
+
+            with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                tmp.write(file_content)
+                tmp_path = tmp.name
+
+            try:
+                result = subprocess.run(
+                    [clamav_path, '--no-summary', tmp_path],
+                    capture_output=True, text=True, timeout=30
+                )
+                # clamscan exit codes: 0=clean, 1=virus found, 2=error
+                if result.returncode == 1:
+                    threats = []
+                    for line in result.stdout.splitlines():
+                        if 'FOUND' in line:
+                            virus_name = line.split(':')[-1].replace('FOUND', '').strip()
+                            threats.append({
+                                "type": "virus",
+                                "name": virus_name,
+                                "description": f"ClamAV: {virus_name}"
+                            })
+                    return threats
+                return []
+            finally:
+                os.unlink(tmp_path)
             
         except Exception as e:
             logger.warning(f"ClamAV scan failed: {e}")
@@ -413,17 +432,18 @@ class VirusScanner:
     def get_scanner_info(self) -> Dict[str, Any]:
         """
         Get information about the scanner configuration.
-        
+
         Returns:
             Scanner information dictionary
         """
+        import shutil
         return {
             "scanner_name": self.scanner_name,
             "heuristic_threshold": self.heuristic_threshold,
             "allowed_file_types": list(self._allowed_types.keys()),
             "blocked_file_types": list(self._blocked_types.keys()),
             "patterns_monitored": len(self._suspicious_patterns),
-            "clamav_available": False  # TODO: Check actual availability
+            "clamav_available": bool(shutil.which('clamscan') or shutil.which('clamdscan'))
         }
 
 
