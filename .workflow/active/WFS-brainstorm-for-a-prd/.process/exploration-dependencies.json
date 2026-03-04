@@ -1,0 +1,75 @@
+{
+  "project_structure": "Dependencies span Python backend services and TypeScript frontend packages. Backend dependencies are pinned in backend/requirements.txt, frontend dependencies in frontend/package.json, and infra dependencies in supabase/ migrations.",
+  "relevant_files": [
+    {
+      "path": "backend/requirements.txt",
+      "relevance": 0.95,
+      "rationale": "Authoritative backend dependency list with pinned versions."
+    },
+    {
+      "path": "frontend/package.json",
+      "relevance": 0.9,
+      "rationale": "Frontend dependency and tooling versions."
+    },
+    {
+      "path": "package.json",
+      "relevance": 0.7,
+      "rationale": "Root workspace scripts and tooling references."
+    },
+    {
+      "path": "backend/main.py",
+      "relevance": 0.78,
+      "rationale": "Backend entry references external services and env configuration."
+    },
+    {
+      "path": "backend/services/llm_parser_service.py",
+      "relevance": 0.7,
+      "rationale": "LLM parsing depends on OpenAI and Google integrations."
+    },
+    {
+      "path": "frontend/src/utils/creditReportProcessor.ts",
+      "relevance": 0.72,
+      "rationale": "API client dependency on backend endpoints and Supabase auth."
+    },
+    {
+      "path": "frontend/src/hooks/use-auth.tsx",
+      "relevance": 0.68,
+      "rationale": "Supabase client dependency for auth state."
+    }
+  ],
+  "patterns": "- Backend dependencies are pinned (==) for reproducible environments.\n- Frontend dependencies use caret ranges for semver-compatible upgrades.\n- Supabase is used in both backend and frontend, with separate clients.\n- OCR and LLM integrations rely on Google and OpenAI SDKs.",
+  "dependencies": "BACKEND (requirements.txt): fastapi==0.115.14, supabase==2.16.0, google-cloud-documentai==3.5.0, google-generativeai==0.8.5, openai==1.93.3.\nFRONTEND (package.json): react ^18.3.1, react-router-dom ^6.30.0, @tanstack/react-query ^5.56.2, tailwindcss ^3.4.11, @supabase/supabase-js ^2.50.5, framer-motion ^12.23.3.",
+  "integration_points": "- backend/requirements.txt:20-40 declares OCR/LLM dependencies for processing pipeline.\n- backend/main.py:120-127 reads env vars for Document AI, Gemini, and Supabase credentials.\n- frontend/package.json lists UI and data fetching dependencies used in App.tsx and pages.\n- frontend/src/utils/creditReportProcessor.ts:2-4 links Supabase auth with API base URL.",
+  "constraints": "- Dependency versions must stay compatible across backend and frontend (Supabase SDKs).\n- External API usage (Document AI, Gemini, OpenAI) must be gated by credential availability.\n- Avoid introducing new dependencies in context gathering outputs.",
+  "clarification_needs": [
+    {
+      "question": "Should dependency reporting include devDependencies or only runtime dependencies?",
+      "context": "Frontend tooling (Vite, testing libraries) may be useful for planning docs, but the core runtime stack is smaller.",
+      "options": [
+        "Runtime dependencies only",
+        "Include devDependencies",
+        "Include devDependencies but mark them separately"
+      ],
+      "recommended": 2
+    },
+    {
+      "question": "Should dependency data prioritize actual package versions or PRD-stated technology choices?",
+      "context": "Brainstorming artifacts mention future-state tools (e.g., analytics extensions) that may not appear in requirements.txt.",
+      "options": [
+        "Actual versions only",
+        "PRD-stated choices only",
+        "Both with explicit labeling"
+      ],
+      "recommended": 2
+    }
+  ],
+  "_metadata": {
+    "timestamp": "2026-03-03T15:31:39.480858+00:00",
+    "task_description": "Resume workflow planning by completing Phase 2 context gathering for session WFS-brainstorm-for-a-prd; regenerate stale context-package.json using architecture, patterns, dependencies, and integration-points explorations.",
+    "source": "cli-explore-agent",
+    "exploration_angle": "dependencies",
+    "exploration_index": 3,
+    "total_explorations": 4,
+    "duration_seconds": 120
+  }
+}
