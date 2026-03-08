@@ -1,0 +1,250 @@
+{
+  "session_id": "WFS-brainstorm-for-a-prd",
+  "generated_at": "2026-03-03T00:00:00Z",
+  "generated_by": "cross-role-synthesizer",
+  "participating_roles": ["product-manager", "system-architect", "data-architect"],
+
+  "cross_role_analysis_summary": {
+    "consensus": [
+      "Hybrid in-memory + Redis rate limiting with 2 uploads/month and 3 letters/month",
+      "TimescaleDB enabled from Phase 1 to avoid migration debt in Phase 3",
+      "Per-letter pricing model ($5-10) with 10-15% free-to-paid conversion target",
+      "Lob.com first for fast GTM, USPS API Direct migration in Phase 2",
+      "8 FCRA dispute status types: pending, investigating, verified, deleted, updated, escalated, expired, blank",
+      "Supabase RLS + Fernet column-level encryption for SSN and account numbers",
+      "Hybrid AI pipeline: Google Document AI OCR + Gemini parsing + rule-based classification",
+      "4-phase product roadmap (MVP to Optimization to AI Enhancement to Scale)",
+      "Phase 3 ML training data requires opt-in user consent with anonymization before use"
+    ],
+    "conflicts_found": 8,
+    "gaps_found": 10,
+    "ambiguities_found": 7
+  },
+
+  "enhancements": [
+    {
+      "id": "EP-001",
+      "title": "Resolve TimescaleDB deployment location conflict",
+      "affected_roles": ["system-architect", "data-architect"],
+      "category": "Architecture",
+      "current_state": "System Architect recommends a separate dedicated TimescaleDB instance using a dual-write pattern to preserve Supabase managed service benefits. Data Architect recommends enabling TimescaleDB as an extension within the existing Supabase PostgreSQL instance as a single unified database. These approaches are mutually exclusive: one requires a second database connection, sync logic, and connection pooler configuration; the other requires confirming the Supabase plan tier supports the extension. Both analyses document DDL for credit_score_history and both claim their approach implements Decision D-019, creating conflicting implementation targets.",
+      "enhancement": "Lock a single TimescaleDB deployment topology before any Phase 1 DDL is written. The Data Architect's single-database extension approach is operationally simpler and eliminates synchronization logic; adopt it as the default if the Supabase Pro plan confirms TimescaleDB availability (verify this in Week 1 of implementation planning). If the extension is unavailable on the chosen Supabase plan, adopt the System Architect's separate-instance approach with documented dual-write patterns and a dedicated connection pool. The System Architect analysis must be updated to remove the 'Separate TimescaleDB Instance' recommendation once the decision is locked to avoid divergent implementations.",
+      "rationale": "A topology mismatch between SA and DA on database infrastructure causes schema incompatibilities, incorrect query patterns targeting the wrong host, and rework at Phase 3 when credit_score_history writes begin. The decision is a zero-cost choice now and a multi-week migration cost later.",
+      "priority": "Critical"
+    },
+    {
+      "id": "EP-002",
+      "title": "Resolve background processing technology conflict",
+      "affected_roles": ["system-architect", "data-architect"],
+      "category": "Architecture",
+      "current_state": "System Architect specifies FastAPI BackgroundTasks with Redis job tracking for all PDF processing and AI pipeline execution. Data Architect specifies Celery async workers for the same OCR and AI parsing workloads. FastAPI BackgroundTasks execute in-process within the API worker: if the API server process crashes during a 45-second Gemini parsing call, the task is permanently lost with no recovery mechanism. Celery tasks are persisted in the Redis/broker queue and survive server restarts. The Data Architect's error handling section (3 retries with exponential backoff, processing_status = 'failed' on final failure) implicitly requires Celery-level durability that FastAPI BackgroundTasks cannot provide.",
+      "enhancement": "Select one async processing approach for the platform and document it as a firm infrastructure decision. Celery is the recommended choice for the following reasons: (1) PDF processing and AI parsing take 30-60 seconds per job, making crash recovery essential; (2) the DA's error handling design (retry logic, status transitions, user notification on failure) maps naturally to Celery task states; (3) Celery uses the existing Redis infrastructure as the broker with no new vendor dependency. If Celery is chosen, update the System Architect analysis to replace BackgroundTasks references with Celery task dispatch. Document worker deployment: one Celery worker process per API instance, with the option to scale workers independently under load.",
+      "rationale": "PDF processing and AI parsing are the core value-delivery operations of the platform. A processing failure with no recovery path means users upload a credit report, wait 60 seconds, and receive no tradelines — with no indication of what happened. Celery's durable task queue prevents this. The inconsistency between SA (in-process) and DA (distributed workers) will produce divergent implementations that cannot be integrated without a second architectural decision.",
+      "priority": "Critical"
+    },
+    {
+      "id": "EP-003",
+      "title": "Add missing payment and transaction data model",
+      "affected_roles": ["data-architect", "product-manager", "system-architect"],
+      "category": "Data",
+      "current_state": "The Product Manager defines detailed payment models including per-letter pricing ($5-10), 3-letter bundles ($24, $8/letter), 5-letter bundles ($35, $7/letter), Stripe fee calculations (2.9% + $0.30 per transaction), and explicit refund policies (full refund if letter not delivered). The System Architect includes a checkout endpoint returning a tracking number. The Data Architect's schema has no payments table, no Stripe transaction records, no receipt schema, and no refund tracking. The mailing_records table records only the mailing service API response — not the financial transaction that authorized the mailing. There is also no Stripe webhook events log, making idempotent webhook processing impossible.",
+      "enhancement": "Add two tables to the Data Architect schema. First, a payments table: payment_id (UUID primary key), user_id (UUID, denormalized for RLS), stripe_payment_intent_id (TEXT unique, serves as idempotency key), stripe_charge_id (TEXT), amount_cents (INTEGER), currency (TEXT DEFAULT 'usd'), payment_status as ENUM ('pending', 'succeeded', 'failed', 'refunded', 'partially_refunded'), dispute_letter_ids (UUID array of letters covered by this payment), bundle_type as ENUM ('single', 'bundle_3', 'bundle_5'), stripe_fee_cents (INTEGER), net_revenue_cents (INTEGER computed as amount_cents minus stripe_fee_cents), created_at and refunded_at timestamps. Second, a stripe_webhook_events table: event_id (TEXT unique, the Stripe event ID), event_type (TEXT), processed_at (TIMESTAMPTZ), processing_status as ENUM ('received', 'processed', 'failed'), payload (JSONB). RLS policies apply to payments for user self-access; webhook events are backend-only with no user RLS.",
+      "rationale": "Without a payments schema: (1) failed mailings cannot be linked to their payment for refund processing; (2) real revenue metrics (net of Stripe fees) cannot be computed; (3) Stripe webhooks delivered multiple times will reprocess, causing double-mailings; (4) support investigations have no auditable payment record. Stripe explicitly documents that synchronous charge responses are not authoritative — only webhook events confirm final payment state. Missing the webhook events log is a financial integrity risk.",
+      "priority": "Critical"
+    },
+    {
+      "id": "EP-004",
+      "title": "Align subscription tier model across all three roles",
+      "affected_roles": ["data-architect", "product-manager", "system-architect"],
+      "category": "Business",
+      "current_state": "The Product Manager defines three distinct monetization behaviors: free users with rate limits, per-letter paying users ($5-10 per mailing, no ongoing subscription), and premium subscribers ($15/month unlocking unlimited letter generation plus Phase 3 AI features). The Data Architect's users table defines subscription_tier as ENUM ('free', 'paid') — only two values, unable to distinguish a user who paid for a single letter from a user with an active $15/month subscription. The System Architect does not address subscription tier management, rate limit overrides per tier, or Stripe subscription lifecycle at all.",
+      "enhancement": "Expand the subscription_tier ENUM to ('free', 'premium') where 'free' covers rate-limited freemium users and 'premium' covers active $15/month subscribers. Per-letter purchases are payment events, not a tier — a user who pays for letters remains in the 'free' tier. Add subscription tracking fields to the users table: premium_subscription_id (TEXT — Stripe subscription ID, nullable), premium_started_at (TIMESTAMPTZ), premium_expires_at (TIMESTAMPTZ), premium_cancelled_at (TIMESTAMPTZ). Define rate limit overrides per tier in the middleware: free tier enforces 2 reports and 3 letters per month; premium tier has no letter generation limit. The System Architect's rate limiting middleware must read subscription_tier to apply the correct limits. Stripe subscription webhooks (customer.subscription.created, .updated, .deleted) update the premium_expires_at field; the middleware checks expiry at each request.",
+      "rationale": "Mismatched subscription tier models will cause the rate limiting middleware to apply incorrect limits to premium users, either blocking paying customers from using the service they subscribed for or giving free users unlimited access. The Phase 3 premium tier at $15/month is a primary revenue milestone accounting for $22,500 MRR at Month 24. Building the data model correctly in Phase 1 is a one-hour schema change that prevents a live migration under active subscriptions in Phase 3.",
+      "priority": "Critical"
+    },
+    {
+      "id": "EP-005",
+      "title": "Add Stripe webhook architecture for payment reliability",
+      "affected_roles": ["system-architect", "data-architect"],
+      "category": "Architecture",
+      "current_state": "The System Architect's checkout endpoint returns a tracking number synchronously after calling process_payment(). The Data Architect's mailing pipeline assumes payment verification is a synchronous pre-condition. Neither role addresses Stripe webhook handling. Stripe sends asynchronous webhooks for payment_intent.succeeded, payment_intent.payment_failed, charge.refunded, charge.dispute.created, and customer.subscription events. Without webhook handling: the system cannot reliably confirm a payment succeeded (synchronous charge responses can fail after the UI shows success), cannot process refunds, cannot manage premium subscription lifecycle (renewal, cancellation, payment failure), and cannot handle Stripe's automatic payment retries for failed subscriptions.",
+      "enhancement": "Add a Stripe webhook endpoint at /api/v1/webhooks/stripe with three requirements: (1) signature verification using the Stripe-Signature header and the STRIPE_WEBHOOK_SECRET environment variable before processing any event; (2) idempotent event processing using the stripe_webhook_events table — check if event_id already exists before processing, mark as processed after completion; (3) event handlers for: payment_intent.succeeded confirms mailing dispatch and updates payments.payment_status to 'succeeded'; payment_intent.payment_failed cancels queued mailing and sends user notification; charge.refunded updates mailing_records delivery_status and payments.payment_status to 'refunded'; customer.subscription.created sets users.subscription_tier to 'premium' and updates premium_expires_at; customer.subscription.deleted sets subscription_tier back to 'free'; customer.subscription.updated handles plan changes and trial endings.",
+      "rationale": "Stripe's documentation states that only webhook events are authoritative for payment confirmation — synchronous charge responses can succeed client-side while the charge fails backend authorization. Without webhooks, the system will dispatch mailings for payments that subsequently fail, incurring $1.65 Lob API cost per letter with no revenue recovery. This is not a theoretical risk; Stripe explicitly recommends against treating synchronous responses as final.",
+      "priority": "High"
+    },
+    {
+      "id": "EP-006",
+      "title": "Define user mailing address collection workflow",
+      "affected_roles": ["product-manager", "system-architect", "data-architect"],
+      "category": "UX",
+      "current_state": "The Data Architect encrypts users.address_encrypted as a JSONB column using Fernet encryption to store the return address required for certified mail. The mailing pipeline uses this address when calling the Lob.com API. However, none of the three roles specify when or how this address is collected from the user: it does not appear in the Product Manager's 6-step conversion funnel, the System Architect's API endpoint specifications, or the Data Architect's onboarding flow documentation. The Lob.com POST /letters call requires a from_address parameter; if address_encrypted is NULL, the API call fails and the paid mailing cannot be sent.",
+      "enhancement": "Define address collection explicitly as part of the conversion funnel. Recommend just-in-time collection at first checkout (Step 5 of the PM's conversion funnel): when the user clicks 'Mail Letter', if address_encrypted is NULL, present an address collection form as the first step of checkout before payment. Save the address after collection for all future purchases so subsequent checkouts are one-click. Use Lob's address verification API to validate the address before saving (Lob returns standardized USPS-format addresses and flags invalid addresses before they cause mailing failures). Store the address as JSON with fields: name, address_line1, address_line2 (optional), city, state, zip, country (default 'US'). Encrypt the full JSON blob with Fernet before writing to address_encrypted. Document the API endpoint as POST /api/v1/users/me/address with the backend decrypting only for mailing service calls, never returning the decrypted address to the frontend response.",
+      "rationale": "Address collection is a critical UX friction point and a functional requirement for paid mailings. Without specifying the collection point, the field will be NULL for all users until a developer notices the Lob API failures in production. Defining it as just-in-time at checkout minimizes friction for free users while ensuring the data is available when payment is collected.",
+      "priority": "High"
+    },
+    {
+      "id": "EP-007",
+      "title": "Resolve analytics implementation inconsistency between roles",
+      "affected_roles": ["system-architect", "data-architect"],
+      "category": "Data",
+      "current_state": "System Architect implements personal statistics as a PostgreSQL MATERIALIZED VIEW (user_dispute_stats) refreshed using REFRESH MATERIALIZED VIEW CONCURRENTLY triggered on status changes. Data Architect implements the same analytics as a regular TABLE (user_analytics) maintained via trigger-based UPSERT using ON CONFLICT DO UPDATE. These approaches differ in: locking behavior (MATERIALIZED VIEW requires a share lock during CONCURRENT refresh; the DA's UPSERT is a targeted single-row write with no table-level lock); RLS support (PostgreSQL MATERIALIZED VIEWS in Supabase have documented limitations with row-level security policies); and read semantics (MV reads can be stale between refresh cycles in high-concurrency scenarios, while the DA's trigger ensures the analytics row is updated within the same transaction as the status change).",
+      "enhancement": "Adopt the Data Architect's approach exclusively: user_analytics as a regular TABLE refreshed by trigger-based UPSERT within the same transaction as each status change. Remove the System Architect's MATERIALIZED VIEW design from both analyses. Rationale for the preference: Supabase's managed PostgreSQL documentation notes MATERIALIZED VIEW + RLS requires additional policy configuration that does not work out of the box; the DA's trigger-based UPSERT is atomic, always consistent, and requires no post-transaction refresh call; the <5ms dashboard read on a PK lookup is better than the <100ms MV read the SA targets. Update the System Architect's integration patterns section to remove the REFRESH MATERIALIZED VIEW CONCURRENTLY call from refresh_user_statistics().",
+      "rationale": "Two different implementations targeting the same feature will produce divergent behavior: developers following the SA spec create a MATERIALIZED VIEW while the DA schema defines a regular TABLE. When combined in the same codebase, one will overwrite the other's data. The DA approach is the stronger choice for the Supabase environment and provides the transactional consistency the audit trail requires.",
+      "priority": "High"
+    },
+    {
+      "id": "EP-008",
+      "title": "Specify CROA compliance requirements alongside FCRA",
+      "affected_roles": ["product-manager", "system-architect", "data-architect"],
+      "category": "Risk",
+      "current_state": "The Product Manager explicitly identifies the Credit Repair Organizations Act (CROA, 15 U.S.C. § 1679 et seq.) as a distinct legal requirement separate from FCRA. CROA mandates specific written disclosures before providing credit repair services for compensation, prohibits false representations about creditworthiness, and prohibits guaranteeing dispute outcomes. The System Architect and Data Architect address FCRA compliance in detail (7-year data retention, user consent, audit trails, RLS) but neither document mentions CROA. The Data Architect's consent schema captures fcra_consent_given and ai_training_consent but has no CROA-specific disclosure field, meaning there is no auditable proof that the required CROA disclosure was accepted before a user paid for mailing services.",
+      "enhancement": "Add CROA compliance to both the System Architect and Data Architect analyses with concrete implementation requirements. For the Data Architect schema: add croa_disclosure_accepted (BOOLEAN NOT NULL DEFAULT FALSE) and croa_disclosure_timestamp (TIMESTAMPTZ) to the users table; CROA requires written disclosure before services for compensation are provided, so this field must be TRUE before any paid mailing is accepted by the backend. For the System Architect checkout flow: add a pre-payment CROA disclosure step that is distinct from the FCRA consent (CROA applies specifically when users pay for the mailing service); the checkout endpoint must verify croa_disclosure_accepted = TRUE before calling process_payment(). For the Product Manager milestone: designate legal expert review covering both FCRA and CROA as a Phase 1 gate that must be completed before letter template development begins, not before launch.",
+      "rationale": "CROA violations carry civil liability including actual damages, punitive damages, costs, and attorney fees (15 U.S.C. § 1679g). The mailing service at $5-10/letter is unambiguously a credit repair service for compensation. Missing the CROA disclosure field means the platform has no auditable evidence of compliance if a regulatory inquiry occurs. This is a legal foundation requirement, not a feature.",
+      "priority": "High"
+    },
+    {
+      "id": "EP-009",
+      "title": "Specify PDF processing time target and failure recovery consistently",
+      "affected_roles": ["system-architect", "data-architect"],
+      "category": "Architecture",
+      "current_state": "System Architect states PDF processing target is under 30 seconds for files under 10MB, listing this as already achieved with current capability, and sets a Gunicorn worker timeout of 120 seconds. Data Architect states the end-to-end pipeline target is under 60 seconds for files under 10MB, broken down as OCR 15 seconds, Gemini 30 seconds, and classification plus INSERT under 5 seconds. These are different SLAs (30s vs 60s) for the same scenario. The System Architect's 120-second timeout suggests the actual processing time may exceed 30 seconds for some files. The failure recovery strategies also differ: SA mentions retry with exponential backoff only for the Lob API, while DA specifies 3 retry attempts with exponential backoff for the entire AI pipeline.",
+      "enhancement": "Agree on a single tiered SLA for PDF processing: files under 5MB processed end-to-end in under 45 seconds (a compromise between the 30s and 60s figures); files 5-10MB processed in under 90 seconds; files over 10MB dispatched as background jobs with a progress polling endpoint. Confirm whether the SA's under-30-seconds claim is from a measured benchmark or a projection, and document the test conditions (file size, page count, tradeline count). Set the Gunicorn worker timeout to 120 seconds for synchronous requests and 300 seconds for background job workers. Standardize the retry policy across the entire AI pipeline (not just the Lob API): 3 attempts with exponential backoff at 4s, 16s, 64s intervals, transitioning to processing_status equals 'failed' with user notification on final failure.",
+      "rationale": "A 2x discrepancy in processing time SLA affects frontend UX design (inline spinner with estimated completion vs async notification), polling interval configuration, and whether Gunicorn's 120-second timeout will kill in-flight PDF processing requests for borderline files. Resolving this prevents silent timeout failures in production that manifest as stuck jobs with processing_status remaining 'pending' indefinitely.",
+      "priority": "Medium"
+    },
+    {
+      "id": "EP-010",
+      "title": "Define email notification infrastructure and data model",
+      "affected_roles": ["product-manager", "system-architect", "data-architect"],
+      "category": "Process",
+      "current_state": "The Product Manager defines 5 critical email touchpoints that are integral to the conversion funnel and repeat purchase target: Day 1 and Day 3 onboarding emails for non-activating users; Day 25 FCRA deadline reminder (30-day FCRA window approaching); Item Deleted success celebration with prompt to dispute remaining items; Item Verified escalation prompt with 40% second-round success rate messaging; and delivery confirmation notifications. The Day 25 FCRA reminder requires a scheduled job, not an event-triggered call — there is no application event that fires 25 days after a dispute is created. The System Architect mentions send_success_notification() as a function call in one code snippet but provides no email service selection, template management, or infrastructure specification. The Data Architect's schema has no notification_log table.",
+      "enhancement": "Add email notification infrastructure to both SA and DA analyses. For the Data Architect schema: add a notification_log table with fields notification_id (UUID), user_id (UUID), notification_type as ENUM ('onboarding_day1', 'onboarding_day3', 'fcra_deadline_warning', 'item_deleted', 'item_verified', 'delivery_confirmed', 'upgrade_prompt'), sent_at (TIMESTAMPTZ), provider_message_id (TEXT for SendGrid or Postmark message ID enabling delivery tracking), opened_at (TIMESTAMPTZ nullable), clicked_at (TIMESTAMPTZ nullable). For the System Architect: specify email service provider as SendGrid or Postmark (both provide transactional email APIs with FastAPI-compatible Python SDKs and delivery webhooks); add a pg_cron or Celery beat scheduled job running daily to identify users with disputes created 25 days ago and send the FCRA deadline warning. Add a daily job to send Day 1 and Day 3 onboarding emails to users who signed up but have not uploaded a credit report. Event-driven emails (Item Deleted, Item Verified, delivery confirmed) are triggered from the existing status update endpoint.",
+      "rationale": "The Day 25 FCRA deadline email is specifically identified by the Product Manager as driving re-engagement and the 30% repeat purchase target. This email cannot be event-driven — it requires a scheduled task. Without a scheduled notification system, this high-value touchpoint does not exist and the repeat purchase rate target is unreachable. The PM's revenue model for Month 24 ($75,600 MRR from paid mailing) depends on the repeat purchase rate being achieved.",
+      "priority": "Medium"
+    }
+  ],
+
+  "clarifications": [
+    {
+      "id": "CQ-001",
+      "category": "Architecture",
+      "question": "TimescaleDB 部署位置：系统架构师建议将其作为独立实例（与 Supabase 分离，采用双写模式），数据架构师建议在现有 Supabase PostgreSQL 中启用扩展（单一数据库）。这两种方案在运营复杂度和扩展性上有重大差异，您希望选择哪种？",
+      "options": [
+        {
+          "label": "A — Supabase 内置扩展（单一数据库，推荐）",
+          "description": "在现有 Supabase PostgreSQL 实例中启用 TimescaleDB 扩展。优点：无需维护第二个数据库连接，RLS 策略统一，运营成本最低，数据始终一致（无同步问题）。前提条件：需确认当前 Supabase 计划支持 TimescaleDB（Pro 计划通常支持）。"
+        },
+        {
+          "label": "B — 独立 TimescaleDB 实例（双写模式）",
+          "description": "主业务数据保留在 Supabase，信用评分历史数据写入独立 TimescaleDB 实例。优点：两个系统可独立扩展，规避 Supabase 扩展限制风险。缺点：需要实现双写同步逻辑，维护第二个数据库连接，处理跨实例的一致性问题，增加 Phase 3 前的额外工程量。"
+        }
+      ]
+    },
+    {
+      "id": "CQ-002",
+      "category": "Architecture",
+      "question": "后台任务处理框架：PDF 处理和 AI 解析（耗时 30-60 秒）应采用哪种方案？系统架构师建议 FastAPI 内置 BackgroundTasks（进程内执行），数据架构师建议 Celery 独立工作进程。服务器崩溃时两者的恢复行为截然不同。",
+      "options": [
+        {
+          "label": "A — FastAPI BackgroundTasks（轻量级，当前基础代码已有支持）",
+          "description": "在 API 进程内运行后台任务。优点：无需额外基础设施，部署简单，与现有架构契合。缺点：服务器崩溃时正在处理的任务会永久丢失（无法恢复），无法跨多个 API 实例分布任务，随用户量增长扩展性受限。需要额外设计应对任务丢失的用户通知机制。"
+        },
+        {
+          "label": "B — Celery 工作进程（生产级持久化，推荐）",
+          "description": "部署独立 Celery 工作进程，以现有 Redis 为消息代理（无需新增基础设施）。优点：任务持久化，服务器崩溃后可自动重试（满足数据架构师定义的 3 次重试设计）；支持多实例水平扩展；任务监控和错误追踪能力更强。缺点：需额外配置 Celery worker 的部署脚本和进程管理，增加约 1 周工程量。"
+        }
+      ]
+    },
+    {
+      "id": "CQ-003",
+      "category": "User Intent",
+      "question": "用户回邮地址的收集时机：认证邮寄需要用户的回邮地址，但目前三个角色均未在用户旅程中明确此步骤。若地址为空，Lob.com API 调用将失败。您希望在哪个节点收集用户地址？",
+      "options": [
+        {
+          "label": "A — 注册时强制收集",
+          "description": "在账号注册流程中要求填写邮寄地址。优点：结账流程完全无摩擦，首次付费一键完成。缺点：在用户尚未决定是否付费前要求提供地址，可能增加注册放弃率，对仅使用免费功能的用户造成不必要的隐私顾虑。"
+        },
+        {
+          "label": "B — 首次付款时即时收集（推荐）",
+          "description": "用户点击「发送信件」进入付款流程时，若地址为空，将地址填写作为结账第一步，填写后永久保存供后续购买复用（后续购买真正实现一键完成）。优点：对免费用户零摩擦，地址收集有明确使用场景，用户理解为何需要提供。"
+        },
+        {
+          "label": "C — 账户设置中选择性填写，购买时提醒",
+          "description": "地址填写放在个人资料设置中作为可选项，首次尝试付款时若未填写则跳转至设置页面。优点：无强制，用户按需填写。缺点：购买流程被中断跳转，用户体验不流畅，可能影响转化率。"
+        }
+      ]
+    },
+    {
+      "id": "CQ-004",
+      "category": "Requirements",
+      "question": "高级订阅层（$15/月）的具体权益边界：产品经理定义了 Phase 3 的高级订阅层，但数据架构师的 subscription_tier 字段仅有 'free'/'paid' 两个值，无法区分按信付费用户和月度订阅用户。您希望如何定义高级订阅层的权益？",
+      "options": [
+        {
+          "label": "A — 高级层仅解锁 AI 功能，邮寄仍按信计费",
+          "description": "$15/月解锁：无限信件生成（超出免费限额）、信用评分预测引擎、AI 财务顾问聊天机器人。认证邮寄仍按每封 $5-10 计费（不含在订阅中）。优点：收入结构最清晰，保留邮寄增量收入；高级订阅和邮寄收入独立增长。缺点：感知价值相对较低，'$15/月但邮寄还要另付'可能影响转化率。"
+        },
+        {
+          "label": "B — 高级层包含每月固定邮寄额度",
+          "description": "$15/月包含：每月 2 封免费认证邮寄（市价 $20 价值，订阅即回本）+ AI 功能 + 无限信件生成。超出每月 2 封后仍按 $5-10 计费。优点：感知价值高（「订阅立刻省钱」），可能显著提升转化率；与「便利」定位更一致。缺点：需在数据模型中追踪月度邮寄额度使用情况，收入核算更复杂。"
+        },
+        {
+          "label": "C — 高级层 = 完全无限制（含无限邮寄）",
+          "description": "$15/月包含无限信件生成和无限认证邮寄。优点：价值主张最清晰，可能获得最高转化率。缺点：Lob 邮寄成本约 $1.65/封，若高级用户每月发送超过 9 封信，订阅将亏损；需要限制机制（如每月邮寄上限 10 封），实际上又回到方案 B 的模式。"
+        }
+      ]
+    },
+    {
+      "id": "CQ-005",
+      "category": "Risk",
+      "question": "CROA（信用修复机构法）合规时间节点：产品经理识别出 CROA 要求在提供收费信用修复服务前进行书面披露，但系统架构师和数据架构师均未在架构设计中纳入 CROA 合规控制。您希望何时落实 CROA 合规要求？",
+      "options": [
+        {
+          "label": "A — 信件模板开发前聘请法律专家审查（强烈推荐）",
+          "description": "在 MVP 开发启动前（第 1-2 周），聘请专注信用修复领域的律师审查服务流程、用户协议和披露声明设计。预算 $3,000-5,000（产品经理已在风险分析中提及此预算）。数据库同步增加 croa_disclosure_accepted 字段，结账流程中强制 CROA 披露确认。优点：最大程度降低法律风险，CROA 民事责任可能超过 $10,000/案。"
+        },
+        {
+          "label": "B — 使用 FCRA 通用披露过渡，Phase 2 完善 CROA 合规",
+          "description": "MVP 阶段使用通用 FCRA 权利声明（已在所有三个角色分析中覆盖），Phase 2 再引入 CROA 专项合规措施和法律审查。优点：加快 MVP 发布速度（节省约 2-3 周）。缺点：在 Phase 1 期间以收费形式提供信用修复服务存在 CROA 合规风险；若在此期间收到监管查询，FCRA 披露不能替代 CROA 要求的具体披露内容。"
+        }
+      ]
+    },
+    {
+      "id": "CQ-006",
+      "category": "Architecture",
+      "question": "信用局回函 OCR 的置信度阈值策略：数据架构师建议置信度低于 80% 时要求手动输入，系统架构师目标 OCR 准确率为 85%，产品经理未指定阈值。这些数字代表不同含义，您希望采用哪种阈值策略？",
+      "options": [
+        {
+          "label": "A — 单一阈值 80%（数据架构师方案）",
+          "description": "OCR 提取置信度 ≥80% 时，预填状态表单供用户点击确认；<80% 时要求完全手动选择。优点：实现简单，用户体验一致。缺点：80-85% 区间的提取结果存在一定错误率（约 15-20% 错误），若用户不仔细核验可能引入错误的 FCRA 审计记录，影响后续争议追踪准确性。"
+        },
+        {
+          "label": "B — 双层阈值（高信心自动建议 + 低信心手动）",
+          "description": "置信度 ≥90%：显示提取结果为强烈建议，用户可一键确认；60-90%：显示提取结果为参考建议，要求用户主动确认；<60%：不显示建议，要求完全手动输入。优点：高置信度场景最大化便利性，低置信度场景保护数据准确性，适配不同质量的信用局回函。缺点：前端需呈现两种不同的 UI 确认流程。"
+        },
+        {
+          "label": "C — Phase 2 始终要求用户确认（最保守，推荐用于初始发布）",
+          "description": "无论置信度如何，始终将 OCR 结果作为参考建议，要求用户明确点击确认后才更新状态。Phase 3 根据真实 OCR 准确率数据再决定是否引入自动更新机制。优点：数据准确性最高，满足 FCRA 审计记录的准确性要求。缺点：OCR 功能的便利性价值降低，但 Phase 2 的首要目标是验证 OCR 准确率，而非最大化自动化。"
+        }
+      ]
+    },
+    {
+      "id": "CQ-007",
+      "category": "Decisions",
+      "question": "信件模板自定义程度：产品经理提到「可自定义争议原因」，但三个角色均未明确用户可以修改信件的具体范围。这影响 FCRA/CROA 合规风险、工程复杂度和用户体验设计。",
+      "options": [
+        {
+          "label": "A — 仅选择预设争议原因（最低风险，推荐用于 MVP）",
+          "description": "用户从预设列表中选择争议类型（如：信息不准确、账户非本人所有、金额有误、已超过报告期限）；AI 根据选择和账户信息自动生成完整 FCRA 合规信件。用户无法编辑信件正文。优点：所有生成信件满足 FCRA/CROA 合规要求，法律风险最低，工程实现最简单。缺点：无法满足有特殊证据或具体陈述的用户需求。"
+        },
+        {
+          "label": "B — 可编辑争议原因说明段落（中等自定义）",
+          "description": "用户可以编辑信件中专门用于争议原因说明的段落（约 200-500 字符限制），信件的 FCRA 必要条款、抬头格式、结尾声明由系统固定不可修改。优点：满足有个人情况说明需求的用户；固定条款保障合规性。缺点：需要简单的内容审核（过滤虚假陈述的警告提示）；工程量增加约 1 周。"
+        },
+        {
+          "label": "C — 全文可编辑，AI 生成作为起点（最高自定义）",
+          "description": "用户可以在 AI 生成信件基础上自由编辑全文，系统显示合规警告提示（如：「请勿删除 FCRA 权利声明段落」）。优点：满足有信用修复经验用户的高级需求，差异化于纯模板工具。缺点：若用户修改引入虚假陈述或删除 FCRA 必要披露，平台面临连带法律风险；需要明确的责任免除条款；CROA 合规审查范围扩大。"
+        }
+      ]
+    }
+  ]
+}

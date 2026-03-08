@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/pagination";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { Helmet } from "react-helmet-async";
 import { Loader2, FileText, Eye, Download, History } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -175,10 +174,6 @@ export default function DisputeHistoryPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="has-navbar">
-      <Helmet>
-        <title>Dispute History - Credit Clarity</title>
-        <meta name="robots" content="noindex" />
-      </Helmet>
 
       {viewing && <LetterModal dispute={viewing} onClose={() => setViewing(null)} />}
 

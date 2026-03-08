@@ -13,9 +13,8 @@ import {
   PaginationPrevious,
 } from '@/components/ui/pagination';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowUpDown, ChevronUp, ChevronDown, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { usePaginatedTradelines } from '@/hooks/usePaginatedTradelines';
-import { PaginationOptions } from '@/utils/tradelineParser';
 
 interface PaginatedTradelinesListProps {
   userId: string;
@@ -25,10 +24,20 @@ interface PaginatedTradelinesListProps {
   selectedIds?: Set<string>;
 }
 
+const BUREAUS = ['equifax', 'experian', 'transunion'] as const;
+const BUREAU_LABELS: Record<string, string> = {
+  equifax: 'Equifax',
+  experian: 'Experian',
+  transunion: 'TransUnion',
+};
+const BUREAU_COLORS: Record<string, string> = {
+  equifax: 'bg-red-600 text-white border-red-600',
+  experian: 'bg-blue-700 text-white border-blue-700',
+  transunion: 'bg-green-700 text-white border-green-700',
+};
+
 const PaginatedTradelinesList: React.FC<PaginatedTradelinesListProps> = ({
   userId,
-  onSelect,
-  onUpdate,
   onDelete,
   selectedIds = new Set()
 }) => {
@@ -40,34 +49,26 @@ const PaginatedTradelinesList: React.FC<PaginatedTradelinesListProps> = ({
     loadPage,
     refresh,
     setPageSize,
-    setSorting,
     goToNextPage,
     goToPreviousPage,
-    goToFirstPage,
-    goToLastPage,
   } = usePaginatedTradelines({
     userId,
     initialOptions: { pageSize: 10 },
     autoLoad: true
   });
 
-  const [currentSort, setCurrentSort] = React.useState<{
-    field: PaginationOptions['sortBy'];
-    direction: PaginationOptions['sortOrder'];
-  }>({
-    field: 'created_at',
-    direction: 'desc'
-  });
+  const [activeBureau, setActiveBureau] = React.useState<string | null>(null);
 
-  const handleSort = (field: PaginationOptions['sortBy']) => {
-    const newDirection = 
-      currentSort.field === field && currentSort.direction === 'desc' 
-        ? 'asc' 
-        : 'desc';
-    
-    setCurrentSort({ field, direction: newDirection });
-    setSorting(field, newDirection);
-  };
+  const visibleTradelines = activeBureau
+    ? tradelines.filter(t => t.credit_bureau?.toLowerCase() === activeBureau)
+    : tradelines;
+
+  const bureauCounts = React.useMemo(() => {
+    return BUREAUS.reduce<Record<string, number>>((acc, b) => {
+      acc[b] = tradelines.filter(t => t.credit_bureau?.toLowerCase() === b).length;
+      return acc;
+    }, {} as Record<string, number>);
+  }, [tradelines]);
 
   const generatePageNumbers = () => {
     const pages = [];
@@ -103,15 +104,6 @@ const PaginatedTradelinesList: React.FC<PaginatedTradelinesListProps> = ({
     return pages;
   };
 
-  const SortIcon = ({ field }: { field: PaginationOptions['sortBy'] }) => {
-    if (currentSort.field !== field) {
-      return <ArrowUpDown className="h-4 w-4" />;
-    }
-    return currentSort.direction === 'asc' 
-      ? <ChevronUp className="h-4 w-4" />
-      : <ChevronDown className="h-4 w-4" />;
-  };
-
   if (error) {
     return (
       <Card>
@@ -129,16 +121,17 @@ const PaginatedTradelinesList: React.FC<PaginatedTradelinesListProps> = ({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>
-          Tradelines 
-          {!loading && (
-            <span className="text-sm text-muted-foreground ml-2">
-              ({pagination.totalCount} total)
-            </span>
-          )}
-        </CardTitle>
-        <div className="flex items-center gap-2">
+      <CardHeader className="flex flex-col gap-3">
+        <div className="flex flex-row items-center justify-between">
+          <CardTitle>
+            Tradelines
+            {!loading && (
+              <span className="text-sm text-muted-foreground ml-2">
+                ({pagination.totalCount} total)
+              </span>
+            )}
+          </CardTitle>
+          <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Rows per page:</span>
           <Select 
             value={pagination.pageSize.toString()} 
@@ -158,124 +151,159 @@ const PaginatedTradelinesList: React.FC<PaginatedTradelinesListProps> = ({
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Refresh'}
           </Button>
         </div>
+        </div>
+
+        {/* Bureau filter tabs */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setActiveBureau(null)}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+              activeBureau === null
+                ? 'bg-foreground text-background border-foreground'
+                : 'border-border hover:bg-muted'
+            }`}
+          >
+            All ({pagination.totalCount})
+          </button>
+          {BUREAUS.map(b => (
+            <button
+              key={b}
+              onClick={() => setActiveBureau(activeBureau === b ? null : b)}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                activeBureau === b
+                  ? BUREAU_COLORS[b]
+                  : 'border-border hover:bg-muted'
+              }`}
+            >
+              {BUREAU_LABELS[b]} ({bureauCounts[b]})
+            </button>
+          ))}
+        </div>
       </CardHeader>
 
       <CardContent>
         {loading && tradelines.length === 0 ? (
-          <div className="space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-16 w-full" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="space-y-3">
+                <Skeleton className="h-9 w-full rounded-lg" />
+                {Array.from({ length: 3 }).map((_, j) => (
+                  <Skeleton key={j} className="h-24 w-full" />
+                ))}
+              </div>
             ))}
           </div>
         ) : (
           <>
-            {/* Table Header */}
-            <div className="grid grid-cols-12 gap-4 p-3 bg-muted rounded-lg mb-4 text-sm font-medium">
-              <div className="col-span-1">
-                <input
-                  type="checkbox"
-                  className="rounded"
-                  // Add select all functionality here if needed
-                />
-              </div>
-              <div className="col-span-3">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-auto p-0 font-medium"
-                  onClick={() => handleSort('creditor_name')}
-                >
-                  Creditor
-                  <SortIcon field="creditor_name" />
-                </Button>
-              </div>
-              <div className="col-span-2">Account Number</div>
-              <div className="col-span-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-auto p-0 font-medium"
-                  onClick={() => handleSort('account_balance')}
-                >
-                  Balance
-                  <SortIcon field="account_balance" />
-                </Button>
-              </div>
-              <div className="col-span-2">Status</div>
-              <div className="col-span-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-auto p-0 font-medium"
-                  onClick={() => handleSort('created_at')}
-                >
-                  Date
-                  <SortIcon field="created_at" />
-                </Button>
-              </div>
-              <div className="col-span-1">Actions</div>
-            </div>
+            {/* 3-column bureau layout */}
+            {(() => {
+              const grouped = BUREAUS.reduce<Record<string, typeof tradelines>>((acc, b) => {
+                acc[b] = visibleTradelines.filter(t => (t.credit_bureau || '').toLowerCase() === b);
+                return acc;
+              }, {} as Record<string, typeof tradelines>);
 
-            {/* Table Body */}
-            <div className="space-y-2">
-              {tradelines.map((tradeline) => (
-                <div
-                  key={tradeline.id}
-                  className={`grid grid-cols-12 gap-4 p-3 border rounded-lg transition-colors ${
-                    selectedIds.has(tradeline.id) ? 'bg-blue-50 border-blue-200' : 'hover:bg-muted/50'
-                  }`}
-                >
-                  <div className="col-span-1 flex items-center">
-                    <input
-                      type="checkbox"
-                      className="rounded"
-                      checked={selectedIds.has(tradeline.id)}
-                      onChange={() => onSelect?.(tradeline.id)}
-                    />
+              const unassigned = visibleTradelines.filter(
+                t => !BUREAUS.some(b => b === (t.credit_bureau || '').toLowerCase())
+              );
+
+              const BUREAU_COL_STYLES: Record<string, { header: string; border: string }> = {
+                equifax:    { header: 'bg-red-600',   border: 'border-red-200 dark:border-red-800' },
+                experian:   { header: 'bg-blue-700',  border: 'border-blue-200 dark:border-blue-800' },
+                transunion: { header: 'bg-green-700', border: 'border-green-200 dark:border-green-800' },
+              };
+
+              return (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {BUREAUS.map(bureau => (
+                      <div key={bureau} className={`rounded-lg border ${BUREAU_COL_STYLES[bureau].border} overflow-hidden`}>
+                        <div className={`${BUREAU_COL_STYLES[bureau].header} px-4 py-2 flex items-center justify-between`}>
+                          <span className="font-semibold text-white text-sm">{BUREAU_LABELS[bureau]}</span>
+                          <Badge variant="secondary" className="text-xs bg-white/20 text-white border-0">
+                            {grouped[bureau].length}
+                          </Badge>
+                        </div>
+                        <div className="p-3 space-y-2 min-h-[80px]">
+                          {grouped[bureau].length === 0 ? (
+                            <p className="text-muted-foreground text-xs text-center py-4">
+                              No tradelines for this bureau
+                            </p>
+                          ) : (
+                            grouped[bureau].map(tradeline => (
+                              <div
+                                key={tradeline.id}
+                                className={`p-3 border rounded-lg text-sm transition-colors ${
+                                  selectedIds.has(tradeline.id) ? 'bg-blue-50 border-blue-200' : 'bg-card hover:bg-muted/50'
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <p className="font-medium truncate">{tradeline.creditor_name}</p>
+                                    <p className="text-xs text-muted-foreground font-mono">{tradeline.account_number}</p>
+                                    <p className="text-xs text-muted-foreground">{tradeline.account_type}</p>
+                                  </div>
+                                  <button
+                                    onClick={() => onDelete?.(tradeline.id)}
+                                    className="text-red-500 hover:text-red-700 text-lg leading-none flex-shrink-0"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                                <div className="mt-2 flex items-center justify-between">
+                                  <span className="font-medium">{tradeline.account_balance}</span>
+                                  <Badge variant={tradeline.is_negative ? 'destructive' : 'secondary'} className="text-xs">
+                                    {tradeline.account_status}
+                                  </Badge>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="col-span-3 flex items-center">
-                    <div>
-                      <p className="font-medium">{tradeline.creditor_name}</p>
-                      <p className="text-sm text-muted-foreground">{tradeline.account_type}</p>
+
+                  {unassigned.length > 0 && (
+                    <div className="rounded-lg border border-dashed border-muted-foreground/30 overflow-hidden">
+                      <div className="bg-muted px-4 py-2 flex items-center justify-between">
+                        <span className="font-semibold text-sm text-muted-foreground">Unassigned Bureau</span>
+                        <Badge variant="outline" className="text-xs">{unassigned.length}</Badge>
+                      </div>
+                      <div className="p-3 grid grid-cols-1 md:grid-cols-3 gap-2">
+                        {unassigned.map(tradeline => (
+                          <div key={tradeline.id} className="p-3 border rounded-lg text-sm bg-card hover:bg-muted/50">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="font-medium truncate">{tradeline.creditor_name}</p>
+                                <p className="text-xs text-muted-foreground font-mono">{tradeline.account_number}</p>
+                              </div>
+                              <button
+                                onClick={() => onDelete?.(tradeline.id)}
+                                className="text-red-500 hover:text-red-700 text-lg leading-none flex-shrink-0"
+                              >
+                                ×
+                              </button>
+                            </div>
+                            <div className="mt-2 flex items-center justify-between">
+                              <span className="font-medium">{tradeline.account_balance}</span>
+                              <Badge variant={tradeline.is_negative ? 'destructive' : 'secondary'} className="text-xs">
+                                {tradeline.account_status}
+                              </Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                  <div className="col-span-2 flex items-center">
-                    <span className="font-mono text-sm">
-                      {tradeline.account_number}
-                    </span>
-                  </div>
-                  <div className="col-span-2 flex items-center">
-                    <span className="font-medium">{tradeline.account_balance}</span>
-                  </div>
-                  <div className="col-span-2 flex items-center">
-                    <Badge variant={tradeline.is_negative ? "destructive" : "secondary"}>
-                      {tradeline.account_status}
-                    </Badge>
-                  </div>
-                  <div className="col-span-1 flex items-center">
-                    <span className="text-sm text-muted-foreground">
-                      {new Date(tradeline.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <div className="col-span-1 flex items-center">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onDelete?.(tradeline.id)}
-                      className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
-                    >
-                      ×
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                  )}
 
-            {tradelines.length === 0 && !loading && (
-              <div className="text-center py-8 text-muted-foreground">
-                No tradelines found.
-              </div>
-            )}
+                  {visibleTradelines.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      {activeBureau ? `No tradelines for ${BUREAU_LABELS[activeBureau]} on this page.` : 'No tradelines found.'}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Pagination */}
             {pagination.totalPages > 1 && (

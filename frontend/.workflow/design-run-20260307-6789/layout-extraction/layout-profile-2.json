@@ -1,0 +1,31 @@
+{
+  "target": "profile",
+  "variant": 2,
+  "variant_name": "Tab Cards",
+  "description": "Horizontal tab bar at top (Personal, Security, Billing, Notifications). Each tab shows a card-based form. Clean, modern.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-profile-v2",
+      "children": [
+        { "tag": "aside", "class": "sidebar" },
+        {
+          "tag": "main",
+          "class": "profile-main",
+          "children": [
+            { "tag": "div", "class": "profile-header" },
+            { "tag": "div", "class": "profile-tabs" },
+            { "tag": "div", "class": "tab-content" }
+          ]
+        }
+      ]
+    },
+    "css_layout_rules": {
+      ".layout-profile-v2": "display: grid; grid-template-columns: 260px 1fr; min-height: 100vh;",
+      ".profile-main": "padding: 2rem; overflow-y: auto;",
+      ".profile-header": "display: flex; align-items: center; gap: 1.5rem; margin-bottom: 2rem;",
+      ".profile-tabs": "display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border); margin-bottom: 2rem;",
+      ".tab-content": "display: flex; flex-direction: column; gap: 1.5rem; max-width: 640px;"
+    }
+  }
+}

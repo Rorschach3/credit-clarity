@@ -26,35 +26,21 @@ import { DuplicateDisputeModal } from '@/components/dispute-wizard/DuplicateDisp
 // Import types only (no code execution)
 import { type ParsedTradeline } from '@/utils/tradelineParser';
 import type { GeneratedDisputeLetter, PacketProgress } from '@/utils/disputeUtils';
-import type { DocumentBlob } from '@/utils/documentPacketUtils';
 
 // Lazy load PDF utilities only when needed (dynamic import)
 const loadPDFUtils = async () => {
-  const [disputeUtils, documentUtils] = await Promise.all([
+  const [disputeUtils] = await Promise.all([
     import('@/utils/disputeUtils'),
-    import('@/utils/documentPacketUtils')
   ]);
 
   return {
     generateDisputeLetters: disputeUtils.generateDisputeLetters,
     generatePDFPacket: disputeUtils.generatePDFPacket,
-    generateCompletePacket: disputeUtils.generateCompletePacket,
     saveLettersToDisputesTable: disputeUtils.saveLettersToDisputesTable,
     checkDuplicateDispute: disputeUtils.checkDuplicateDispute,
-    fetchUserDocuments: documentUtils.fetchUserDocuments,
-    downloadDocumentBlobs: documentUtils.downloadDocumentBlobs,
-    hasRequiredDocuments: documentUtils.hasRequiredDocuments,
-    getMissingDocuments: documentUtils.getMissingDocuments,
   };
 };
 
-interface UploadedDocument {
-  id: string;
-  name: string;
-  type: string;
-  file: File;
-  preview?: string;
-}
 
 const DisputeWizardPage = () => {
   const { user } = useAuth();
@@ -93,7 +79,6 @@ const DisputeWizardPage = () => {
   const [negativeTradelines, setNegativeTradelines] = useState<ParsedTradeline[]>([]);
   const [selectedTradelines, setSelectedTradelines] = useState<string[]>([]);
   const [generatedLetters, setGeneratedLetters] = useState<GeneratedDisputeLetter[]>([]);
-  const [uploadedDocuments, setUploadedDocuments] = useState<UploadedDocument[]>([]);
   const [generatedPDF, setGeneratedPDF] = useState<Blob | null>(null);
   const [pdfFilename, setPdfFilename] = useState<string>('');
   const [editingLetter, setEditingLetter] = useState<string | null>(null);
@@ -145,7 +130,7 @@ const DisputeWizardPage = () => {
   }, [location.state]);
 
   // Computed values
-  const isReadyToGenerate = disputeProfile && isProfileComplete && selectedTradelines.length > 0 && !isLoading && !profileLoading;
+  const isReadyToGenerate = !!(disputeProfile && isProfileComplete && selectedTradelines.length > 0 && !isLoading && !profileLoading);
 
   // Event handlers
   const handleToggleTradelineSelection = useCallback((tradelineId: string) => {
@@ -294,9 +279,6 @@ const DisputeWizardPage = () => {
     }
   };
 
-  const handleDocumentUpload = (documents: UploadedDocument[]) => {
-    setUploadedDocuments(documents);
-  };
 
   const handleDownloadPDF = () => {
     if (!generatedPDF) return;
@@ -341,137 +323,6 @@ const DisputeWizardPage = () => {
   const handleCancelEdit = () => {
     setEditingLetter(null);
     setEditedContent('');
-  };
-
-  const handlePrepareDisputePacket = async () => {
-    if (!user?.id || !generatedLetters.length) {
-      toast.error("No dispute letters ready");
-      return;
-    }
-
-    try {
-      setIsGenerating(true);
-      setGenerationProgress({
-        step: 'Fetching documents...',
-        progress: 0,
-        message: 'Checking for uploaded documents'
-      });
-
-      // Dynamically load PDF utilities (lazy loading)
-      const pdfUtils = await loadPDFUtils();
-
-      // Fetch user documents
-      const userDocuments = await pdfUtils.fetchUserDocuments(user.id);
-
-      setGenerationProgress({
-        step: 'Validating documents...',
-        progress: 10,
-        message: 'Checking required documents'
-      });
-
-      // Check if we have documents to include
-      let documentBlobs: DocumentBlob[] = [];
-
-      if (userDocuments.length > 0) {
-        // Check for missing documents
-        const missingDocs = pdfUtils.getMissingDocuments(userDocuments);
-        if (missingDocs.length > 0) {
-          toast.info(`Missing documents: ${missingDocs.join(', ')}`, {
-            description: "Proceeding with available documents"
-          });
-        }
-
-        // Download document blobs
-        documentBlobs = await pdfUtils.downloadDocumentBlobs(userDocuments, setGenerationProgress);
-
-        if (documentBlobs.length === 0) {
-          toast.warning("No documents could be downloaded", {
-            description: "Creating packet with dispute letters only"
-          });
-        }
-      } else {
-        toast.info("No documents uploaded", {
-          description: "Creating packet with dispute letters only"
-        });
-      }
-
-      // Generate complete packet
-      const completePacket = await pdfUtils.generateCompletePacket(
-        generatedLetters,
-        documentBlobs,
-        setGenerationProgress
-      );
-
-      // Update the generated PDF state
-      setGeneratedPDF(completePacket);
-      
-      const fileName = `complete-dispute-packet-${Date.now()}.pdf`;
-      setPdfFilename(fileName);
-
-      setGenerationProgress({ 
-        step: 'Uploading packet...', 
-        progress: 80, 
-        message: 'Uploading to secure storage' 
-      });
-
-      // Upload complete packet to storage
-      const filePath = `${user.id}/${fileName}`;
-      const { error: uploadError } = await supabase.storage
-        .from('dispute_packets')
-        .upload(filePath, completePacket, {
-          contentType: 'application/pdf',
-          upsert: false
-        });
-
-      if (uploadError) throw uploadError;
-
-      setGenerationProgress({ 
-        step: 'Saving to database...', 
-        progress: 90, 
-        message: 'Saving packet information' 
-      });
-
-      // Save to database with updated info
-      await saveDisputePacketRecord(user.id, generatedLetters, fileName);
-
-      // Update the dispute packet record with the storage URL
-      const { error: updateError } = await supabase
-        .from('dispute_packets')
-        .update({
-          dispute_letter_url: filePath,
-          packet_status: 'ready',
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', user.id)
-        .eq('filename', fileName);
-
-      if (updateError) throw updateError;
-
-      setGenerationProgress({ 
-        step: 'Complete!', 
-        progress: 100, 
-        message: 'Complete dispute packet ready for download' 
-      });
-
-      // Refresh workflow state to mark as completed
-      refreshWorkflowState();
-
-      const documentsIncluded = documentBlobs.length;
-      toast.success("Complete dispute packet prepared successfully!", {
-        description: `Includes ${generatedLetters.length} letter(s) and ${documentsIncluded} document(s)`
-      });
-
-      // Close the packet generation section
-      setShowPacketGeneration(false);
-
-    } catch (error) {
-      console.error('Error preparing dispute packet:', error);
-      toast.error("Failed to prepare dispute packet", {
-        description: "Please try again or contact support"
-      });
-    } finally {
-      setIsGenerating(false);
-    }
   };
 
   // Loading state
@@ -558,17 +409,14 @@ const DisputeWizardPage = () => {
 
           {/* Document Upload Section */}
           {showDocsSection && (
-            <DocumentUploadSection 
-              onDocumentsUploaded={handleDocumentUpload}
-              documents={uploadedDocuments}
+            <DocumentUploadSection
+              onClose={() => setShowDocsSection(false)}
             />
           )}
 
           {/* Mailing Instructions */}
           {showDocsSection && (
-            <MailingInstructions 
-              creditBureaus={generatedLetters.map(l => l.creditBureau)}
-            />
+            <MailingInstructions />
           )}
         </CardContent>
       </Card>

@@ -1,0 +1,46 @@
+{
+  "id": "IMPL-002",
+  "title": "Backend Configuration & Dependencies",
+  "status": "pending",
+  "context_package_path": ".workflow/active/WFS-implement-credit-clarity-platform/.process/context-package.json",
+  "meta": {
+    "priority": "critical",
+    "effort_estimate": "1 day",
+    "phase": "Phase 1 - Infrastructure Foundation",
+    "type": "configuration",
+    "depends_on": [],
+    "tags": ["config", "dependencies", "environment", "stripe", "celery", "lob"]
+  },
+  "context": {
+    "description": "Add all new backend dependencies and environment configuration for Stripe, Celery, Lob, and email services. Foundation for all service implementations.",
+    "focus_paths": [
+      "backend/requirements.txt",
+      "backend/core/config.py",
+      "backend/.env.example"
+    ],
+    "acceptance_criteria": [
+      "backend/requirements.txt includes: stripe>=7.0.0, celery[redis]>=5.3.0, lob-python>=6.0.0, sendgrid>=6.9.0",
+      "backend/core/config.py DevelopmentSettings adds: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID_PER_LETTER, LOB_API_KEY, CELERY_BROKER_URL (default redis://localhost:6379/1), CELERY_RESULT_BACKEND (default redis://localhost:6379/2), SENDGRID_API_KEY, FROM_EMAIL",
+      "backend/.env.example updated with all new variables (values as placeholder strings)",
+      "All new config fields have sensible defaults or clear error if missing",
+      "Verify with: python -c 'from core.config import settings; print(settings.STRIPE_SECRET_KEY)'"
+    ],
+    "implementation_approach": [
+      "Step 1: Read backend/core/config.py to understand existing DevelopmentSettings pattern",
+      "Step 2: Add new dependencies to requirements.txt following existing version pin style",
+      "Step 3: Add new settings fields to DevelopmentSettings class with Optional typing where appropriate",
+      "Step 4: Create or update .env.example with all new variables",
+      "Step 5: Verify no circular imports by checking import order in config.py"
+    ],
+    "pre_analysis": [
+      "Read backend/core/config.py for existing settings class structure and env var patterns",
+      "Read backend/requirements.txt for existing dependency format"
+    ]
+  },
+  "flow_control": {
+    "execution_mode": "sequential",
+    "parallel_with": ["IMPL-001"],
+    "requires": [],
+    "blocks": ["IMPL-003", "IMPL-005", "IMPL-007", "IMPL-008", "IMPL-009"]
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "target": "tradelines",
+  "variant": 2,
+  "variant_name": "Table + Detail Drawer",
+  "description": "Full-width paginated data table with sortable columns. Click a row to open a slide-in detail drawer for editing.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-tradelines-v2",
+      "children": [
+        { "tag": "aside", "class": "sidebar" },
+        {
+          "tag": "main",
+          "class": "table-main",
+          "children": [
+            { "tag": "div", "class": "table-header" },
+            { "tag": "div", "class": "table-filters" },
+            { "tag": "div", "class": "data-table-wrapper" },
+            { "tag": "div", "class": "table-pagination" }
+          ]
+        },
+        { "tag": "aside", "class": "detail-drawer" }
+      ]
+    },
+    "css_layout_rules": {
+      ".layout-tradelines-v2": "display: grid; grid-template-columns: 260px 1fr 0px; min-height: 100vh; transition: grid-template-columns 300ms ease;",
+      ".layout-tradelines-v2.drawer-open": "grid-template-columns: 260px 1fr 420px;",
+      ".table-main": "padding: 2rem; overflow-y: auto; min-width: 0;",
+      ".table-header": "display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;",
+      ".table-filters": "display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap;",
+      ".data-table-wrapper": "overflow-x: auto; border-radius: 0.75rem; border: 1px solid var(--border);",
+      ".detail-drawer": "border-left: 1px solid var(--border); overflow-y: auto; overflow: hidden; transition: all 300ms ease;"
+    }
+  }
+}

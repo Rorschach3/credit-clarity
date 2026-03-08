@@ -1,0 +1,56 @@
+{
+  "id": "IMPL-005",
+  "title": "Stripe Backend Integration",
+  "status": "pending",
+  "context_package_path": ".workflow/active/WFS-implement-credit-clarity-platform/.process/context-package.json",
+  "meta": {
+    "priority": "critical",
+    "effort_estimate": "4-5 days",
+    "phase": "Phase 1 - Monetization",
+    "type": "backend",
+    "depends_on": ["IMPL-001", "IMPL-002"],
+    "tags": ["stripe", "payments", "webhooks", "subscriptions", "backend"]
+  },
+  "context": {
+    "description": "Implement complete Stripe backend integration: stripe_service.py for checkout session creation, payments route for per-letter purchase and webhook handling, subscriptions route for premium tier management. Idempotent webhook processing using stripe_webhook_events table.",
+    "focus_paths": [
+      "backend/api/v1/router.py",
+      "backend/api/v1/routes/",
+      "backend/services/database_optimizer.py",
+      "backend/core/security.py",
+      "docs/PRD-Technical-Architecture.md",
+      "docs/PRD-Feature-Specifications.md"
+    ],
+    "acceptance_criteria": [
+      "backend/services/stripe_service.py implements: create_checkout_session(user_id, price_id, metadata) -> session_url, create_subscription_checkout(user_id) -> session_url, construct_webhook_event(payload, sig_header) -> stripe.Event",
+      "backend/api/v1/routes/payments.py implements: POST /checkout (authenticated, creates Stripe checkout session for per-letter purchase), POST /webhook (raw body, validates Stripe signature, idempotent event processing via stripe_webhook_events table), GET /history (authenticated, returns user's payment history)",
+      "backend/api/v1/routes/subscriptions.py implements: POST /subscribe (creates Stripe subscription checkout), GET /status (returns current subscription_tier from profiles), POST /cancel (cancels Stripe subscription, downgrades to free)",
+      "Webhook events processed idempotently: INSERT INTO stripe_webhook_events ... ON CONFLICT (stripe_event_id) DO NOTHING",
+      "payment.succeeded webhook: INSERT INTO payments + UPDATE profiles SET subscription_tier='premium' (if subscription event)",
+      "Webhook endpoint returns HTTP 200 to Stripe within 2s (async processing)",
+      "Bundle pricing support: stripe_service.py includes STRIPE_PRICE_ID_BUNDLE config; POST /payments/bundle-checkout creates 3-letter bundle checkout session ($24 total); bundle purchase records as 3 separate payment credits in payments table",
+      "Verify with: stripe listen --forward-to localhost:8000/api/v1/payments/webhook (Stripe CLI)"
+    ],
+    "implementation_approach": [
+      "Step 1: Read backend/api/v1/router.py to understand how to register new routers",
+      "Step 2: Read backend/services/database_optimizer.py for upsert pattern to reuse for payments",
+      "Step 3: Create backend/services/stripe_service.py with Stripe client initialization from settings.STRIPE_SECRET_KEY",
+      "Step 4: Create backend/api/v1/routes/payments.py with /checkout and /webhook endpoints",
+      "Step 5: Create backend/api/v1/routes/subscriptions.py with /subscribe, /status, /cancel",
+      "Step 6: Register both routers in backend/api/v1/router.py",
+      "Step 7: For /webhook, use Request body directly (not Pydantic) to preserve raw bytes for signature validation",
+      "CRITICAL: /webhook must NOT use verify_supabase_jwt dependency - Stripe calls it unauthenticated"
+    ],
+    "pre_analysis": [
+      "Read backend/api/v1/router.py - router registration pattern",
+      "Read backend/api/v1/routes/tradelines.py - authenticated route pattern with Depends(verify_supabase_jwt)",
+      "Read backend/services/database_optimizer.py - upsert pattern"
+    ]
+  },
+  "flow_control": {
+    "execution_mode": "sequential",
+    "parallel_with": ["IMPL-003", "IMPL-004"],
+    "requires": ["IMPL-001", "IMPL-002"],
+    "blocks": ["IMPL-006", "IMPL-007"]
+  }
+}

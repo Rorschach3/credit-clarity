@@ -37,30 +37,15 @@ const validateFile = (file: File): void => {
     console.error('❌ NOT A FILE INSTANCE:', typeof file, file);
     throw new Error(`Expected File instance, got ${typeof file}`);
   }
-  
-  console.log('✅ File validation passed:', {
-    name: file.name,
-    type: file.type, 
-    size: file.size,
-    isFile: file instanceof File,
-    constructor: file.constructor.name
-  });
 };
 
 // Shared FormData creation utility
 const createFormData = (file: File, userId?: string): FormData => {
   const formData = new FormData();
-  formData.append('file', file); // Raw File object, no JSON, no toString()
+  formData.append('file', file);
   if (userId) {
     formData.append('user_id', userId);
   }
-  
-  // Debug FormData contents
-  console.log('📦 FormData entries:');
-  for (const [key, value] of formData.entries()) {
-    console.log(`  ${key}:`, value instanceof File ? `File(${value.name})` : value);
-  }
-  
   return formData;
 };
 
@@ -148,14 +133,6 @@ export const processWithAI = async (
   onProgress?: (message: string) => void,
   retryCount: number = 0
 ): Promise<ProcessingResult> => {
-  console.log('🔧 TEMPORARY DEBUG: processWithAI called with:', {
-    fileName: file.name,
-    fileSize: file.size,
-    fileType: file.type,
-    userId: userId,
-    retryCount: retryCount
-  });
-
   // BULLETPROOF FILE VALIDATION
   validateFile(file);
 
@@ -189,17 +166,6 @@ export const processWithAI = async (
     
     const startTime = Date.now();
     
-    console.log('🚀 Making fetch request...');
-    console.log('🔧 TEMPORARY DEBUG: About to send request to:', `${API_BASE_URL}/api/process-credit-report`);
-    console.log('🔧 TEMPORARY DEBUG: FormData contents:');
-    for (const [key, value] of formData.entries()) {
-      if (value instanceof File) {
-        console.log(`  ${key}: File(${value.name}, ${value.size} bytes, ${value.type})`);
-      } else {
-        console.log(`  ${key}: ${value}`);
-      }
-    }
-
     const headers = await buildAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/api/process-credit-report`, {
       method: 'POST',
@@ -245,17 +211,7 @@ export const processWithAI = async (
       }
     }
     
-    console.log('📥 Parsing response...');
     const result = await response.json();
-    console.log('✅ Processing Complete!', result);
-    console.log('🔧 TEMPORARY DEBUG: Backend response details:', {
-      success: result.success,
-      tradelines_found: result.tradelines_found,
-      tradelines_saved: result.tradelines_saved,
-      processing_method: result.processing_method,
-      has_tradelines: !!(result.tradelines && result.tradelines.length > 0),
-      tradelines_count: result.tradelines ? result.tradelines.length : 0
-    });
     
     // Check if this is a background job response
     if (result.success && result.job_id) {

@@ -1,0 +1,39 @@
+{
+  "target": "dispute-wizard",
+  "variant": 1,
+  "variant_name": "Guided Step Flow",
+  "description": "Full-page wizard with top step indicator, centered content per step, back/next controls. Clear progress through the dispute letter generation process.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-wizard-v1",
+      "children": [
+        { "tag": "nav", "class": "navbar-minimal" },
+        {
+          "tag": "main",
+          "class": "wizard-container",
+          "children": [
+            { "tag": "div", "class": "wizard-steps" },
+            {
+              "tag": "div",
+              "class": "wizard-content",
+              "children": [
+                { "tag": "div", "class": "step-header" },
+                { "tag": "div", "class": "step-body" },
+                { "tag": "div", "class": "step-nav" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "css_layout_rules": {
+      ".layout-wizard-v1": "min-height: 100vh; display: flex; flex-direction: column;",
+      ".wizard-container": "max-width: 720px; margin: 0 auto; padding: 2rem; width: 100%; flex: 1; display: flex; flex-direction: column;",
+      ".wizard-steps": "display: flex; align-items: center; justify-content: center; gap: 0; margin-bottom: 3rem;",
+      ".wizard-content": "flex: 1; display: flex; flex-direction: column;",
+      ".step-body": "flex: 1; padding: 2rem 0;",
+      ".step-nav": "display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 0; border-top: 1px solid var(--border);"
+    }
+  }
+}

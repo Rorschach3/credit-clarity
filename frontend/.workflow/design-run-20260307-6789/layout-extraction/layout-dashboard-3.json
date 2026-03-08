@@ -1,0 +1,40 @@
+{
+  "target": "dashboard",
+  "variant": 3,
+  "variant_name": "Command Center",
+  "description": "Dense, data-rich layout for power users. Sidebar + three-panel content area: overview, tradelines table, action queue. Inspired by Bloomberg terminal aesthetics.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-dashboard-v3",
+      "children": [
+        { "tag": "aside", "class": "sidebar sidebar-narrow" },
+        {
+          "tag": "div",
+          "class": "command-center",
+          "children": [
+            { "tag": "header", "class": "command-header" },
+            {
+              "tag": "div",
+              "class": "three-panel",
+              "children": [
+                { "tag": "div", "class": "panel panel-overview" },
+                { "tag": "div", "class": "panel panel-data" },
+                { "tag": "div", "class": "panel panel-actions" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "css_layout_rules": {
+      ".layout-dashboard-v3": "display: grid; grid-template-columns: 200px 1fr; height: 100vh; overflow: hidden;",
+      ".sidebar-narrow": "width: 200px; overflow-y: auto; border-right: 1px solid var(--border);",
+      ".command-center": "display: flex; flex-direction: column; overflow: hidden;",
+      ".command-header": "height: 52px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 1.5rem; flex-shrink: 0;",
+      ".three-panel": "display: grid; grid-template-columns: 280px 1fr 300px; flex: 1; overflow: hidden;",
+      ".panel": "overflow-y: auto; border-right: 1px solid var(--border);",
+      ".panel-actions": "border-right: none;"
+    }
+  }
+}

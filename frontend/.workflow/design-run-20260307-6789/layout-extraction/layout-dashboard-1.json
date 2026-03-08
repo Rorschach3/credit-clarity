@@ -1,0 +1,78 @@
+{
+  "target": "dashboard",
+  "variant": 1,
+  "variant_name": "Sidebar + Content Canvas",
+  "description": "Fixed left sidebar with navigation, main content area with stats grid, credit score ring, and recent activity feed.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-dashboard-v1",
+      "children": [
+        {
+          "tag": "aside",
+          "class": "sidebar",
+          "children": [
+            { "tag": "div", "class": "sidebar-logo" },
+            { "tag": "nav", "class": "sidebar-nav" },
+            { "tag": "div", "class": "sidebar-user" }
+          ]
+        },
+        {
+          "tag": "main",
+          "class": "main-content",
+          "children": [
+            {
+              "tag": "header",
+              "class": "top-bar",
+              "children": [
+                { "tag": "div", "class": "page-title" },
+                { "tag": "div", "class": "top-bar-actions" }
+              ]
+            },
+            {
+              "tag": "div",
+              "class": "content-area",
+              "children": [
+                {
+                  "tag": "div",
+                  "class": "stats-row",
+                  "children": [
+                    { "tag": "div", "class": "stat-card stat-credit-score" },
+                    { "tag": "div", "class": "stat-card stat-disputes" },
+                    { "tag": "div", "class": "stat-card stat-accounts" },
+                    { "tag": "div", "class": "stat-card stat-progress" }
+                  ]
+                },
+                {
+                  "tag": "div",
+                  "class": "content-grid",
+                  "children": [
+                    { "tag": "div", "class": "col-main" },
+                    { "tag": "div", "class": "col-sidebar" }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "css_layout_rules": {
+      ".layout-dashboard-v1": "display: grid; grid-template-columns: 260px 1fr; min-height: 100vh;",
+      ".sidebar": "position: fixed; top: 0; left: 0; width: 260px; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; z-index: 40;",
+      ".main-content": "margin-left: 260px; display: flex; flex-direction: column;",
+      ".top-bar": "position: sticky; top: 0; height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 2rem; z-index: 30; border-bottom: 1px solid var(--border);",
+      ".content-area": "padding: 2rem; flex: 1;",
+      ".stats-row": "display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; margin-bottom: 2rem;",
+      ".content-grid": "display: grid; grid-template-columns: 1fr 360px; gap: 1.5rem;",
+      ".stat-credit-score": "grid-column: span 1;",
+      "@media (max-width: 1024px)": {
+        ".layout-dashboard-v1": "grid-template-columns: 1fr;",
+        ".sidebar": "display: none;",
+        ".main-content": "margin-left: 0;",
+        ".stats-row": "grid-template-columns: repeat(2, 1fr);",
+        ".content-grid": "grid-template-columns: 1fr;"
+      }
+    }
+  }
+}

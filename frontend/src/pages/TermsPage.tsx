@@ -1,13 +1,6 @@
-import { Helmet } from "react-helmet-async";
-
 export default function TermsPage() {
   return (
     <div className="has-navbar">
-      <Helmet>
-        <title>Terms of Service - Credit Clarity</title>
-        <meta name="description" content="Credit Clarity terms of service — your rights and responsibilities when using our platform." />
-        <link rel="canonical" href="https://creditclarity.ai/terms-and-conditions" />
-      </Helmet>
 
       <div className="container max-w-3xl mx-auto py-16 px-4">
         <h1 className="text-3xl font-bold mb-2">

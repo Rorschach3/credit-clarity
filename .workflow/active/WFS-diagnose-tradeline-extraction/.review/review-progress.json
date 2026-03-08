@@ -1,0 +1,22 @@
+{
+  "review_id": "review-20260304-053643",
+  "last_update": "2026-03-04T05:39:00.688715+00:00",
+  "phase": "complete",
+  "current_iteration": 1,
+  "progress": {
+    "parallel_review": {
+      "total_dimensions": 7,
+      "completed": 7,
+      "in_progress": 0,
+      "percent_complete": 100
+    },
+    "deep_dive": {
+      "total_findings": 0,
+      "analyzed": 0,
+      "in_progress": 0,
+      "percent_complete": 0
+    }
+  },
+  "agent_status": [],
+  "estimated_completion": null
+}

@@ -57,8 +57,8 @@ const handleSubmit = async (e: React.FormEvent) => {
 };
 
   return (
-    <div className="flex min-h-screen items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
-      <Card className="w-full max-w-md">
+    <div className="has-navbar flex min-h-screen items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <Card className="w-full max-w-md card-midnight border-[#1E2D47]">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">Create an account</CardTitle>
           <CardDescription className="text-center">
@@ -118,7 +118,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                 />
                 <button 
                   type="button"
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -132,9 +132,9 @@ const handleSubmit = async (e: React.FormEvent) => {
           </form>
         </CardContent>
         <CardFooter className="flex justify-center">
-          <div className="text-sm text-gray-500">
+          <div className="text-sm text-muted-foreground">
             Already have an account?{" "}
-            <Link to="/login" className="font-medium text-brand-600 hover:text-brand-500">
+            <Link to="/login" className="font-medium text-[#D4A853] hover:text-[#E8C06A]">
               Log in
             </Link>
           </div>

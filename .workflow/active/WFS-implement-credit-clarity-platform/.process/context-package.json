@@ -1,0 +1,203 @@
+{
+  "metadata": {
+    "session_id": "WFS-implement-credit-clarity-platform",
+    "task_description": "GOAL: Implement Credit Clarity Negative Tradeline Dispute Management Platform\nSCOPE: All 4 core features (AI tradeline scanner, free dispute letter generation, paid mailing service, multi-bureau dashboard) + Stripe payments, auth, email notifications, FCRA/CROA compliance, subscription management (free/premium tiers)\nCONTEXT: Brainstorm synthesis complete (WFS-brainstorm-for-a-prd archived). PRD docs in docs/ directory. Key decisions: Celery background jobs, TimescaleDB as Supabase extension, trigger-based user_analytics TABLE, Stripe webhook architecture, CROA compliance gate in Phase 1, premium subscription tier",
+    "keywords": ["tradeline", "dispute", "mailing", "stripe", "celery", "FCRA", "CROA", "supabase", "freemium", "subscription", "Lob", "RLS", "rate-limiting", "email-notifications"],
+    "complexity": "High",
+    "tech_stack": ["Python", "FastAPI", "TypeScript", "React 18", "Supabase", "PostgreSQL", "Redis", "Celery", "Stripe", "Google Document AI", "Gemini AI", "Tailwind CSS", "Lob API"],
+    "generated_at": "2026-03-07T00:00:00.000Z",
+    "source_brainstorm": "WFS-brainstorm-for-a-prd"
+  },
+  "project_context": {
+    "description": "AI-powered credit report analysis platform with OCR-based tradeline extraction, dispute letter generation, and comprehensive credit score tracking. Created by a former credit repair specialist to automate FCRA-compliant credit dispute workflows.",
+    "technology_stack": {
+      "backend": "Python/FastAPI with Supabase (PostgreSQL + RLS), Redis, Google Document AI, Gemini AI",
+      "frontend": "React 18 + TypeScript + Tailwind CSS + Radix UI + TanStack Query + Supabase client",
+      "infrastructure": "Supabase (auth + DB + edge functions), Redis (cache + rate limiting), Celery (background jobs)",
+      "integrations_needed": ["Stripe (payments/webhooks)", "Lob API (mailing)", "USPS (Phase 2)", "Celery+Redis worker (jobs)"]
+    },
+    "architecture": {
+      "style": "Client-Server Monolithic Repository with Service Layer Pattern",
+      "layers": ["presentation (React pages)", "API (FastAPI /api/v1 routes)", "services (business logic)", "data (Supabase/Redis)"],
+      "current_state": "Phase 1 foundations exist: PDF upload, tradeline extraction pipeline, Supabase auth, dispute wizard UI. Missing: Stripe, Celery, CROA gate, paid mailing, email notifications, rate-limit persistence."
+    },
+    "key_components": {
+      "existing": [
+        {"path": "backend/main.py", "role": "FastAPI app entry, middleware, routers"},
+        {"path": "backend/api/v1/routes/tradelines.py", "role": "Tradeline CRUD endpoints"},
+        {"path": "backend/api/v1/routes/tradeline_extraction.py", "role": "PDF upload + extraction trigger"},
+        {"path": "backend/api/v1/routes/processing.py", "role": "PDF processing pipeline"},
+        {"path": "backend/api/v1/routes/auth.py", "role": "Auth endpoints"},
+        {"path": "backend/services/enhanced_gemini_processor.py", "role": "AI extraction with Gemini"},
+        {"path": "backend/services/database_optimizer.py", "role": "Supabase upsert with conflict resolution"},
+        {"path": "backend/services/optimized_processor.py", "role": "Dedup + batch tradeline save"},
+        {"path": "backend/services/cache_service.py", "role": "Redis + in-memory hybrid cache"},
+        {"path": "backend/services/background_jobs.py", "role": "Existing background job skeleton"},
+        {"path": "backend/services/redis_queue.py", "role": "Redis queue utilities"},
+        {"path": "backend/services/job_service.py", "role": "Job status tracking"},
+        {"path": "backend/core/security.py", "role": "Supabase JWT verification"},
+        {"path": "backend/core/config.py", "role": "App settings (env vars)"},
+        {"path": "frontend/src/App.tsx", "role": "Client-side routing + global providers"},
+        {"path": "frontend/src/pages/CreditReportUploadPage.tsx", "role": "PDF upload + tradeline display"},
+        {"path": "frontend/src/pages/DisputeWizardPage.tsx", "role": "Dispute letter wizard UI"},
+        {"path": "frontend/src/pages/DashboardPage.tsx", "role": "Multi-bureau dashboard"},
+        {"path": "frontend/src/pages/PricingPage.tsx", "role": "Pricing page (needs Stripe integration)"},
+        {"path": "frontend/src/hooks/use-auth.tsx", "role": "Auth context with Supabase JWT"},
+        {"path": "frontend/src/integrations/supabase/", "role": "Supabase client + types"},
+        {"path": "supabase/functions/generate-dispute-letter/index.ts", "role": "Edge function for dispute letters"},
+        {"path": "supabase/migrations/20250720_update_tradeline_unique_constraint.sql", "role": "Current DB schema baseline"}
+      ],
+      "to_create": [
+        "backend/api/v1/routes/payments.py - Stripe checkout + webhook handler",
+        "backend/api/v1/routes/subscriptions.py - Subscription tier management",
+        "backend/api/v1/routes/mailing.py - Lob mailing service endpoints",
+        "backend/services/stripe_service.py - Stripe client + event processing",
+        "backend/services/lob_service.py - Lob API mailing abstraction",
+        "backend/services/email_service.py - Email notification service",
+        "backend/services/rate_limit_service.py - Redis-persisted rate limiting",
+        "backend/workers/celery_app.py - Celery app configuration",
+        "backend/workers/pdf_worker.py - Celery PDF processing task",
+        "backend/workers/email_worker.py - Celery email notification task",
+        "frontend/src/pages/SubscriptionPage.tsx - Subscription management UI",
+        "frontend/src/components/croa/CROADisclosureGate.tsx - CROA compliance gate",
+        "supabase/migrations/YYYYMMDD_payments_schema.sql - payments + stripe_webhook_events tables",
+        "supabase/migrations/YYYYMMDD_subscriptions_schema.sql - subscription_tier ENUM + profile fields",
+        "supabase/migrations/YYYYMMDD_notifications_schema.sql - notification_log table",
+        "supabase/migrations/YYYYMMDD_croa_compliance.sql - croa_disclosure fields on profiles",
+        "supabase/migrations/YYYYMMDD_user_analytics_trigger.sql - trigger-based user_analytics TABLE"
+      ]
+    }
+  },
+  "assets": {
+    "documentation": [
+      {"path": "docs/PRD-Executive-Summary.md", "relevance": 0.95, "rationale": "Product vision, business model, core feature definitions"},
+      {"path": "docs/PRD-Technical-Architecture.md", "relevance": 0.95, "rationale": "System design, component architecture, integration patterns"},
+      {"path": "docs/PRD-Feature-Specifications.md", "relevance": 0.98, "rationale": "20 features with RICE scores, acceptance criteria, technical milestones"},
+      {"path": "docs/PRD-Data-Architecture.md", "relevance": 0.95, "rationale": "DB schemas, RLS policies, data pipelines, FCRA compliance"},
+      {"path": "docs/PRD-Implementation-Roadmap.md", "relevance": 0.90, "rationale": "Phase breakdown, KPIs, success criteria"},
+      {"path": "docs/PRD-Master-Index.md", "relevance": 0.80, "rationale": "25 decision cross-references"},
+      {"path": "docs/ARCHITECTURE_GUIDE.md", "relevance": 0.75, "rationale": "Existing architecture conventions"},
+      {"path": "docs/CLAUDE.md", "relevance": 0.70, "rationale": "Project coding conventions"}
+    ],
+    "source_code": [
+      {"path": "backend/api/v1/routes/tradeline_extraction.py", "relevance": 0.90, "rationale": "Core extraction endpoint - integration point for Celery migration"},
+      {"path": "backend/api/v1/routes/processing.py", "relevance": 0.85, "rationale": "PDF processing - needs Celery background task conversion"},
+      {"path": "backend/services/background_jobs.py", "relevance": 0.90, "rationale": "Existing job skeleton - extend to Celery worker"},
+      {"path": "backend/services/database_optimizer.py", "relevance": 0.85, "rationale": "Upsert pattern - extend for payments/notifications tables"},
+      {"path": "backend/services/cache_service.py", "relevance": 0.80, "rationale": "Redis integration - reuse for rate limiting persistence"},
+      {"path": "backend/core/config.py", "relevance": 0.85, "rationale": "Settings - add Stripe/Lob/Celery config"},
+      {"path": "backend/core/security.py", "relevance": 0.80, "rationale": "JWT verify - CROA gate middleware integration point"},
+      {"path": "frontend/src/pages/PricingPage.tsx", "relevance": 0.90, "rationale": "Pricing page - integrate Stripe checkout"},
+      {"path": "frontend/src/pages/DisputeWizardPage.tsx", "relevance": 0.85, "rationale": "Dispute wizard - add CROA disclosure gate + mailing step"},
+      {"path": "frontend/src/hooks/use-auth.tsx", "relevance": 0.80, "rationale": "Auth context - add subscription_tier to user state"},
+      {"path": "supabase/functions/generate-dispute-letter/index.ts", "relevance": 0.85, "rationale": "Dispute letter edge function - extend for Lob mailing trigger"}
+    ],
+    "config": [
+      {"path": "backend/requirements.txt", "relevance": 0.90, "rationale": "Add stripe, celery, lob-python, sendgrid dependencies"},
+      {"path": "supabase/config.toml", "relevance": 0.75, "rationale": "Supabase local config"},
+      {"path": "frontend/package.json", "relevance": 0.80, "rationale": "Add @stripe/stripe-js, @stripe/react-stripe-js"},
+      {"path": "supabase/migrations/20250720_update_tradeline_unique_constraint.sql", "relevance": 0.85, "rationale": "Schema baseline for new migrations"}
+    ],
+    "tests": [
+      {"path": "backend/tests/unit/test_auth.py", "relevance": 0.75, "rationale": "Auth test patterns to follow for CROA gate tests"},
+      {"path": "backend/tests/unit/test_tradelines_api.py", "relevance": 0.80, "rationale": "API test patterns for new route tests"},
+      {"path": "backend/tests/integration/test_api_integration.py", "relevance": 0.75, "rationale": "Integration test patterns"}
+    ]
+  },
+  "dependencies": {
+    "internal": [
+      {"from": "payments.py route", "to": "stripe_service.py", "type": "service-call"},
+      {"from": "stripe_service.py", "to": "database_optimizer.py", "type": "data-write"},
+      {"from": "pdf_worker.py (Celery)", "to": "enhanced_gemini_processor.py", "type": "delegates"},
+      {"from": "pdf_worker.py (Celery)", "to": "database_optimizer.py", "type": "data-write"},
+      {"from": "mailing.py route", "to": "lob_service.py", "type": "service-call"},
+      {"from": "lob_service.py", "to": "stripe_service.py", "type": "payment-verify"},
+      {"from": "CROADisclosureGate.tsx", "to": "use-auth.tsx", "type": "auth-context"},
+      {"from": "DisputeWizardPage.tsx", "to": "CROADisclosureGate.tsx", "type": "gate-check"},
+      {"from": "email_worker.py (Celery)", "to": "email_service.py", "type": "delegates"},
+      {"from": "rate_limit_service.py", "to": "cache_service.py", "type": "redis-access"}
+    ],
+    "external": [
+      {"package": "stripe", "version": ">=7.0.0", "language": "python", "purpose": "Stripe payment processing and webhooks"},
+      {"package": "celery[redis]", "version": ">=5.3.0", "language": "python", "purpose": "Background task processing for PDF jobs and email notifications"},
+      {"package": "lob-python", "version": ">=6.0.0", "language": "python", "purpose": "Physical mail dispatch via Lob API"},
+      {"package": "sendgrid", "version": ">=6.9.0", "language": "python", "purpose": "Transactional email notifications"},
+      {"package": "@stripe/stripe-js", "version": ">=4.0.0", "language": "typescript", "purpose": "Stripe.js for PCI-compliant frontend checkout"},
+      {"package": "@stripe/react-stripe-js", "version": ">=2.4.0", "language": "typescript", "purpose": "React Stripe Elements components"},
+      {"package": "timescaledb", "version": "extension", "language": "sql", "purpose": "Time-series analytics for credit score history (Supabase extension)"}
+    ]
+  },
+  "brainstorm_artifacts": {
+    "has_brainstorm": true,
+    "source": "WFS-brainstorm-for-a-prd (archived)",
+    "archive_path": ".workflow/archives/WFS-brainstorm-for-a-prd",
+    "prd_docs_path": "docs/",
+    "synthesis_status": "completed",
+    "enhancements_applied": ["EP-001 (TimescaleDB)", "EP-002 (Celery)", "EP-003 (payments schema)", "EP-004 (subscription tiers)", "EP-005 (Stripe webhooks)", "EP-006 (address collection)", "EP-007 (analytics)", "EP-008 (CROA)", "EP-009 (PDF SLA)", "EP-010 (email notifications)"],
+    "clarifications_documented": ["CQ-001 through CQ-007"],
+    "key_decisions": {
+      "D-010": "Hybrid rules + ML classification",
+      "D-012": "Lob -> USPS mailing sequence",
+      "D-013": "Middleware rate limiting",
+      "D-015": "TimescaleDB analytics (as Supabase extension)",
+      "D-017": "Supabase RLS + column encryption",
+      "D-018": "Rate limit persistence in Redis",
+      "D-019": "Implement TimescaleDB now (Phase 1)",
+      "D-020": "Launch Lob first, USPS in Phase 2",
+      "D-021": "Pinecone/Weaviate for vector store (Phase 3)"
+    }
+  },
+  "conflict_detection": {
+    "risk_level": "medium",
+    "risk_factors": [
+      "Celery replaces FastAPI BackgroundTasks - existing processing routes need migration without breaking active upload flow",
+      "New payments/subscriptions DB tables require RLS policies consistent with existing tradelines RLS pattern",
+      "CROA gate must intercept DisputeWizardPage flow without breaking existing free letter generation",
+      "Rate limiting middleware needs Redis persistence alongside existing cache_service Redis usage - potential key collision",
+      "Historical: Context package missing brainstorm artifacts (resolved - PRD docs now in docs/)"
+    ],
+    "affected_modules": [
+      "backend/api/v1/routes/processing.py",
+      "backend/api/v1/routes/tradeline_extraction.py",
+      "backend/services/background_jobs.py",
+      "frontend/src/pages/DisputeWizardPage.tsx",
+      "frontend/src/hooks/use-auth.tsx",
+      "supabase/migrations/"
+    ],
+    "mitigation_strategy": "Implement Celery as additive (new endpoints first, migrate old endpoints progressively). Use DB migrations with explicit RLS policies. CROA gate as React HOC wrapping existing wizard. Rate limit keys prefixed separately from cache keys.",
+    "historical_conflicts": [
+      {
+        "source_session": "WFS-brainstorm-for-a-prd",
+        "pattern": "Context package missing brainstorm artifacts",
+        "action": "Regenerate context-package.json before planning or execution",
+        "files_to_check": [".workflow/active/*/process/context-package.json"],
+        "archived_at": "2026-03-04T05:28:48.531392+00:00"
+      }
+    ]
+  },
+  "exploration_results": {
+    "exploration_count": 4,
+    "angles": ["architecture", "integration-points", "dependencies", "patterns"],
+    "aggregated_insights": {
+      "architecture": "Monorepo with FastAPI + React. Service layer is well-established. Celery workers will need separate process entry point (backend/workers/). Supabase migrations are the DB change mechanism.",
+      "integration_points": [
+        "backend/api/v1/routes/processing.py:upload_pdf - Celery task dispatch insertion point",
+        "frontend/src/pages/DisputeWizardPage.tsx - CROA gate + mailing trigger insertion",
+        "frontend/src/pages/PricingPage.tsx - Stripe checkout integration",
+        "backend/core/config.py - Add STRIPE_SECRET_KEY, LOB_API_KEY, CELERY_BROKER_URL",
+        "supabase/migrations/ - New tables: payments, stripe_webhook_events, notification_log, user_analytics",
+        "frontend/src/hooks/use-auth.tsx - Add subscription_tier to user state"
+      ],
+      "dependencies": "stripe, celery[redis], lob-python, sendgrid (backend). @stripe/stripe-js, @stripe/react-stripe-js (frontend). TimescaleDB as Supabase extension.",
+      "patterns": "Follow existing database_optimizer.py upsert pattern for new tables. Follow existing cache_service.py Redis key prefix pattern. Follow existing RLS policy pattern from tradeline migrations. Follow existing TanStack Query pattern for new API hooks."
+    }
+  },
+  "statistics": {
+    "total_source_files": 22,
+    "documentation_files": 8,
+    "source_code_files": 11,
+    "config_files": 4,
+    "test_files": 3,
+    "new_files_to_create": 16
+  }
+}

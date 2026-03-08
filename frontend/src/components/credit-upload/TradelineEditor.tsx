@@ -125,6 +125,23 @@ export const TradelineEditor: React.FC<TradelineEditorProps> = ({
             </SelectContent>
           </Select>
         </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Credit Bureau</label>
+          <Select
+            value={tradeline.credit_bureau || ''}
+            onValueChange={(value) => handleFieldUpdate('credit_bureau', value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select Bureau" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Equifax">Equifax</SelectItem>
+              <SelectItem value="Experian">Experian</SelectItem>
+              <SelectItem value="TransUnion">TransUnion</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Negative account toggle */}
@@ -150,3 +167,5 @@ export const TradelineEditor: React.FC<TradelineEditorProps> = ({
     </div>
   );
 };
+
+export default TradelineEditor;

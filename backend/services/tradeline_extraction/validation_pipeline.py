@@ -105,8 +105,11 @@ class TradelineValidationPipeline:
         }
 
         logger.debug(
-            f"Validation result for {tradeline.get('creditor_name', 'unknown')} | "
-            f"confidence={confidence:.2f}, severity={severity}, errors={errors}, warnings={warnings}"
+            "Validation result | confidence=%.2f, severity=%s, errors=%d, warnings=%d",
+            confidence,
+            severity,
+            len(errors),
+            len(warnings)
         )
 
         return validation_result

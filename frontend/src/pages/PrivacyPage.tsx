@@ -1,13 +1,6 @@
-import { Helmet } from "react-helmet-async";
-
 export default function PrivacyPage() {
   return (
     <div className="has-navbar">
-      <Helmet>
-        <title>Privacy Policy - Credit Clarity</title>
-        <meta name="description" content="Credit Clarity privacy policy — how we collect, use, and protect your data." />
-        <link rel="canonical" href="https://creditclarity.ai/privacy-policy" />
-      </Helmet>
 
       <div className="container max-w-3xl mx-auto py-16 px-4">
         <h1 className="text-3xl font-bold mb-2">

@@ -1,0 +1,43 @@
+{
+  "target": "pricing",
+  "variant": 3,
+  "variant_name": "Highlighted Featured Plan",
+  "description": "2-column layout: small basic card + large featured card. Most popular plan dominates visually with expanded feature list.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-pricing-v3",
+      "children": [
+        { "tag": "nav", "class": "navbar" },
+        {
+          "tag": "main",
+          "class": "pricing-page",
+          "children": [
+            { "tag": "div", "class": "pricing-hero" },
+            {
+              "tag": "div",
+              "class": "pricing-asymmetric",
+              "children": [
+                { "tag": "div", "class": "plan-stack" },
+                { "tag": "div", "class": "plan-featured" }
+              ]
+            },
+            { "tag": "div", "class": "pricing-guarantee" },
+            { "tag": "div", "class": "pricing-faq" }
+          ]
+        },
+        { "tag": "footer", "class": "footer" }
+      ]
+    },
+    "css_layout_rules": {
+      ".pricing-page": "max-width: 1100px; margin: 0 auto; padding: 4rem 2rem;",
+      ".pricing-asymmetric": "display: grid; grid-template-columns: 1fr 1.6fr; gap: 2rem; margin-bottom: 4rem; align-items: start;",
+      ".plan-stack": "display: flex; flex-direction: column; gap: 1.5rem;",
+      ".plan-featured": "border-radius: 1.5rem; padding: 2.5rem; position: relative;",
+      ".pricing-guarantee": "text-align: center; padding: 2rem; margin-bottom: 3rem;",
+      "@media (max-width: 768px)": {
+        ".pricing-asymmetric": "grid-template-columns: 1fr;"
+      }
+    }
+  }
+}

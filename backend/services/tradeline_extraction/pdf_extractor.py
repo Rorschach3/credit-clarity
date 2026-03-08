@@ -367,28 +367,6 @@ class TransUnionPDFExtractor:
         
         return prioritized if prioritized.strip() else text
 
-    async def _get_sample_transunion_text(self) -> str:
-        """
-        DEPRECATED: This method is only for testing with the specific test PDF
-        Real extraction now uses the cost-optimized pipeline above
-        """
-        logger.warning("Using sample text for testing purposes only")
-        return """
-        TransUnion Credit Report
-        
-        TRADELINE INFORMATION:
-        
-        LENTEGRITY LLC
-        Account Number: 2212311376****
-        Account Type: Installment
-        Account Status: Closed
-        Date Opened: 12/29/2022
-        Monthly Payment: $0
-        Balance: $0
-        
-        [... rest of sample data ...]
-        """
-    
     def _score_negative_keywords(self, text: str) -> Dict[str, Any]:
         """Calculate negative keyword counts and density for prioritization."""
         text_lower = text.lower()

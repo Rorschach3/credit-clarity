@@ -1,0 +1,39 @@
+{
+  "target": "pricing",
+  "variant": 1,
+  "variant_name": "3-Column Plans",
+  "description": "Navbar, hero headline + toggle (monthly/annual), 3 pricing cards side by side, FAQ, CTA.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-pricing-v1",
+      "children": [
+        { "tag": "nav", "class": "navbar" },
+        {
+          "tag": "main",
+          "class": "pricing-page",
+          "children": [
+            { "tag": "div", "class": "pricing-hero" },
+            { "tag": "div", "class": "billing-toggle" },
+            { "tag": "div", "class": "pricing-cards" },
+            { "tag": "div", "class": "features-comparison" },
+            { "tag": "div", "class": "pricing-faq" },
+            { "tag": "div", "class": "pricing-cta" }
+          ]
+        },
+        { "tag": "footer", "class": "footer" }
+      ]
+    },
+    "css_layout_rules": {
+      ".pricing-page": "max-width: 1200px; margin: 0 auto; padding: 4rem 2rem;",
+      ".pricing-hero": "text-align: center; margin-bottom: 2rem;",
+      ".billing-toggle": "display: flex; align-items: center; justify-content: center; gap: 1rem; margin-bottom: 3rem;",
+      ".pricing-cards": "display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; margin-bottom: 4rem;",
+      ".pricing-faq": "max-width: 720px; margin: 0 auto 4rem;",
+      ".pricing-cta": "text-align: center; padding: 4rem; border-radius: 2rem;",
+      "@media (max-width: 768px)": {
+        ".pricing-cards": "grid-template-columns: 1fr;"
+      }
+    }
+  }
+}

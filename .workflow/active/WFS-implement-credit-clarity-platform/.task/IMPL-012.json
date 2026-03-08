@@ -1,0 +1,55 @@
+{
+  "id": "IMPL-012",
+  "title": "End-to-End Integration Testing & QA",
+  "status": "pending",
+  "context_package_path": ".workflow/active/WFS-implement-credit-clarity-platform/.process/context-package.json",
+  "meta": {
+    "priority": "high",
+    "effort_estimate": "3-4 days",
+    "phase": "Phase 1 - Quality Assurance",
+    "type": "testing",
+    "depends_on": ["IMPL-003", "IMPL-004", "IMPL-005", "IMPL-006", "IMPL-007", "IMPL-008", "IMPL-009", "IMPL-010", "IMPL-011"],
+    "tags": ["testing", "integration", "e2e", "stripe", "celery", "rate-limit", "CROA"]
+  },
+  "context": {
+    "description": "Create integration tests for all 5 critical Phase 1 user flows: (1) PDF upload → Celery job → tradeline extraction, (2) CROA gate → dispute letter generation → rate limit enforcement, (3) Stripe checkout → payment confirmation → premium upgrade, (4) Lob mailing dispatch → tracking, (5) Email notification delivery.",
+    "focus_paths": [
+      "backend/tests/integration/",
+      "backend/tests/unit/",
+      "backend/tests/conftest.py",
+      "frontend/src/components/__tests__/",
+      "docs/PRD-Feature-Specifications.md"
+    ],
+    "acceptance_criteria": [
+      "backend/tests/integration/test_payments.py: tests Stripe webhook processing with test event payload, verifies idempotent re-delivery (insert ON CONFLICT DO NOTHING), verifies payment record created in payments table",
+      "backend/tests/integration/test_rate_limiting.py: tests free tier limit enforcement (2 uploads/3 letters), verifies 429 on limit exceeded, verifies premium bypass",
+      "backend/tests/integration/test_croa.py: tests CROA gate enforcement on letter generation endpoints (403 if not accepted), tests /croa-accept endpoint updates profiles table",
+      "backend/tests/unit/test_lob_service.py: mocks Lob API, tests send_dispute_letter returns {lob_letter_id, tracking_number}, tests error handling on Lob API failure",
+      "backend/tests/unit/test_email_service.py: mocks SendGrid, tests 4 email templates render correctly, tests notification_log write",
+      "backend/tests/unit/test_celery_worker.py: tests pdf_worker task signature, tests job status update on completion/failure",
+      "All tests pass with: pytest backend/tests/ -v (minimum 80% pass rate, 0 failures on critical paths)",
+      "frontend/src/components/__tests__/CROADisclosureModal.test.tsx: tests modal renders, checkbox enables button, form submission"
+    ],
+    "implementation_approach": [
+      "Step 1: Read backend/tests/conftest.py for existing test fixtures (Supabase mock, JWT mock)",
+      "Step 2: Read backend/tests/integration/test_api_integration.py for integration test patterns",
+      "Step 3: Read backend/tests/unit/test_auth.py for auth mock patterns",
+      "Step 4: Create test files for each critical path following existing conftest fixtures",
+      "Step 5: Mock external services: Stripe (use stripe-mock or webhook payloads), Lob (mock HTTP), SendGrid (mock SMTP)",
+      "Step 6: Add test for rate limit Redis key creation/TTL",
+      "Step 7: Add frontend tests for CROADisclosureModal",
+      "Step 8: Run full test suite and fix failures"
+    ],
+    "pre_analysis": [
+      "Read backend/tests/conftest.py - fixtures and mock patterns",
+      "Read backend/tests/integration/test_api_integration.py - integration test structure",
+      "Read backend/tests/unit/test_tradelines_api.py - unit test patterns for routes"
+    ]
+  },
+  "flow_control": {
+    "execution_mode": "sequential",
+    "parallel_with": [],
+    "requires": ["IMPL-003", "IMPL-004", "IMPL-005", "IMPL-006", "IMPL-007", "IMPL-008", "IMPL-009", "IMPL-010", "IMPL-011"],
+    "blocks": []
+  }
+}

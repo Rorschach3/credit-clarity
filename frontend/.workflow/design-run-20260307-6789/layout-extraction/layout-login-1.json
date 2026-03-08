@@ -1,0 +1,41 @@
+{
+  "target": "login",
+  "variant": 1,
+  "variant_name": "Centered Card",
+  "description": "Minimal centered auth card on a branded background. Clean and focused.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-login-v1",
+      "children": [
+        {
+          "tag": "div",
+          "class": "auth-bg",
+          "children": [
+            {
+              "tag": "div",
+              "class": "auth-card",
+              "children": [
+                { "tag": "div", "class": "auth-logo" },
+                { "tag": "h1", "class": "auth-title" },
+                { "tag": "p", "class": "auth-subtitle" },
+                { "tag": "form", "class": "auth-form" },
+                { "tag": "div", "class": "auth-divider" },
+                { "tag": "div", "class": "auth-social" },
+                { "tag": "div", "class": "auth-switch" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "css_layout_rules": {
+      ".layout-login-v1": "min-height: 100vh;",
+      ".auth-bg": "min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem;",
+      ".auth-card": "width: 100%; max-width: 420px; border-radius: 1.25rem; padding: 2.5rem;",
+      ".auth-form": "display: flex; flex-direction: column; gap: 1rem; margin: 1.5rem 0;",
+      ".auth-divider": "display: flex; align-items: center; gap: 1rem; margin: 1rem 0; font-size: 0.875rem;",
+      ".auth-social": "display: flex; flex-direction: column; gap: 0.75rem;"
+    }
+  }
+}

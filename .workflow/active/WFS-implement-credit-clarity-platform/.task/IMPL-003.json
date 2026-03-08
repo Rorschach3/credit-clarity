@@ -1,0 +1,60 @@
+{
+  "id": "IMPL-003",
+  "title": "Celery Worker Infrastructure",
+  "status": "pending",
+  "context_package_path": ".workflow/active/WFS-implement-credit-clarity-platform/.process/context-package.json",
+  "meta": {
+    "priority": "critical",
+    "effort_estimate": "3-4 days",
+    "phase": "Phase 1 - Infrastructure Foundation",
+    "type": "backend",
+    "depends_on": ["IMPL-001", "IMPL-002"],
+    "tags": ["celery", "workers", "background-jobs", "pdf-processing", "redis"]
+  },
+  "context": {
+    "description": "Implement Celery worker infrastructure replacing FastAPI BackgroundTasks for PDF processing. Create celery_app.py, pdf_worker.py Celery task, and migrate existing processing endpoints to use Celery for crash-recovery and job status persistence.",
+    "focus_paths": [
+      "backend/services/background_jobs.py",
+      "backend/services/redis_queue.py",
+      "backend/services/job_service.py",
+      "backend/api/v1/routes/processing.py",
+      "backend/api/v1/routes/tradeline_extraction.py",
+      "backend/services/enhanced_gemini_processor.py",
+      "backend/services/optimized_processor.py",
+      "docs/PRD-Technical-Architecture.md"
+    ],
+    "acceptance_criteria": [
+      "backend/workers/__init__.py created",
+      "backend/workers/celery_app.py configures Celery with broker=CELERY_BROKER_URL, backend=CELERY_RESULT_BACKEND, task_serializer='json', result_expires=3600",
+      "backend/workers/pdf_worker.py defines @celery_app.task(bind=True, max_retries=3) process_pdf_task(self, job_id, user_id, file_path) that: calls enhanced_gemini_processor, saves via database_optimizer, updates job status in Supabase",
+      "processing.py /process-pdf endpoint dispatches to pdf_worker.process_pdf_task.delay() and returns {job_id, status: 'queued'} immediately",
+      "Existing /upload endpoint continues to work during migration (backward compatible)",
+      "Job status polling endpoint returns {job_id, status: queued|processing|completed|failed, tradelines_count} from Supabase jobs table",
+      "Celery worker starts successfully with: celery -A backend.workers.celery_app worker --loglevel=info",
+      "PDF processing under 45s for <5MB, 90s for 5-10MB (EP-009 SLA tiers — supersedes PRD F1 original <30s target; celery_app.py uses Redis DB1 for broker, DB2 for results to avoid collision with cache_service DB0)",
+      "Regression check: run existing pytest backend/tests/ after Celery migration — negative tradeline detection accuracy must remain >=95% (no regression from BackgroundTasks migration)"
+    ],
+    "implementation_approach": [
+      "Step 1: Read backend/services/background_jobs.py and backend/services/job_service.py for existing job patterns",
+      "Step 2: Read backend/api/v1/routes/processing.py to understand current upload flow",
+      "Step 3: Create backend/workers/ directory with __init__.py",
+      "Step 4: Create backend/workers/celery_app.py with Celery instance configuration",
+      "Step 5: Create backend/workers/pdf_worker.py with process_pdf_task - delegate to existing enhanced_gemini_processor",
+      "Step 6: Modify processing.py to call pdf_worker.process_pdf_task.delay() instead of BackgroundTasks",
+      "Step 7: Ensure job_service.py updates Supabase job status on task completion/failure",
+      "Step 8: Do NOT modify tradeline_extraction.py in this task (keep existing endpoint working)"
+    ],
+    "pre_analysis": [
+      "Read backend/services/background_jobs.py - understand existing BackgroundTasks usage",
+      "Read backend/services/job_service.py - understand job status storage pattern",
+      "Read backend/api/v1/routes/processing.py - map existing upload flow",
+      "Read backend/services/enhanced_gemini_processor.py - identify main extraction function signature"
+    ]
+  },
+  "flow_control": {
+    "execution_mode": "sequential",
+    "parallel_with": [],
+    "requires": ["IMPL-001", "IMPL-002"],
+    "blocks": ["IMPL-008", "IMPL-009"]
+  }
+}

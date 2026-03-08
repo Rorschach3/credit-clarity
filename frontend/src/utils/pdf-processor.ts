@@ -13,11 +13,18 @@ export const TradelineSchema = z.object({
 export type Tradeline = z.infer<typeof TradelineSchema>;
 
 
-export async function processPdfFile(file: File, userId: string): Promise<PDFProcessingResult> {
+export interface PDFProcessingResult {
+  tradelines: Tradeline[];
+  success: boolean;
+  message: string;
+  text: string;
+}
+
+export async function processPdfFile(file: File, userId?: string): Promise<PDFProcessingResult> {
   try {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('user_id', userId);
+    if (userId) formData.append('user_id', userId);
     
     // Vite environment variable
     const apiUrl = import.meta.env.VITE_API_URL || '';
@@ -36,7 +43,8 @@ export async function processPdfFile(file: File, userId: string): Promise<PDFPro
     return {
       tradelines: result.tradelines || [],
       success: result.success || false,
-      message: `Processed ${result.tradelines_saved || 0} tradelines`
+      message: `Processed ${result.tradelines_saved || 0} tradelines`,
+      text: result.extracted_text || ''
     };
   } catch (error) {
     console.error('PDF processing error:', error);
