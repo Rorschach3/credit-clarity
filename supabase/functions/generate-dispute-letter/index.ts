@@ -43,8 +43,9 @@ serve(async (req) => {
     // Get OpenAI API key from environment
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY')
     if (!openaiApiKey) {
+      console.error('[generate-dispute-letter] OPENAI_API_KEY is not set in Edge Function secrets')
       return new Response(
-        JSON.stringify({ error: 'OpenAI API key not configured' }),
+        JSON.stringify({ error: 'OpenAI API key not configured. Set OPENAI_API_KEY in Supabase Edge Function secrets.' }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
       )
     }
@@ -92,13 +93,18 @@ serve(async (req) => {
         })
 
         if (!response.ok) {
-          throw new Error(`OpenAI API error: ${response.status}`)
+          const errBody = await response.text().catch(() => '')
+          throw new Error(`OpenAI API error ${response.status}: ${errBody}`)
         }
 
         const data = await response.json()
-        disputeLetters[bureau] = data.choices[0]?.message?.content || ''
+        const content = data.choices[0]?.message?.content
+        if (!content) {
+          throw new Error('OpenAI returned empty content')
+        }
+        disputeLetters[bureau] = content
       } catch (error) {
-        console.error(`Error generating letter for ${bureau}:`, error)
+        console.error(`[generate-dispute-letter] OpenAI call failed for bureau "${bureau}": ${error instanceof Error ? error.message : String(error)}. Using fallback template.`)
         disputeLetters[bureau] = generateFallbackLetter(personalInfo, bureauTradelines, bureau)
       }
     }
@@ -119,11 +125,12 @@ serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('Error in generate-dispute-letter function:', error)
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('[generate-dispute-letter] Unhandled error:', message)
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: 'Internal server error',
-        details: error.message 
+        details: message
       }),
       {
         status: 500,

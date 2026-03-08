@@ -21,6 +21,7 @@ import { ProfileRequirements } from '@/components/dispute-wizard/ProfileRequirem
 import { ProfileSummary } from '@/components/dispute-wizard/ProfileSummary';
 import { TradelineSelection } from '@/components/dispute-wizard/TradelineSelection';
 import { DisputeLetterGeneration } from '@/components/dispute-wizard/DisputeLetterGeneration';
+import { DuplicateDisputeModal } from '@/components/dispute-wizard/DuplicateDisputeModal';
 
 // Import types only (no code execution)
 import { type ParsedTradeline } from '@/utils/tradelineParser';
@@ -38,6 +39,8 @@ const loadPDFUtils = async () => {
     generateDisputeLetters: disputeUtils.generateDisputeLetters,
     generatePDFPacket: disputeUtils.generatePDFPacket,
     generateCompletePacket: disputeUtils.generateCompletePacket,
+    saveLettersToDisputesTable: disputeUtils.saveLettersToDisputesTable,
+    checkDuplicateDispute: disputeUtils.checkDuplicateDispute,
     fetchUserDocuments: documentUtils.fetchUserDocuments,
     downloadDocumentBlobs: documentUtils.downloadDocumentBlobs,
     hasRequiredDocuments: documentUtils.hasRequiredDocuments,
@@ -95,6 +98,8 @@ const DisputeWizardPage = () => {
   const [pdfFilename, setPdfFilename] = useState<string>('');
   const [editingLetter, setEditingLetter] = useState<string | null>(null);
   const [editedContent, setEditedContent] = useState<string>('');
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+  const [duplicateInfo, setDuplicateInfo] = useState<Array<{ disputeId: string; creditorName: string; bureau: string }>>([]);
 
   // Load user data when component mounts
   useEffect(() => {
@@ -163,17 +168,7 @@ const DisputeWizardPage = () => {
     setSelectedTradelines([]);
   }, []);
 
-  const handleGenerateLetters = useCallback(async () => {
-    if (!disputeProfile || !isProfileComplete) {
-      toast.error("Complete your profile first");
-      return;
-    }
-
-    if (selectedTradelines.length === 0) {
-      toast.error("Select at least one tradeline to dispute");
-      return;
-    }
-
+  const proceedWithGeneration = useCallback(async () => {
     setIsGenerating(true);
     setGenerationProgress({ step: 'Starting...', progress: 0, message: 'Initializing dispute letter generation' });
 
@@ -198,11 +193,19 @@ const DisputeWizardPage = () => {
       setPdfFilename(filename);
       setShowDocsSection(true);
 
-      // Save to database
+      // Save packet summary to dispute_packets table
       await saveDisputePacketRecord(letters, filename);
 
+      // Also persist individual letter records to disputes table for history tracking
+      try {
+        const activeTradelines = negativeTradelines.filter(t => selectedTradelines.includes(t.id));
+        await pdfUtils.saveLettersToDisputesTable(letters, user!.id, activeTradelines);
+      } catch (historyErr) {
+        console.warn('[DisputeWizard] Non-critical: failed to save letters to dispute history:', historyErr);
+      }
+
       setGenerationProgress({ step: 'Complete!', progress: 100, message: 'Dispute packet ready for download' });
-      
+
       toast.success("Dispute letters generated successfully!", {
         description: `Created ${letters.length} letter(s) for ${selectedTradelines.length} tradeline(s)`
       });
@@ -215,7 +218,58 @@ const DisputeWizardPage = () => {
     } finally {
       setIsGenerating(false);
     }
-  }, [disputeProfile, isProfileComplete, selectedTradelines, negativeTradelines]);
+  }, [disputeProfile, selectedTradelines, negativeTradelines, user]);
+
+  const handleGenerateLetters = useCallback(async () => {
+    if (!disputeProfile || !isProfileComplete) {
+      toast.error("Complete your profile first");
+      return;
+    }
+
+    if (selectedTradelines.length === 0) {
+      toast.error("Select at least one tradeline to dispute");
+      return;
+    }
+
+    // Check for duplicates before generating
+    if (user?.id) {
+      try {
+        const pdfUtils = await loadPDFUtils();
+        const activeTradelines = negativeTradelines.filter(t => selectedTradelines.includes(t.id));
+        const BUREAUS = ['Equifax', 'Experian', 'TransUnion'];
+
+        const duplicates: Array<{ disputeId: string; creditorName: string; bureau: string }> = [];
+        for (const tradeline of activeTradelines) {
+          const bureauList = tradeline.credit_bureau ? [tradeline.credit_bureau] : BUREAUS;
+          for (const bureau of bureauList) {
+            const existingId = await pdfUtils.checkDuplicateDispute(
+              user.id,
+              tradeline.creditor_name ?? '',
+              tradeline.account_number
+                ? tradeline.account_number.length > 4
+                  ? `****${tradeline.account_number.slice(-4)}`
+                  : tradeline.account_number
+                : '',
+              bureau
+            );
+            if (existingId) {
+              duplicates.push({ disputeId: existingId, creditorName: tradeline.creditor_name ?? 'Unknown', bureau });
+            }
+          }
+        }
+
+        if (duplicates.length > 0) {
+          setDuplicateInfo(duplicates);
+          setDuplicateModalOpen(true);
+          return;
+        }
+      } catch (dupErr) {
+        console.warn('[DisputeWizard] Duplicate check failed, proceeding anyway:', dupErr);
+      }
+    }
+
+    await proceedWithGeneration();
+  }, [disputeProfile, isProfileComplete, selectedTradelines, negativeTradelines, user, proceedWithGeneration]);
 
   const saveDisputePacketRecord = async (letters: GeneratedDisputeLetter[], filename: string) => {
     try {
@@ -521,6 +575,17 @@ const DisputeWizardPage = () => {
       
       {/* Credit Clarity AI Chatbot */}
       <ChatbotWidget />
+
+      {/* Duplicate Dispute Modal */}
+      <DuplicateDisputeModal
+        open={duplicateModalOpen}
+        onClose={() => setDuplicateModalOpen(false)}
+        onProceedAnyway={async () => {
+          setDuplicateModalOpen(false);
+          await proceedWithGeneration();
+        }}
+        duplicates={duplicateInfo}
+      />
     </div>
   );
 };

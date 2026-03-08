@@ -1,12 +1,13 @@
 import jsPDF from 'jspdf';
 import { PDFDocument, rgb } from 'pdf-lib';
 import { type ParsedTradeline } from '@/utils/tradelineParser';
-import { 
-  DocumentBlob, 
-  convertImageToPdfPage, 
-  addPdfPages, 
-  getDocumentTitle 
+import {
+  DocumentBlob,
+  convertImageToPdfPage,
+  addPdfPages,
+  getDocumentTitle
 } from './documentPacketUtils';
+import { supabase } from '@/integrations/supabase/client';
 
 // Credit Bureau Information
 export const CREDIT_BUREAU_ADDRESSES = {
@@ -425,5 +426,263 @@ export const generateCompletePacket = async (
   } catch (error) {
     console.error('Error generating complete packet:', error);
     throw error;
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI-Powered Dispute Letter Generation Pipeline
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Thrown when a duplicate dispute is found within 24 hours */
+export class DuplicateDisputeError extends Error {
+  constructor(message: string, public readonly existingDisputeId: string) {
+    super(message);
+    this.name = 'DuplicateDisputeError';
+  }
+}
+
+export interface DisputePayload {
+  userId: string;
+  bureau: string;
+  creditorName: string;
+  accountNumberMasked: string;
+  disputeReason: string;
+}
+
+export interface StoredDispute {
+  id: string;
+  user_id: string;
+  creditor_name: string | null;
+  account_number_masked: string | null;
+  bureau: string | null;
+  dispute_reason: string | null;
+  letter_text: string | null;
+  status: string;
+  created_at: string | null;
+  mailing_address: string;
+}
+
+/**
+ * Returns the existing dispute ID if a duplicate was filed within the last 24 h, null otherwise.
+ */
+export const checkDuplicateDispute = async (
+  userId: string,
+  creditorName: string,
+  accountNumberMasked: string,
+  bureau: string
+): Promise<string | null> => {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data } = await supabase
+    .from('disputes')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('creditor_name', creditorName)
+    .eq('account_number_masked', accountNumberMasked)
+    .eq('bureau', bureau)
+    .gte('created_at', since)
+    .maybeSingle();
+  return data?.id ?? null;
+};
+
+/** Build a static fallback letter when the AI Edge Function is unavailable */
+const buildFallbackSingleLetter = (
+  pi: { firstName: string; lastName: string; address: string; address2?: string; city: string; state: string; zip: string; lastFourSSN: string },
+  payload: DisputePayload,
+  bureauAddress: string
+): string => {
+  const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return `${pi.firstName} ${pi.lastName}
+${pi.address}${pi.address2 ? '\n' + pi.address2 : ''}
+${pi.city}, ${pi.state} ${pi.zip}
+
+${date}
+
+${bureauAddress}
+
+Re: Dispute of Credit Report Information — FCRA Section 611
+
+Dear Sir or Madam:
+
+I am writing pursuant to the Fair Credit Reporting Act (FCRA), 15 U.S.C. § 1681i, to dispute the following item appearing on my credit report:
+
+  Creditor Name:   ${payload.creditorName}
+  Account Number:  ${payload.accountNumberMasked}
+  Dispute Reason:  ${payload.disputeReason}
+
+This information is inaccurate. I respectfully request that you investigate this matter within 30 days as required by law. If you cannot verify the accuracy of this information, it must be deleted from my credit file immediately.
+
+Please send me written notification of the results of your investigation and a corrected copy of my credit report.
+
+Sincerely,
+
+${pi.firstName} ${pi.lastName}
+SSN: XXX-XX-${pi.lastFourSSN}
+
+Enclosures: Copy of identification, Copy of Social Security card`;
+};
+
+/**
+ * Generate and persist a single dispute letter via the AI Edge Function.
+ * Falls back to a static template if the Edge Function is unavailable.
+ * Throws DuplicateDisputeError if a duplicate exists within 24 h.
+ */
+export const generateDisputeLetterViaAI = async (
+  payload: DisputePayload
+): Promise<StoredDispute> => {
+  // 1. Duplicate check
+  const duplicateId = await checkDuplicateDispute(
+    payload.userId,
+    payload.creditorName,
+    payload.accountNumberMasked,
+    payload.bureau
+  );
+  if (duplicateId) {
+    throw new DuplicateDisputeError(
+      'A dispute for this account was already generated in the last 24 hours.',
+      duplicateId
+    );
+  }
+
+  // 2. Fetch user profile
+  const { data: profileData, error: profileError } = await supabase
+    .from('profiles')
+    .select('first_name, last_name, address1, address2, city, state, zip_code, phone_number, last_four_of_ssn')
+    .eq('user_id', payload.userId)
+    .single();
+
+  if (profileError || !profileData) {
+    console.error('[disputeUtils] Profile fetch failed:', profileError);
+    throw new Error('Profile not found. Please complete your profile before generating letters.');
+  }
+
+  const pi = {
+    firstName: profileData.first_name ?? '',
+    lastName: profileData.last_name ?? '',
+    address: profileData.address1 ?? '',
+    address2: profileData.address2 ?? undefined,
+    city: profileData.city ?? '',
+    state: profileData.state ?? '',
+    zip: profileData.zip_code ?? '',
+    phone: profileData.phone_number ?? undefined,
+    lastFourSSN: profileData.last_four_of_ssn ?? 'XXXX',
+  };
+
+  // 3. Resolve bureau mailing address (DB → hardcoded fallback)
+  const { data: bureauRow } = await supabase
+    .from('credit_bureaus')
+    .select('address')
+    .eq('name', payload.bureau)
+    .maybeSingle();
+
+  let mailingAddress = bureauRow?.address ?? '';
+  if (!mailingAddress) {
+    const bi = CREDIT_BUREAU_ADDRESSES[payload.bureau as keyof typeof CREDIT_BUREAU_ADDRESSES];
+    mailingAddress = bi
+      ? `${bi.name}\n${bi.address}\n${bi.city}, ${bi.state} ${bi.zip}`
+      : payload.bureau;
+  }
+
+  // 4. Call Edge Function (with static fallback)
+  let letterText: string;
+  try {
+    const { data: edgeData, error: edgeError } = await supabase.functions.invoke('generate-dispute-letter', {
+      body: {
+        personalInfo: {
+          firstName: pi.firstName,
+          lastName: pi.lastName,
+          address: pi.address,
+          address2: pi.address2,
+          city: pi.city,
+          state: pi.state,
+          zip: pi.zip,
+          phone: pi.phone,
+          lastFourSSN: pi.lastFourSSN,
+        },
+        selectedTradelines: [{
+          creditor_name: payload.creditorName,
+          account_number: payload.accountNumberMasked,
+          dispute_reason: payload.disputeReason,
+        }],
+        bureaus: [payload.bureau],
+      },
+    });
+
+    if (edgeError) throw edgeError;
+    letterText = (edgeData?.letters?.[payload.bureau] as string) ?? '';
+    if (!letterText) throw new Error('AI service returned an empty letter');
+  } catch (err) {
+    console.warn('[disputeUtils] Edge function unavailable, using fallback template:', err);
+    letterText = buildFallbackSingleLetter(pi, payload, mailingAddress);
+  }
+
+  // 5. Persist to disputes table
+  const { data: saved, error: insertError } = await supabase
+    .from('disputes')
+    .insert({
+      user_id: payload.userId,
+      credit_report_id: `dispute-${Date.now()}`,
+      creditor_name: payload.creditorName,
+      account_number_masked: payload.accountNumberMasked,
+      bureau: payload.bureau,
+      dispute_reason: payload.disputeReason,
+      letter_text: letterText,
+      mailing_address: mailingAddress,
+      status: 'generated',
+    })
+    .select()
+    .single();
+
+  if (insertError || !saved) {
+    console.error('[disputeUtils] Failed to save dispute record:', insertError);
+    throw new Error('Failed to save dispute letter. Please try again.');
+  }
+
+  return saved as StoredDispute;
+};
+
+/**
+ * Persist batch-generated (static template) letters to the disputes table so
+ * they appear in Dispute History. Non-throwing — logs errors internally.
+ */
+export const saveLettersToDisputesTable = async (
+  letters: GeneratedDisputeLetter[],
+  userId: string,
+  tradelines: ParsedTradeline[]
+): Promise<void> => {
+  if (letters.length === 0 || !userId) return;
+
+  const inserts = letters.flatMap((letter) => {
+    const bureauTradelines = tradelines.filter(
+      (t) => !t.credit_bureau || t.credit_bureau === letter.creditBureau
+    );
+    const targets = bureauTradelines.length > 0 ? bureauTradelines : tradelines;
+
+    const bi = CREDIT_BUREAU_ADDRESSES[letter.creditBureau as keyof typeof CREDIT_BUREAU_ADDRESSES];
+    const mailingAddress = bi
+      ? `${bi.name}\n${bi.address}\n${bi.city}, ${bi.state} ${bi.zip}`
+      : letter.creditBureau;
+
+    return targets.map((t) => ({
+      user_id: userId,
+      credit_report_id: `batch-${Date.now()}-${t.id}`,
+      creditor_name: t.creditor_name ?? null,
+      account_number_masked: t.account_number
+        ? t.account_number.length > 4
+          ? `****${t.account_number.slice(-4)}`
+          : t.account_number
+        : null,
+      bureau: letter.creditBureau,
+      dispute_reason: 'Inaccurate or unverifiable information',
+      letter_text: letter.letterContent,
+      mailing_address: mailingAddress,
+      status: 'generated',
+    }));
+  });
+
+  if (inserts.length === 0) return;
+
+  const { error } = await supabase.from('disputes').insert(inserts);
+  if (error) {
+    console.error('[disputeUtils] Failed to save batch disputes to history:', error);
   }
 };

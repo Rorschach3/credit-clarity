@@ -85,12 +85,9 @@ export const usePersistentProfile = (): UsePersistentProfileReturn => {
     setError(null);
 
     try {
-      console.log('[DEBUG] Refreshing profile from database for user:', user.id);
-      
       // Check cache first
       const cached = getCachedProfile(user.id);
       if (cached) {
-        console.log('[DEBUG] Using cached profile');
         setProfile(cached);
         setLoading(false);
         return;
@@ -105,14 +102,11 @@ export const usePersistentProfile = (): UsePersistentProfileReturn => {
 
       if (fetchError) {
         if (fetchError.code === 'PGRST116') {
-          // No profile found - this is okay, user hasn't created one yet
-          console.log('[INFO] No profile found for user');
           setProfile(null);
         } else {
           throw fetchError;
         }
       } else if (data) {
-        console.log('[SUCCESS] ✅ Profile loaded successfully');
         setProfile(data);
         setCachedProfile(user.id, data);
       }
@@ -196,7 +190,8 @@ export const usePersistentProfile = (): UsePersistentProfileReturn => {
   } : null;
 
   // Check if profile is complete for dispute letter generation
-  const requiredFields = ['first_name', 'last_name', 'address1', 'city', 'state', 'zip_code'];
+  // last_four_of_ssn is required so bureaus can verify identity
+  const requiredFields = ['first_name', 'last_name', 'address1', 'city', 'state', 'zip_code', 'last_four_of_ssn'];
   const missingFields = requiredFields.filter(field => !profile?.[field as keyof Profile]);
   const isProfileComplete = missingFields.length === 0;
 
