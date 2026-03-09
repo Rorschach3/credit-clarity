@@ -4,9 +4,10 @@ import { UserDocumentsSection } from "@/components/disputes/UserDocumentsSection
 
 interface DocumentUploadSectionProps {
   onClose: () => void;
+  onPrepare: () => void;
 }
 
-export const DocumentUploadSection: React.FC<DocumentUploadSectionProps> = ({ onClose }) => {
+export const DocumentUploadSection: React.FC<DocumentUploadSectionProps> = ({ onClose, onPrepare }) => {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -35,7 +36,7 @@ export const DocumentUploadSection: React.FC<DocumentUploadSectionProps> = ({ on
           <h3 className="text-lg font-semibold mb-2 text-center">Upload Supporting Documents (Optional)</h3>
           <UserDocumentsSection />
           <div className="flex gap-2 mt-4">
-            <Button variant="default">Prepare Dispute Packet</Button>
+            <Button variant="default" onClick={onPrepare}>Prepare Dispute Packet</Button>
             <Button variant="outline" onClick={onClose}>Cancel</Button>
           </div>
         </>

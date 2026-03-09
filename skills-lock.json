@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "PDF Processing Pro": {
+      "source": "smithery.ai",
+      "sourceType": "well-known",
+      "computedHash": "41a3b82700a57d8fdc5a3d10a6144c5e17861ecd685e0e7f5bc037cf2898a445"
+    }
+  }
+}

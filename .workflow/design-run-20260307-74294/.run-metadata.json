@@ -1,0 +1,20 @@
+{
+  "design_id": "design-run-20260307-74294",
+  "session_id": null,
+  "timestamp": "2026-03-07T00:00:00Z",
+  "workflow": "ui-design:auto",
+  "architecture": "style-centric-batch-generation",
+  "parameters": {
+    "style_variants": 3,
+    "layout_variants": 2,
+    "targets": ["home", "dashboard", "profile"],
+    "target_type": "page",
+    "prompt": "create a user friendly UI with working buttons, CTA, Hero, sophisticated dashboard and profile page, and add subtle animations, make sure its mobile first and SEO optimized",
+    "images": null,
+    "input": null,
+    "device_type": "responsive",
+    "device_source": "prompt_keywords"
+  },
+  "status": "in_progress",
+  "performance_mode": "optimized"
+}

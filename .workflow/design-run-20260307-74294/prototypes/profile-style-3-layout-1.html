@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profile Settings — Credit Clarity</title>
+  <meta name="description" content="Update your personal information, address, and identity details for generating accurate credit dispute letters.">
+  <meta property="og:title" content="Profile Settings — Credit Clarity">
+  <meta property="og:description" content="Manage your profile to enable AI-powered dispute letter generation.">
+  <link rel="canonical" href="https://creditclarity.app/profile">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --base:#060B18; --card:#0B1220; --elevated:#152035; --border:#1B2B42;
+      --border-subtle:rgba(27,43,66,0.7);
+      --gold:#C9A84C; --gold-hover:#DFC060; --gold-muted:rgba(201,168,76,0.1);
+      --gold-border:rgba(201,168,76,0.28);
+      --text:#E8EDF8; --text-muted:#7B8BA8;
+      --success:#22C55E; --error:#EF4444;
+      --font:'Inter',system-ui,sans-serif;
+      --radius:0.625rem;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--base);color:var(--text);font-family:var(--font);line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh;padding-bottom:4rem}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}}
+
+    /* TOPNAV */
+    .topnav{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:1rem;padding:0 1.25rem;height:58px;background:rgba(10,15,30,0.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+    .topnav-logo{font-size:0.9375rem;font-weight:700;color:var(--gold);text-decoration:none}
+    .back-link{font-size:0.875rem;color:var(--text-muted);text-decoration:none;display:flex;align-items:center;gap:0.375rem;transition:color 150ms}
+    .back-link:hover{color:var(--text)}
+
+    /* PAGE */
+    .page{max-width:672px;margin:0 auto;padding:2rem 1rem 4rem;animation:fadeUp 500ms ease both}
+
+    .page-header{margin-bottom:2rem}
+    .page-header h1{font-size:1.5rem;font-weight:700}
+    .page-header p{font-size:0.875rem;color:var(--text-muted);margin-top:0.375rem}
+    .gold-text{background:linear-gradient(135deg,var(--gold),var(--gold-hover));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+
+    /* AVATAR CARD */
+    .avatar-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;display:flex;flex-direction:column;align-items:center;gap:0.875rem;margin-bottom:1.25rem;text-align:center}
+    .avatar-wrap{position:relative;cursor:pointer}
+    .avatar-circle{width:88px;height:88px;border-radius:50%;background:var(--gold-muted);border:2px solid var(--gold-border);display:flex;align-items:center;justify-content:center;font-size:1.625rem;font-weight:700;color:var(--gold);overflow:hidden;transition:border-color 150ms}
+    .avatar-wrap:hover .avatar-circle{border-color:var(--gold)}
+    .avatar-overlay{position:absolute;inset:0;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 200ms;font-size:1.25rem}
+    .avatar-wrap:hover .avatar-overlay{opacity:1}
+    .camera-btn{position:absolute;bottom:-2px;right:-2px;width:28px;height:28px;border-radius:50%;background:var(--gold);border:2px solid var(--base);display:flex;align-items:center;justify-content:center;font-size:0.75rem;cursor:pointer;transition:transform 150ms}
+    .camera-btn:hover{transform:scale(1.1)}
+    .avatar-hint{font-size:0.75rem;color:var(--text-muted)}
+
+    /* FORM CARD */
+    .form-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.75rem;margin-bottom:1.25rem}
+    .section-label{font-size:0.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:1rem;padding-bottom:0.625rem;border-bottom:1px solid var(--border-subtle)}
+    .form-section{margin-bottom:1.5rem}
+    .form-section:last-of-type{margin-bottom:0}
+    .form-grid-2{display:grid;grid-template-columns:1fr;gap:1rem}
+    @media(min-width:520px){.form-grid-2{grid-template-columns:1fr 1fr}}
+    .form-grid-3{display:grid;grid-template-columns:1fr;gap:1rem}
+    @media(min-width:520px){.form-grid-3{grid-template-columns:2fr 1fr 1fr}}
+    .field{display:flex;flex-direction:column;gap:0.375rem}
+    .field label{font-size:0.8125rem;font-weight:500;color:var(--text)}
+    .req{color:var(--error);margin-left:0.25rem}
+    .field input{background:var(--elevated);border:1px solid var(--border);border-radius:0.5rem;padding:0.6875rem 0.875rem;font-size:0.9375rem;color:var(--text);font-family:var(--font);outline:none;transition:border-color 150ms,box-shadow 150ms;width:100%}
+    .field input::placeholder{color:var(--text-muted)}
+    .field input:focus{border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-muted)}
+    .field-hint{font-size:0.75rem;color:var(--text-muted)}
+
+    /* SAVE BTN */
+    .btn-gold{display:flex;align-items:center;justify-content:center;gap:0.5rem;background:linear-gradient(135deg,var(--gold),var(--gold-hover));color:#0A0F1E;font-weight:700;padding:0.875rem 1.5rem;border-radius:0.5rem;border:none;cursor:pointer;font-size:0.9375rem;transition:transform 150ms,box-shadow 150ms;width:100%;margin-top:1.5rem}
+    .btn-gold:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(201,168,76,0.3)}
+    .btn-ghost{display:inline-flex;align-items:center;gap:0.5rem;background:transparent;border:1px solid var(--border);color:var(--text-muted);padding:0.625rem 1.125rem;border-radius:0.5rem;cursor:pointer;font-size:0.875rem;transition:border-color 150ms,color 150ms}
+    .btn-ghost:hover{border-color:var(--gold-border);color:var(--text)}
+
+    /* DANGER ZONE */
+    .danger-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem 1.75rem}
+    .danger-title{font-size:0.9375rem;font-weight:600;margin-bottom:1rem}
+    .danger-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;padding:0.75rem 0;border-top:1px solid var(--border-subtle)}
+    .danger-row:first-of-type{border-top:none}
+    .danger-label{font-size:0.875rem;font-weight:500}
+    .danger-sub{font-size:0.75rem;color:var(--text-muted);margin-top:0.125rem}
+    .delete-link{font-size:0.875rem;color:var(--error);text-decoration:none;font-weight:500;transition:opacity 150ms}
+    .delete-link:hover{opacity:0.75}
+  </style>
+</head>
+<body>
+
+<header class="topnav" role="banner">
+  <a href="/dashboard" class="back-link" aria-label="Back to dashboard">← Dashboard</a>
+  <div style="flex:1"></div>
+  <a href="/" class="topnav-logo">◈ Credit Clarity</a>
+</header>
+
+<main role="main" class="page">
+  <div class="page-header">
+    <h1>Profile <span class="gold-text">Settings</span></h1>
+    <p>Your name, address, and SSN last 4 are required to generate dispute letters.</p>
+  </div>
+
+  <!-- AVATAR -->
+  <div class="avatar-card">
+    <div class="avatar-wrap" role="button" tabindex="0" aria-label="Upload profile picture" onclick="document.getElementById('avatar-input').click()">
+      <div class="avatar-circle">JS</div>
+      <div class="avatar-overlay">📷</div>
+      <div class="camera-btn" aria-hidden="true">📷</div>
+    </div>
+    <input type="file" id="avatar-input" accept="image/*" style="display:none" aria-label="Upload profile photo">
+    <p class="avatar-hint">Click to update profile photo</p>
+  </div>
+
+  <!-- FORM -->
+  <form class="form-card" onsubmit="handleSave(event)" novalidate>
+
+    <!-- Personal -->
+    <div class="form-section">
+      <div class="section-label">Personal Information</div>
+      <div class="form-grid-2">
+        <div class="field">
+          <label for="firstName">First Name<span class="req">*</span></label>
+          <input type="text" id="firstName" name="first_name" placeholder="Jane" autocomplete="given-name" required>
+        </div>
+        <div class="field">
+          <label for="lastName">Last Name<span class="req">*</span></label>
+          <input type="text" id="lastName" name="last_name" placeholder="Smith" autocomplete="family-name" required>
+        </div>
+      </div>
+      <div class="form-grid-2" style="margin-top:1rem">
+        <div class="field">
+          <label for="dob">Date of Birth</label>
+          <input type="date" id="dob" name="dob" autocomplete="bday">
+        </div>
+        <div class="field">
+          <label for="ssn">Last 4 of SSN<span class="req">*</span> <span class="field-hint">(for disputes)</span></label>
+          <input type="text" id="ssn" name="last_four_of_ssn" placeholder="1234" maxlength="4" inputmode="numeric" pattern="\d{4}" autocomplete="off">
+        </div>
+      </div>
+    </div>
+
+    <!-- Address -->
+    <div class="form-section">
+      <div class="section-label">Mailing Address<span class="req">*</span></div>
+      <div class="field" style="margin-bottom:1rem">
+        <label for="addr1">Address Line 1</label>
+        <input type="text" id="addr1" name="address1" placeholder="123 Main Street" autocomplete="address-line1">
+      </div>
+      <div class="field" style="margin-bottom:1rem">
+        <label for="addr2">Address Line 2 <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+        <input type="text" id="addr2" name="address2" placeholder="Apt 4B" autocomplete="address-line2">
+      </div>
+      <div class="form-grid-3">
+        <div class="field">
+          <label for="city">City</label>
+          <input type="text" id="city" name="city" placeholder="New York" autocomplete="address-level2">
+        </div>
+        <div class="field">
+          <label for="state">State</label>
+          <input type="text" id="state" name="state" placeholder="NY" maxlength="2" autocomplete="address-level1">
+        </div>
+        <div class="field">
+          <label for="zip">ZIP Code</label>
+          <input type="text" id="zip" name="zip_code" placeholder="10001" inputmode="numeric" autocomplete="postal-code">
+        </div>
+      </div>
+    </div>
+
+    <!-- Contact -->
+    <div class="form-section">
+      <div class="section-label">Contact</div>
+      <div class="field">
+        <label for="phone">Phone Number</label>
+        <input type="tel" id="phone" name="phone_number" placeholder="(555) 123-4567" autocomplete="tel">
+      </div>
+    </div>
+
+    <button type="submit" class="btn-gold">💾 Save Profile</button>
+  </form>
+
+  <!-- DANGER ZONE -->
+  <div class="danger-card" role="region" aria-label="Account settings">
+    <div class="danger-title">Account Settings</div>
+    <div class="danger-row">
+      <div>
+        <div class="danger-label">Password</div>
+        <div class="danger-sub">Update your account password</div>
+      </div>
+      <button class="btn-ghost">Change Password</button>
+    </div>
+    <div class="danger-row">
+      <div>
+        <div class="danger-label">Delete Account</div>
+        <div class="danger-sub">Permanently remove your data</div>
+      </div>
+      <a href="#" class="delete-link" onclick="return confirm('Are you sure?')">Delete Account</a>
+    </div>
+  </div>
+</main>
+
+<script>
+function handleSave(e) {
+  e.preventDefault();
+  const fn = document.getElementById('firstName').value.trim();
+  const ln = document.getElementById('lastName').value.trim();
+  if (!fn || !ln) {
+    alert('First name and last name are required.');
+    return;
+  }
+  const ssn = document.getElementById('ssn').value.trim();
+  if (ssn && !/^\d{4}$/.test(ssn)) {
+    alert('Last 4 SSN must be exactly 4 digits.');
+    return;
+  }
+  const zip = document.getElementById('zip').value.trim();
+  if (zip && !/^\d{5}(-\d{4})?$/.test(zip)) {
+    alert('Please enter a valid ZIP code.');
+    return;
+  }
+  // Show success feedback
+  const btn = e.target.querySelector('.btn-gold');
+  const orig = btn.textContent;
+  btn.textContent = '✓ Saved!';
+  btn.style.background = 'linear-gradient(135deg,#22C55E,#16A34A)';
+  setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 2000);
+}
+
+// Avatar preview
+document.getElementById('avatar-input').addEventListener('change', function() {
+  const file = this.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { alert('Please select an image file.'); return; }
+  if (file.size > 5 * 1024 * 1024) { alert('Image must be less than 5MB.'); return; }
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const circle = document.querySelector('.avatar-circle');
+    circle.innerHTML = `<img src="${ev.target.result}" style="width:100%;height:100%;object-fit:cover;">`;
+  };
+  reader.readAsDataURL(file);
+});
+
+// State uppercase
+document.getElementById('state').addEventListener('input', function() {
+  this.value = this.value.toUpperCase().slice(0, 2);
+});
+// SSN digits only
+document.getElementById('ssn').addEventListener('input', function() {
+  this.value = this.value.replace(/\D/g, '').slice(0, 4);
+});
+</script>
+</body>
+</html>

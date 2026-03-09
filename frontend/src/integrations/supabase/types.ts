@@ -498,6 +498,8 @@ export type Database = {
           zip_code: string | null
           dob: string | null
           avatar_url: string | null
+          croa_disclosure_accepted: boolean | null
+          croa_disclosure_timestamp: string | null
         }
         Insert: {
           id: string
@@ -514,6 +516,8 @@ export type Database = {
           zip_code?: string | null
           dob?: string | null
           avatar_url?: string | null
+          croa_disclosure_accepted?: boolean | null
+          croa_disclosure_timestamp?: string | null
         }
         Update: {
           id?: string
@@ -530,6 +534,8 @@ export type Database = {
           zip_code?: string | null
           dob?: string | null
           avatar_url?: string | null
+          croa_disclosure_accepted?: boolean | null
+          croa_disclosure_timestamp?: string | null
         }
         Relationships: []
       }

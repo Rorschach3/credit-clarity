@@ -146,9 +146,9 @@ export const processWithAI = async (
     // Progress callback
     onProgress?.('📤 Uploading file...');
     
-    // Set timeout based on file size (1 minute per MB, minimum 2 minutes, max 8 minutes)
+    // Set timeout based on file size (2 minutes per MB, minimum 5 minutes, max 15 minutes)
     const fileSizeMB = file.size / (1024 * 1024);
-    const timeoutMinutes = Math.max(2, Math.min(8, Math.ceil(fileSizeMB * 1)));
+    const timeoutMinutes = Math.max(5, Math.min(15, Math.ceil(fileSizeMB * 2)));
     
     timeoutId = setTimeout(() => {
       console.log(`⏰ Request timeout after ${timeoutMinutes} minutes`);
@@ -295,11 +295,24 @@ export const processWithAI = async (
         if (retryCount < 1) {
           console.log(`🔄 Retrying request (attempt ${retryCount + 1}/2)...`);
           onProgress?.('🔄 Retrying request...');
-          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+          await new Promise(resolve => setTimeout(resolve, 2000));
           return processWithAI(file, userId, onProgress, retryCount + 1);
         }
-        onProgress?.('❌ Request timed out');
-        throw new Error('Processing timed out - the file may be too large or the server may be overloaded. Please try again.');
+        // AI timed out after retry — fall back to OCR-only processing
+        console.warn('⚠️ AI processing timed out after retry, falling back to OCR extraction');
+        onProgress?.('⏰ AI timed out — switching to OCR fallback...');
+        try {
+          const extractedText = await processWithOCR(file, userId);
+          onProgress?.('✅ OCR extraction complete (AI unavailable)');
+          return {
+            tradelines: [],
+            stats: { found: 0, saved: 0, failed: 0 },
+            processingMethod: 'ocr_fallback'
+          };
+        } catch (ocrError) {
+          onProgress?.('❌ Both AI and OCR processing failed');
+          throw new Error('Processing timed out and OCR fallback also failed. Please try again with a smaller file or contact support.');
+        }
       } else if (error.message?.includes('Failed to fetch')) {
         onProgress?.('❌ Cannot connect to server');
         throw new Error('Cannot connect to server - please ensure the backend is running');

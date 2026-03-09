@@ -124,12 +124,24 @@ export const DisputeLetterGeneration: React.FC<DisputeLetterGenerationProps> = (
               </div>
             </div>
 
-            {generatedLetters.map((letter) => (
-              <Card key={letter.id} className="border-l-4 border-l-blue-500">
+            {generatedLetters.map((letter) => {
+              const bureauColor =
+                letter.creditBureau?.toLowerCase().includes('transunion') ? '#2563EB'
+                : letter.creditBureau?.toLowerCase().includes('experian') ? '#7C3AED'
+                : letter.creditBureau?.toLowerCase().includes('equifax') ? '#DC2626'
+                : '#2563EB';
+              return (
+              <Card key={letter.id} className="border-l-4" style={{ borderLeftColor: bureauColor }}>
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle className="text-base">{letter.creditBureau}</CardTitle>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <span
+                          className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: bureauColor }}
+                        />
+                        {letter.creditBureau}
+                      </CardTitle>
                       <p className="text-sm text-muted-foreground">
                         {letter.disputeCount} item{letter.disputeCount !== 1 ? 's' : ''} to dispute
                       </p>
@@ -186,7 +198,8 @@ export const DisputeLetterGeneration: React.FC<DisputeLetterGenerationProps> = (
                   )}
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
           </div>
         )}
       </CardContent>

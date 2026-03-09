@@ -12,7 +12,9 @@ import {
 } from "@/components/ui/pagination";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, FileText, Eye, Download, History } from "lucide-react";
+import { usePersistentProfile } from "@/hooks/usePersistentProfile";
+import { toast } from "sonner";
+import { Loader2, FileText, Eye, Download, History, Mail, CheckCircle2 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -26,6 +28,7 @@ interface DisputeRecord {
   created_at: string | null;
   letter_text: string | null;
   mailing_address: string;
+  lob_id: string | null;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -35,7 +38,7 @@ const PAGE_SIZE = 10;
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   generated: { label: "Generated", cls: "bg-purple-500/20 text-purple-300 border-purple-500/30" },
   pending:   { label: "Pending",   cls: "bg-amber-500/20 text-amber-300 border-amber-500/30"  },
-  sent:      { label: "Sent",      cls: "bg-blue-500/20 text-blue-300 border-blue-500/30"     },
+  sent:      { label: "Mailed",    cls: "bg-blue-500/20 text-blue-300 border-blue-500/30"     },
   resolved:  { label: "Resolved",  cls: "bg-green-500/20 text-green-300 border-green-500/30"  },
   rejected:  { label: "Rejected",  cls: "bg-red-500/20 text-red-300 border-red-500/30"        },
 };
@@ -134,12 +137,14 @@ function LetterModal({ dispute, onClose }: { dispute: DisputeRecord; onClose: ()
 export default function DisputeHistoryPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { profile } = usePersistentProfile();
 
   const [disputes, setDisputes]     = useState<DisputeRecord[]>([]);
   const [isLoading, setIsLoading]   = useState(true);
   const [error, setError]           = useState<string | null>(null);
   const [page, setPage]             = useState(1);
   const [viewing, setViewing]       = useState<DisputeRecord | null>(null);
+  const [mailing, setMailing]       = useState<string | null>(null); // dispute id being mailed
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -148,7 +153,7 @@ export default function DisputeHistoryPage() {
     const fetchDisputes = async () => {
       const { data, error: fetchErr } = await supabase
         .from("disputes")
-        .select("id, creditor_name, account_number_masked, bureau, dispute_reason, status, created_at, letter_text, mailing_address")
+        .select("id, creditor_name, account_number_masked, bureau, dispute_reason, status, created_at, letter_text, mailing_address, lob_id")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
@@ -163,6 +168,55 @@ export default function DisputeHistoryPage() {
 
     fetchDisputes();
   }, [user]);
+
+  // ── Mail Letter ───────────────────────────────────────────────────────────
+  const handleMailLetter = async (dispute: DisputeRecord) => {
+    if (!profile || !dispute.letter_text || !dispute.bureau) {
+      toast.error("Missing profile address or letter content");
+      return;
+    }
+    if (!profile.address1 || !profile.city || !profile.state || !profile.zip_code) {
+      toast.error("Complete your profile address before mailing");
+      navigate("/profile");
+      return;
+    }
+
+    setMailing(dispute.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("mail-letter", {
+        body: {
+          bureau: dispute.bureau,
+          letterContent: dispute.letter_text,
+          fromAddress: {
+            name: `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim(),
+            address_line1: profile.address1,
+            address_line2: profile.address2 ?? undefined,
+            address_city: profile.city,
+            address_state: profile.state,
+            address_zip: profile.zip_code,
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      toast.success(`Letter mailed to ${dispute.bureau}!`, {
+        description: data?.expectedDelivery
+          ? `Expected delivery: ${new Date(data.expectedDelivery).toLocaleDateString()}`
+          : "Processing your letter now.",
+      });
+
+      // Update local state
+      setDisputes((prev) =>
+        prev.map((d) => d.id === dispute.id ? { ...d, status: "sent", lob_id: data?.letterId ?? "sent" } : d)
+      );
+    } catch (err) {
+      console.error("[DisputeHistory] Mail error:", err);
+      toast.error("Failed to mail letter. Please try again.");
+    } finally {
+      setMailing(null);
+    }
+  };
 
   // ── Pagination ────────────────────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(disputes.length / PAGE_SIZE));
@@ -294,6 +348,27 @@ export default function DisputeHistoryPage() {
                               <Download className="h-3.5 w-3.5 mr-1" />
                               Download
                             </Button>
+                          )}
+                          {dispute.letter_text && !dispute.lob_id && (
+                            <Button
+                              size="sm"
+                              className="h-7 text-xs px-2 bg-[#D4A853] hover:bg-[#E8C06A] text-[#0A0F1E] font-semibold border-0"
+                              onClick={() => handleMailLetter(dispute)}
+                              disabled={mailing === dispute.id}
+                            >
+                              {mailing === dispute.id ? (
+                                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                              ) : (
+                                <Mail className="h-3.5 w-3.5 mr-1" />
+                              )}
+                              {mailing === dispute.id ? "Mailing…" : "Mail Letter"}
+                            </Button>
+                          )}
+                          {dispute.lob_id && (
+                            <span className="h-7 flex items-center gap-1 text-xs text-green-400 px-1">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Mailed
+                            </span>
                           )}
                         </div>
                       </div>

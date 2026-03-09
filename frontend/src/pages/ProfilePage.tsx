@@ -17,11 +17,12 @@ type Profile = Database['public']['Tables']['profiles']['Row'];
 
 export default function ProfilePage() {
   const { user } = useAuth();
-  const { 
-    profile: persistentProfile, 
-    updateProfile, 
+  const {
+    profile: persistentProfile,
+    updateProfile,
+    refreshProfile,
     loading: profileLoading,
-    error: profileError 
+    error: profileError
   } = usePersistentProfile();
   
   const profileSchema = z.object({
@@ -73,51 +74,7 @@ export default function ProfilePage() {
     }
   }, [persistentProfile]);
 
-  // Memoize fetchProfile with useCallback
-  const fetchProfile = useCallback(async () => {
-    if (!user) return;
-    
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('first_name, last_name, address1, address2, city, state, zip_code, phone_number, last_four_of_ssn, dob')
-        .eq('user_id', user.id)
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching profile:', error);
-        throw error;
-      }
-
-      if (data) {
-        setProfile({
-          first_name: data.first_name ?? '',
-          last_name: data.last_name ?? '',
-          address1: data.address1 ?? null,
-          address2: data.address2 ?? null,
-          city: data.city ?? null,
-          state: data.state ?? null,
-          zip_code: data.zip_code ?? null,
-          phone_number: data.phone_number ?? null,
-          last_four_of_ssn: data.last_four_of_ssn ?? null,
-          dob: data.dob ?? null
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching profile:', error instanceof Error ? error.message : 'Unknown error');
-      toast.error('Failed to load profile');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user]); // Include user in dependencies
-
-  // Simplified useEffect with proper dependencies
-  useEffect(() => {
-    if (user) {
-      fetchProfile();
-    }
-  }, [user, fetchProfile]); // Include both user and fetchProfile
+  // Profile data comes from usePersistentProfile hook — no separate fetch needed
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,7 +106,6 @@ export default function ProfilePage() {
 
     setIsLoading(true);
     try {
-      // Use the persistent profile hook to update the profile
       await updateProfile({
         first_name: profile.first_name,
         last_name: profile.last_name,
@@ -163,11 +119,11 @@ export default function ProfilePage() {
         dob: profile.dob || null,
         avatar_url: avatarUrl || null
       });
-
-      // Success toast is handled by the hook
+      // Refresh to ensure UI reflects saved data
+      await refreshProfile();
     } catch (error) {
       console.error('Error updating profile:', error);
-      // Error toast is handled by the hook
+      // Error toast handled by hook — re-throw ensures finally still runs
     } finally {
       setIsLoading(false);
     }
@@ -198,7 +154,7 @@ export default function ProfilePage() {
       // Upload to Supabase storage
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-      
+
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(fileName, file, { upsert: true });
@@ -212,19 +168,11 @@ export default function ProfilePage() {
 
       const newAvatarUrl = urlData.publicUrl;
 
-      // Update profile with new avatar URL
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ 
-          avatar_url: newAvatarUrl,
-          updated_at: new Date().toISOString() 
-        })
-        .eq('user_id', user.id);
+      // Update via hook so cache is cleared and state stays in sync
+      await updateProfile({ avatar_url: newAvatarUrl });
 
-      if (updateError) throw updateError;
-
+      // Immediately reflect in local avatar state
       setAvatarUrl(newAvatarUrl);
-      toast.success('Avatar updated successfully!');
     } catch (error) {
       console.error('Avatar upload error:', error);
       toast.error('Failed to update avatar');

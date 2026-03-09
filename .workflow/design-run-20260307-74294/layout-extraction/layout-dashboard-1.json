@@ -1,0 +1,38 @@
+{
+  "template": {
+    "id": "dashboard-layout-1",
+    "target": "dashboard",
+    "variant": 1,
+    "name": "Sidebar + Main Grid",
+    "device": "responsive",
+    "dom_structure": {
+      "root": "app-shell",
+      "structure": [
+        { "id": "mobile-topbar", "tag": "header", "visible": "mobile-only", "children": ["hamburger", "logo", "avatar"] },
+        { "id": "sidebar", "tag": "nav", "role": "navigation", "aria-label": "Main navigation", "collapsible": true, "children": ["logo", "nav-items", "user-menu"] },
+        { "id": "main", "tag": "main", "role": "main", "children": [
+          { "id": "page-header", "children": ["greeting", "date", "quick-actions"] },
+          { "id": "stats-row", "layout": "4-col-responsive", "children": ["stat-tradelines", "stat-negative", "stat-disputes", "stat-resolved"] },
+          { "id": "content-grid", "layout": "main-sidebar-split", "children": [
+            { "id": "tradelines-panel", "children": ["panel-header", "tradeline-list"] },
+            { "id": "activity-panel", "children": ["recent-disputes", "profile-completion"] }
+          ]},
+          { "id": "action-row", "layout": "2-col", "children": ["upload-cta-card", "generate-cta-card"] }
+        ]}
+      ]
+    },
+    "css_layout_rules": {
+      "app_shell": "display: flex; min-height: 100svh; background: var(--surface-base);",
+      "sidebar": "width: 260px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--surface-card); border-right: 1px solid var(--border); padding: 1.5rem 1rem; position: fixed; top: 0; bottom: 0; left: 0; overflow-y: auto; transform: translateX(0); transition: transform 250ms ease; z-index: 40;",
+      "sidebar_hidden": "@media(max-width:1023px){ .sidebar { transform: translateX(-100%); } .sidebar.open { transform: translateX(0); } }",
+      "main": "flex: 1; margin-left: 260px; padding: 2rem 1.5rem; overflow-y: auto;",
+      "main_mobile": "@media(max-width:1023px){ main { margin-left: 0; padding-top: 5rem; } }",
+      "stats_row": "display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem;",
+      "stats_row_lg": "@media(min-width:1024px){ .stats-row { grid-template-columns: repeat(4, 1fr); } }",
+      "content_grid": "display: grid; grid-template-columns: 1fr; gap: 1.5rem;",
+      "content_grid_xl": "@media(min-width:1280px){ .content-grid { grid-template-columns: 2fr 1fr; } }",
+      "action_row": "display: grid; grid-template-columns: 1fr; gap: 1rem;",
+      "action_row_md": "@media(min-width:768px){ .action-row { grid-template-columns: 1fr 1fr; } }"
+    }
+  }
+}
