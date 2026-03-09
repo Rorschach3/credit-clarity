@@ -58,7 +58,7 @@ Be concise, accurate, and always remind users that you are not a lawyer and they
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-3.5-turbo',
         messages,
         max_tokens: 500,
         temperature: 0.7,
