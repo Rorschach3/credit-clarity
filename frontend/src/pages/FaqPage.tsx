@@ -4,6 +4,85 @@ import { FileText, Brain, Rocket } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 
 export default function FaqPage() {
+  const faqJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: [
+      {
+        "@type": "Question",
+        name: "Why are dispute letters the foundation of credit repair?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text:
+            "Dispute letters invoke your rights under the FCRA and require bureaus and furnishers to investigate and verify reported information within the legal timeframe.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "How does sending multiple dispute letters improve success rates?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text:
+            "Multiple rounds let you challenge different inaccuracies, dispute with different parties, and respond to outcomes, increasing the chance that unverifiable items are removed or corrected.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "What credit issues can we help address?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text:
+            "Common targets include inaccurate late payments, collections, charge-offs, incorrect balances/limits, duplicate accounts, and outdated or misreported account details.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "Is Credit Clarity a substitute for legal advice?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text:
+            "No. We provide tools and educational guidance; for legal advice on your specific situation, consult a qualified attorney.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "How do we analyze dispute letter effectiveness?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text:
+            "We track outcomes by item type, bureau, language patterns, and timing between rounds to continuously refine dispute strategies.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "What makes AI-generated dispute letters more effective?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text:
+            "Letters can be personalized to the account and bureau, incorporate precise dispute reasons, and avoid repetitive boilerplate language that automated systems may deprioritize.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "How does the process work from start to finish?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text:
+            "Upload reports, extract tradelines, generate a dispute strategy and letters per bureau, review for compliance, send disputes, then track responses and iterate with follow-up rounds.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "What results can I expect from the dispute process?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text:
+            "Results vary. Many users see improvements over multiple rounds across several months depending on item type, accuracy of reporting, and creditor documentation.",
+        },
+      },
+    ],
+  };
+
   return (
     <>
       <Helmet>
@@ -17,6 +96,7 @@ export default function FaqPage() {
         <meta name="twitter:title" content="FAQ - Credit Clarity" />
         <meta name="twitter:description" content="Find answers to common questions about credit repair and how Credit Clarity helps improve your credit score." />
         <link rel="canonical" href="https://creditclarity.ai/faq" />
+        <script type="application/ld+json">{JSON.stringify(faqJsonLd)}</script>
       </Helmet>
 
       <div className="has-navbar">
