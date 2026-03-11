@@ -87,6 +87,27 @@ class TradelineValidationPipeline:
         if any(isinstance(tradeline.get(k), str) and '\ufffd' in tradeline.get(k) for k in ['creditor_name', 'account_number']):
             warnings.append('Replacement character found in text fields (possible encoding/OCR issue)')
 
+        # Negative flag consistency: warn when status/history suggests negative but flag disagrees.
+        try:
+            status_raw = (tradeline.get('account_status') or '').lower()
+            payment_history = (tradeline.get('payment_history') or '').lower()
+            comments = (tradeline.get('comments') or '').lower()
+            negative_terms = (
+                'collection', 'charge off', 'charged off', 'late', 'delinquent',
+                'past due', 'repossession', 'foreclosure', 'bankruptcy', 'write off'
+            )
+            likely_negative = any(
+                term in status_raw or term in payment_history or term in comments
+                for term in negative_terms
+            )
+            is_negative_flag = tradeline.get('is_negative')
+            if likely_negative and is_negative_flag is False:
+                warnings.append('Negative indicators detected but is_negative is False')
+            if (not likely_negative) and is_negative_flag is True:
+                warnings.append('is_negative is True but no negative indicators detected')
+        except Exception:
+            warnings.append('Unable to evaluate negative flag consistency')
+
         # Compute confidence using field results and OCR quality if available
         confidence, contributions = self.scorer.compute_confidence(tradeline, field_results)
 
@@ -96,6 +117,8 @@ class TradelineValidationPipeline:
             'valid': len(errors) == 0 and confidence >= 0.5,
             'severity': severity,
             'confidence': confidence,
+            # Backwards-compatible alias used by some tests/consumers.
+            'score': confidence,
             'contributions': contributions,
             'errors': errors,
             'warnings': warnings,

@@ -48,8 +48,10 @@ class FieldValidators:
         # Luhn check for likely card numbers (13-19 digits)
         digits = re.sub(r'\D', '', acct_clean)
         if 13 <= len(digits) <= 19:
+            # Credit report account numbers may be masked/partial or not be bankcard numbers.
+            # Do not fail validation on Luhn alone; surface it as informational text instead.
             if not self._luhn_check(digits):
-                return False, 'Account number fails Luhn checksum'
+                return True, 'Account number format OK (Luhn checksum failed)'
 
         return True, 'Account number format OK'
 
@@ -124,7 +126,8 @@ class FieldValidators:
 
         # validations and messages
         if opened_dt is None:
-            msgs.append((False, 'date_opened missing or unparseable', 'CRITICAL'))
+            # Missing opened date is common in bureau data; treat as a warning.
+            msgs.append((False, 'date_opened missing or unparseable', 'WARNING'))
         else:
             if opened_dt.year < 1950 or opened_dt > datetime.utcnow():
                 msgs.append((False, 'date_opened out of reasonable range', 'ERROR'))

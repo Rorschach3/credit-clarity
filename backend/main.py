@@ -58,6 +58,7 @@ from utils.field_validator import field_validator
 # Import error handling and response modules
 from middleware.error_handler import ErrorHandlerMiddleware, setup_exception_handlers
 from core.response import ResponseFormatter, success_response, error_response
+from api.v1.routes import v1_router
 
 async def with_timeout(coro, timeout_seconds):
     try:
@@ -94,12 +95,28 @@ app = FastAPI(
 app.add_middleware(ErrorHandlerMiddleware)
 setup_exception_handlers(app)
 
+# Root endpoint (used by health/unit tests and basic observability checks)
+@app.get("/")
+async def root():
+    return {
+        "name": "Credit Clarity API",
+        "version": "3.0.0",
+        "architecture": "modular",
+        "status": "operational",
+    }
+
 # Initialize background job processor
 from services.background_jobs import job_processor
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup"""
+    logger.info(f"Startup event begin (environment={settings.environment})")
+    # Tests set ENVIRONMENT=testing; avoid starting background workers or attempting
+    # external service connections during app startup.
+    if settings.is_testing():
+        logger.info("🧪 Testing mode: skipping background job processor and WebSocket init")
+        return
     await job_processor.start()
     from services.websocket_manager import initialize_websocket_manager
     await initialize_websocket_manager()
@@ -109,6 +126,8 @@ async def startup_event():
 @app.on_event("shutdown")  
 async def shutdown_event():
     """Cleanup on shutdown"""
+    if settings.is_testing():
+        return
     from services.websocket_manager import shutdown_websocket_manager
     await shutdown_websocket_manager()
     await job_processor.stop()
@@ -326,6 +345,9 @@ app.add_middleware(
         "X-Process-Time"
     ]
 )
+
+# API v1 (modular router). Tests and clients expect these to be mounted at /api/v1/*.
+app.include_router(v1_router, prefix="/api")
 
 def detect_credit_bureau(text_content: str) -> str:
     """
@@ -2347,6 +2369,7 @@ async def health_check():
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
+        "version": "3.0.0",
         "services": {
             "document_ai": "configured" if PROJECT_ID and PROCESSOR_ID else "not_configured",
             "gemini": "configured" if gemini_model else "not_configured",

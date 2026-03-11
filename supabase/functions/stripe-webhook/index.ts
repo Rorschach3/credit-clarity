@@ -32,22 +32,39 @@ serve(async (req) => {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session
         const userId = session.metadata?.user_id ?? session.client_reference_id
-        const subscriptionId = session.subscription as string
 
-        if (!userId || !subscriptionId) break
+        if (!userId) break
 
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId)
-        const priceId = subscription.items.data[0]?.price.id ?? ''
+        if (session.mode === 'payment') {
+          // Credit package purchase — add credits to user_credits
+          const credits = parseInt(session.metadata?.credits ?? '0', 10)
+          if (credits <= 0) break
 
-        await supabase.from('user_subscriptions').upsert({
-          user_id: userId,
-          stripe_subscription_id: subscriptionId,
-          plan_id: priceId,
-          status: subscription.status,
-          started_at: new Date(subscription.start_date * 1000).toISOString(),
-        }, { onConflict: 'user_id' })
+          await supabase.rpc('add_credits', {
+            p_user_id: userId,
+            p_amount: credits,
+            p_description: `Credit purchase — ${credits} credits`,
+          })
 
-        console.log(`[stripe-webhook] Subscription activated for user ${userId}`)
+          console.log(`[stripe-webhook] Added ${credits} credits for user ${userId}`)
+        } else if (session.mode === 'subscription') {
+          // Subscription purchase
+          const subscriptionId = session.subscription as string
+          if (!subscriptionId) break
+
+          const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+          const priceId = subscription.items.data[0]?.price.id ?? ''
+
+          await supabase.from('user_subscriptions').upsert({
+            user_id: userId,
+            stripe_subscription_id: subscriptionId,
+            plan_id: priceId,
+            status: subscription.status,
+            started_at: new Date(subscription.start_date * 1000).toISOString(),
+          }, { onConflict: 'user_id' })
+
+          console.log(`[stripe-webhook] Subscription activated for user ${userId}`)
+        }
         break
       }
 
@@ -56,14 +73,6 @@ serve(async (req) => {
         const userId = subscription.metadata?.user_id
 
         if (!userId) {
-          // Look up by stripe_subscription_id
-          const { data } = await supabase
-            .from('user_subscriptions')
-            .select('user_id')
-            .eq('stripe_subscription_id', subscription.id)
-            .maybeSingle()
-          if (!data) break
-
           await supabase.from('user_subscriptions')
             .update({ status: subscription.status, plan_id: subscription.items.data[0]?.price.id ?? '' })
             .eq('stripe_subscription_id', subscription.id)

@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { usePersistentProfile } from "@/hooks/usePersistentProfile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AnimatedNumber } from "@/components/ui/animated-number";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -116,7 +117,13 @@ export default function DashboardPage() {
                   <span className="text-sm text-muted-foreground">{label}</span>
                   <Icon className={`h-4 w-4 ${color}`} />
                 </div>
-                <div className="text-2xl font-bold">{value}</div>
+                <div className="text-2xl font-bold">
+                  {typeof value === 'number' ? (
+                    <AnimatedNumber value={value} />
+                  ) : (
+                    value
+                  )}
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -126,8 +133,8 @@ export default function DashboardPage() {
         <div>
           <h2 className="text-lg font-semibold mb-3">Quick Actions</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Link to="/credit-report-upload">
-              <Card className="card-midnight h-full hover:border-[#D4A853]/40 transition-colors cursor-pointer">
+            <Link to="/credit-report-upload" className="group">
+              <Card className="card-midnight h-full hover:border-[#D4A853]/40 transition-colors transition-transform duration-150 ease-in-out group-hover:scale-[1.02]">
                 <CardContent className="p-5 flex items-center gap-3">
                   <div className="rounded-full bg-blue-500/10 p-2">
                     <Upload className="h-5 w-5 text-blue-400" />
@@ -141,8 +148,8 @@ export default function DashboardPage() {
               </Card>
             </Link>
 
-            <Link to="/dispute-wizard">
-              <Card className="card-midnight h-full hover:border-[#D4A853]/40 transition-colors cursor-pointer">
+            <Link to="/dispute-wizard" className="group">
+              <Card className="card-midnight h-full hover:border-[#D4A853]/40 transition-colors transition-transform duration-150 ease-in-out group-hover:scale-[1.02]">
                 <CardContent className="p-5 flex items-center gap-3">
                   <div className="rounded-full bg-[#D4A853]/10 p-2">
                     <FileText className="h-5 w-5 text-[#D4A853]" />
@@ -156,8 +163,8 @@ export default function DashboardPage() {
               </Card>
             </Link>
 
-            <Link to="/dispute-history">
-              <Card className="card-midnight h-full hover:border-[#D4A853]/40 transition-colors cursor-pointer">
+            <Link to="/dispute-history" className="group">
+              <Card className="card-midnight h-full hover:border-[#D4A853]/40 transition-colors transition-transform duration-150 ease-in-out group-hover:scale-[1.02]">
                 <CardContent className="p-5 flex items-center gap-3">
                   <div className="rounded-full bg-purple-500/10 p-2">
                     <History className="h-5 w-5 text-purple-400" />
@@ -201,7 +208,7 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-2">
               {recentDisputes.map(d => (
-                <Card key={d.id} className="card-midnight">
+                <Card key={d.id} className="card-midnight hover:bg-background/20 transition-colors">
                   <CardContent className="p-4 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-medium truncate">{d.creditor_name ?? "Unknown creditor"}</p>

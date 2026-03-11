@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { CreditsBalance } from "@/components/credits/CreditsBalance";
 import {
   Sheet,
   SheetContent,
@@ -77,6 +78,7 @@ export function Navbar() {
         <div className="hidden md:flex items-center gap-2 flex-shrink-0">
           {user ? (
             <>
+              <CreditsBalance />
               <Link to="/profile">
                 <Button
                   variant="ghost"

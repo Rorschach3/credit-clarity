@@ -6,6 +6,7 @@ import re
 import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import uuid
 from dataclasses import dataclass
 
@@ -379,6 +380,9 @@ class TransUnionTradelineParser:
         # Remove ALL special characters (asterisks, X's, dots, dashes, etc.)
         # Keep only alphanumeric characters per user requirement
         cleaned_account = re.sub(r'[^A-Za-z0-9]', '', account_num)
+
+        # Remove common masking markers that are technically alphanumeric but not meaningful.
+        cleaned_account = re.sub(r'[Xx]+', '', cleaned_account)
         
         # Validate: Must be at least 4 characters and contain at least one digit
         if not cleaned_account or len(cleaned_account) < 4:
@@ -424,39 +428,50 @@ class TransUnionTradelineParser:
     
     def _format_currency(self, amount: str, field_name: str = "") -> Optional[str]:
         """
-        Format currency amount to match expected format: $X,XXX.XX for all fields.
+        Format currency values with field-specific requirements:
+        - monthly_payment: `$X,XXX.XX`
+        - credit_limit/account_balance: whole dollars `$X,XXX` (rounded half-up)
+        - zero values: return None (treat as missing)
         """
         if not amount or amount.lower() in ['none', 'n/a', '']:
             return None
 
-        # Handle explicit $0 - format based on field type
-        if amount.lower() == '$0' or amount == '0':
-            return '$0.00'
-        
         amount = amount.strip()
         
         # Apply OCR error corrections
         amount = amount.replace('O', '0').replace('l', '1').replace('S', '5')
         
         # Handle parenthetical negatives: ($1,234) or (1234)
-        is_negative = '(' in amount and ')' in amount or amount.startswith('-')
-        
-        # Extract numeric value
-        numeric_match = re.search(r'[\d,]+\.?\d*', amount)
-        if not numeric_match:
-            return None
-        
-        numeric_str = numeric_match.group()
+        is_negative = False
+        if '(' in amount and ')' in amount:
+            is_negative = True
+            amount = amount.replace('(', '').replace(')', '').strip()
+        if amount.startswith('-'):
+            is_negative = True
+            amount = amount[1:].strip()
         
         try:
-            # Parse the numeric value
-            numeric_value = float(numeric_str.replace(',', ''))
-            abs_amount = abs(numeric_value)
-            formatted = f"${abs_amount:,.2f}"
-            return f"-{formatted}" if is_negative else formatted
-                
-        except ValueError:
+            numeric_str = re.sub(r'[$,\s]', '', amount)
+            if not numeric_str:
+                return None
+            value = Decimal(numeric_str)
+        except (InvalidOperation, ValueError):
             return None
+
+        abs_amount = abs(value)
+
+        if field_name in {"credit_limit", "account_balance"}:
+            rounded = int(abs_amount.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+            if rounded == 0:
+                return None
+            formatted = f"${rounded:,}"
+        else:
+            cents = abs_amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if cents == 0:
+                return None
+            formatted = f"${cents:,.2f}"
+
+        return f"-{formatted}" if is_negative else formatted
     
     def _parse_payment_history(self, section: str) -> str:
         """Extract payment history summaries from a tradeline section."""
@@ -556,7 +571,7 @@ class TransUnionTradelineParser:
         currency_fields = ['monthly_payment', 'credit_limit', 'account_balance']
         for field in currency_fields:
             value = getattr(tradeline, field)
-            if value and not (value.startswith('$') or value == '$0'):
+            if value and not (value.startswith('$') or value.startswith('-$')):
                 validation_result['warnings'].append(f"Currency field {field} should start with $: {value}")
         
         return validation_result

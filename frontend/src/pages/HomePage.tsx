@@ -38,7 +38,7 @@ const HomePage = React.memo(function HomePage() {
             </div>
 
             <h1
-              className="text-5xl md:text-6xl lg:text-7xl font-extrabold mb-6 leading-tight"
+              className="text-5xl md:text-6xl lg:text-7xl font-extrabold mb-6 leading-tight animate-fade-in-up"
               style={{ letterSpacing: '-0.03em' }}
             >
               Take Control of{' '}
@@ -128,7 +128,10 @@ const HomePage = React.memo(function HomePage() {
                 desc: 'Generate professional dispute letters and track your credit score improvements over time.',
               },
             ].map(({ step, icon: Icon, title, desc }) => (
-              <div key={step} className="card-midnight p-8 rounded-xl group">
+              <div
+                key={step}
+                className="card-midnight p-8 rounded-xl group transition-transform duration-150 ease-in-out hover:scale-105 animate-fade-in-up"
+              >
                 <div className="flex items-start gap-4 mb-5">
                   <span
                     className="text-xs font-bold tracking-widest text-[#D4A853] opacity-60 mt-1"

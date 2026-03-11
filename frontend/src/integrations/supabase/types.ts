@@ -112,6 +112,7 @@ export type Database = {
         Row: {
           amount: number
           created_at: string | null
+          description: string | null
           id: string
           letter_id: string | null
           type: string
@@ -120,6 +121,7 @@ export type Database = {
         Insert: {
           amount: number
           created_at?: string | null
+          description?: string | null
           id?: string
           letter_id?: string | null
           type: string
@@ -128,6 +130,7 @@ export type Database = {
         Update: {
           amount?: number
           created_at?: string | null
+          description?: string | null
           id?: string
           letter_id?: string | null
           type?: string
@@ -707,6 +710,24 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      user_credits: {
+        Row: {
+          user_id: string
+          balance: number
+          updated_at: string | null
+        }
+        Insert: {
+          user_id: string
+          balance?: number
+          updated_at?: string | null
+        }
+        Update: {
+          user_id?: string
+          balance?: number
+          updated_at?: string | null
         }
         Relationships: []
       }

@@ -5,7 +5,7 @@ from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
 from enum import Enum
 
-from ..models.tradeline_models import DocumentType, ExtractedTable, ExtractedText, DocumentAIResult
+from models.tradeline_models import DocumentType, ExtractedTable, ExtractedText, DocumentAIResult
 from .google_document_ai_service import GoogleDocumentAIService
 
 logger = logging.getLogger(__name__)

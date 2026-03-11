@@ -13,8 +13,9 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { usePersistentProfile } from "@/hooks/usePersistentProfile";
-import { toast } from "sonner";
-import { Loader2, FileText, Eye, Download, History, Mail, CheckCircle2 } from "lucide-react";
+import { MailForMeButton } from "@/components/credits/MailForMeButton";
+import { CreditsBalance } from "@/components/credits/CreditsBalance";
+import { Loader2, FileText, Eye, Download, History } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -144,7 +145,6 @@ export default function DisputeHistoryPage() {
   const [error, setError]           = useState<string | null>(null);
   const [page, setPage]             = useState(1);
   const [viewing, setViewing]       = useState<DisputeRecord | null>(null);
-  const [mailing, setMailing]       = useState<string | null>(null); // dispute id being mailed
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -168,55 +168,6 @@ export default function DisputeHistoryPage() {
 
     fetchDisputes();
   }, [user]);
-
-  // ── Mail Letter ───────────────────────────────────────────────────────────
-  const handleMailLetter = async (dispute: DisputeRecord) => {
-    if (!profile || !dispute.letter_text || !dispute.bureau) {
-      toast.error("Missing profile address or letter content");
-      return;
-    }
-    if (!profile.address1 || !profile.city || !profile.state || !profile.zip_code) {
-      toast.error("Complete your profile address before mailing");
-      navigate("/profile");
-      return;
-    }
-
-    setMailing(dispute.id);
-    try {
-      const { data, error } = await supabase.functions.invoke("mail-letter", {
-        body: {
-          bureau: dispute.bureau,
-          letterContent: dispute.letter_text,
-          fromAddress: {
-            name: `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim(),
-            address_line1: profile.address1,
-            address_line2: profile.address2 ?? undefined,
-            address_city: profile.city,
-            address_state: profile.state,
-            address_zip: profile.zip_code,
-          },
-        },
-      });
-
-      if (error) throw error;
-
-      toast.success(`Letter mailed to ${dispute.bureau}!`, {
-        description: data?.expectedDelivery
-          ? `Expected delivery: ${new Date(data.expectedDelivery).toLocaleDateString()}`
-          : "Processing your letter now.",
-      });
-
-      // Update local state
-      setDisputes((prev) =>
-        prev.map((d) => d.id === dispute.id ? { ...d, status: "sent", lob_id: data?.letterId ?? "sent" } : d)
-      );
-    } catch (err) {
-      console.error("[DisputeHistory] Mail error:", err);
-      toast.error("Failed to mail letter. Please try again.");
-    } finally {
-      setMailing(null);
-    }
-  };
 
   // ── Pagination ────────────────────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(disputes.length / PAGE_SIZE));
@@ -244,15 +195,18 @@ export default function DisputeHistoryPage() {
                 : "Track the status of your submitted credit bureau disputes."}
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="shrink-0 text-xs"
-            onClick={() => navigate("/dispute-wizard")}
-          >
-            <History className="h-3.5 w-3.5 mr-1.5" />
-            New Dispute
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            <CreditsBalance />
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              onClick={() => navigate("/dispute-wizard")}
+            >
+              <History className="h-3.5 w-3.5 mr-1.5" />
+              New Dispute
+            </Button>
+          </div>
         </div>
 
         {/* Loading */}
@@ -349,26 +303,27 @@ export default function DisputeHistoryPage() {
                               Download
                             </Button>
                           )}
-                          {dispute.letter_text && !dispute.lob_id && (
-                            <Button
-                              size="sm"
-                              className="h-7 text-xs px-2 bg-[#D4A853] hover:bg-[#E8C06A] text-[#0A0F1E] font-semibold border-0"
-                              onClick={() => handleMailLetter(dispute)}
-                              disabled={mailing === dispute.id}
-                            >
-                              {mailing === dispute.id ? (
-                                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                              ) : (
-                                <Mail className="h-3.5 w-3.5 mr-1" />
-                              )}
-                              {mailing === dispute.id ? "Mailing…" : "Mail Letter"}
-                            </Button>
-                          )}
-                          {dispute.lob_id && (
-                            <span className="h-7 flex items-center gap-1 text-xs text-green-400 px-1">
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              Mailed
-                            </span>
+                          {dispute.letter_text && dispute.bureau && (
+                            <MailForMeButton
+                              disputeId={dispute.id}
+                              bureau={dispute.bureau}
+                              letterText={dispute.letter_text}
+                              fromAddress={{
+                                name: `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim(),
+                                address_line1: profile?.address1 ?? "",
+                                address_city: profile?.city ?? "",
+                                address_state: profile?.state ?? "",
+                                address_zip: profile?.zip_code ?? "",
+                              }}
+                              alreadyMailed={!!dispute.lob_id}
+                              onMailed={(letterId) =>
+                                setDisputes((prev) =>
+                                  prev.map((d) =>
+                                    d.id === dispute.id ? { ...d, status: "sent", lob_id: letterId } : d
+                                  )
+                                )
+                              }
+                            />
                           )}
                         </div>
                       </div>

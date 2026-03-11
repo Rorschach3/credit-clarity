@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 from .storage_service import StorageService
-from ..models.tradeline_models import ProcessingJob, ProcessingStatus
+from models.tradeline_models import ProcessingJob, ProcessingStatus
 import logging
 
 logger = logging.getLogger(__name__)

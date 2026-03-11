@@ -4,19 +4,24 @@ Provides system health monitoring and diagnostics
 """
 from fastapi import APIRouter, Depends, Request
 from typing import Dict, Any
+from datetime import datetime
 
 from core.security import get_current_user_optional
 from schemas.responses import APIResponse, HealthResponse, MetricsResponse
-from services.monitoring import metrics_collector, monitor_api_call
-from services.cache_service import cache
-from services.background_jobs import job_processor
+import services.monitoring as monitoring
+import services.cache_service as cache_service
+import services.background_jobs as background_jobs
 from core.config import get_settings
+from utils.async_utils import maybe_await
 
 router = APIRouter(prefix="/health", tags=["Health"])
 settings = get_settings()
 
+def _safe_dict(value: Any) -> Dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
 @router.get("/", response_model=APIResponse[HealthResponse])
-@monitor_api_call
+@monitoring.monitor_api_call
 async def health_check(request: Request):
     """
     Comprehensive health check endpoint.
@@ -27,28 +32,32 @@ async def health_check(request: Request):
         services_status = {
             "api": True,
             "cache": True,
-            "background_jobs": job_processor.is_running if job_processor else False,
-            "monitoring": metrics_collector is not None,
+            "background_jobs": background_jobs.job_processor.is_running if background_jobs.job_processor else False,
+            "monitoring": monitoring.metrics_collector is not None,
             "database": True  # Add actual DB health check
         }
         
         # Get system health if available
         system_health = None
         try:
-            system_health = metrics_collector.get_health_status()
+            system_health = monitoring.metrics_collector.get_health_status()
+            if not isinstance(system_health, dict):
+                system_health = None
         except Exception:
             pass
         
         # Get cache stats
         cache_stats = None
         try:
-            cache_stats = cache.stats()
+            cache_stats = cache_service.cache.stats()
+            if not isinstance(cache_stats, dict):
+                cache_stats = None
         except Exception:
             pass
         
         health_data = HealthResponse(
             status="healthy",
-            timestamp=request.state.start_time if hasattr(request.state, 'start_time') else None,
+            timestamp=datetime.now(),
             version="1.0",
             environment=settings.environment,
             services=services_status,
@@ -87,8 +96,8 @@ async def readiness_check():
     """
     services_ready = {
         "cache": True,
-        "background_jobs": job_processor.is_running if job_processor else False,
-        "monitoring": metrics_collector is not None,
+        "background_jobs": background_jobs.job_processor.is_running if background_jobs.job_processor else False,
+        "monitoring": monitoring.metrics_collector is not None,
     }
     
     all_ready = all(services_ready.values())
@@ -103,7 +112,7 @@ async def readiness_check():
     )
 
 @router.get("/metrics", response_model=APIResponse[MetricsResponse])
-@monitor_api_call
+@monitoring.monitor_api_call
 async def get_basic_metrics(
     request: Request,
     minutes: int = 5,
@@ -115,13 +124,17 @@ async def get_basic_metrics(
     """
     try:
         # Get basic metrics
-        system_metrics = metrics_collector.get_system_metrics_summary(minutes)
-        api_metrics = metrics_collector.get_api_metrics_summary(minutes)
-        business_metrics = metrics_collector.get_business_metrics_summary(minutes)
+        system_metrics = _safe_dict(monitoring.metrics_collector.get_system_metrics_summary(minutes))
+        api_metrics = _safe_dict(monitoring.metrics_collector.get_api_metrics_summary(minutes))
+        business_metrics = _safe_dict(monitoring.metrics_collector.get_business_metrics_summary(minutes))
         
         # Get service stats
-        job_stats = job_processor.get_stats() if job_processor else {}
-        cache_stats = cache.stats()
+        job_stats = (
+            await maybe_await(background_jobs.job_processor.get_stats())
+            if background_jobs.job_processor
+            else {}
+        )
+        cache_stats = _safe_dict(cache_service.cache.stats())
         
         metrics_data = MetricsResponse(
             system=system_metrics,

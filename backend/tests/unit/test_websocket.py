@@ -2,6 +2,7 @@
 Unit tests for WebSocket functionality.
 Tests WebSocket connection manager and message handling.
 """
+import asyncio
 import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch

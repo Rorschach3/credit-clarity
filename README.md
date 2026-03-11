@@ -51,6 +51,49 @@ Created by a former credit repair specialist, <strong>CreditClarityAI</strong> u
 
 ---
 
+## <span style="color: #D4A853;">Business Model — Mailing Credits</span>
+
+The primary revenue stream is **certified letter mailing**. Users buy credits, then pay to have Credit Clarity physically mail dispute letters to the credit bureaus via USPS Certified Mail through the Lob API.
+
+### Credit Packages
+
+| Package | Credits | Price | Notes |
+|---------|---------|-------|-------|
+| Starter | 15 | $15 | ~1 bureau mailing |
+| Value | 35 | $30 | ~3 bureau mailings — saves $5 |
+| Pro | 60 | $50 | ~5+ bureau mailings — saves $10 |
+
+1 credit = $1.00
+
+### Per-Mailing Cost to User
+
+| Item | Credits |
+|------|---------|
+| Per printed page | 1 |
+| USPS Certified Mail fee | 5 |
+| **Total (10-page letter)** | **15** |
+
+### Full 3-Bureau Dispute Packet (30 pages, 10/bureau)
+
+| | Amount |
+|---|---|
+| User pays | **45 credits = $45** |
+| Lob hard cost (~$6.50/bureau × 3) | **~$19.50** |
+| **Gross profit** | **~$25.50 (~57% margin)** |
+
+### Lob Cost Breakdown per Bureau Letter (estimated)
+
+| Item | Est. Cost |
+|------|-----------|
+| First page | ~$0.87 |
+| Additional 9 pages (~$0.12/page) | ~$1.08 |
+| USPS Certified Mail | ~$4.55 |
+| **Total per bureau** | **~$6.50** |
+
+> Lob includes first-class postage in their letter price — no separate postage charge.
+
+---
+
 ## <span style="color: #27AE60;">Tech Stack</span>
 
 | Layer          | Technology                    |

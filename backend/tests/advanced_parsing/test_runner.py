@@ -2,6 +2,15 @@
 Comprehensive test runner for Phase 4 parsing accuracy validation.
 Runs all test suites and generates consolidated reports.
 """
+import pytest
+
+# This module is an executable harness (not a unit test) and depends on optional heavy
+# packages + local test assets. Skip it during normal `pytest` runs.
+pytest.skip(
+    "Phase 4 parsing test runner is a manual harness (requires optional dependencies).",
+    allow_module_level=True,
+)
+
 import asyncio
 import json
 import os
