@@ -1,0 +1,53 @@
+{
+  "id": "IMPL-004",
+  "title": "Redis Rate Limiting Service",
+  "status": "pending",
+  "context_package_path": ".workflow/active/WFS-implement-credit-clarity-platform/.process/context-package.json",
+  "meta": {
+    "priority": "critical",
+    "effort_estimate": "2 days",
+    "phase": "Phase 1 - Infrastructure Foundation",
+    "type": "backend",
+    "depends_on": ["IMPL-001", "IMPL-002"],
+    "tags": ["rate-limiting", "redis", "freemium", "middleware", "enforcement"]
+  },
+  "context": {
+    "description": "Implement Redis-persisted rate limiting service for freemium tier enforcement. Free users get 2 PDF uploads/month and 3 dispute letters/month. Must persist across server restarts (not in-memory only). Redis keys prefixed 'ratelimit:' to avoid collision with cache_service keys (prefixed 'cache:').",
+    "focus_paths": [
+      "backend/services/cache_service.py",
+      "backend/middleware/",
+      "backend/api/v1/routes/tradeline_extraction.py",
+      "backend/api/v1/routes/processing.py",
+      "docs/PRD-Feature-Specifications.md",
+      "docs/PRD-Technical-Architecture.md"
+    ],
+    "acceptance_criteria": [
+      "backend/services/rate_limit_service.py implements: check_upload_limit(user_id) -> {allowed: bool, remaining: int, reset_at: datetime}, check_letter_limit(user_id) -> same, increment_upload(user_id), increment_letter(user_id)",
+      "Redis keys use format: 'ratelimit:{user_id}:uploads:{YYYY-MM}' and 'ratelimit:{user_id}:letters:{YYYY-MM}' with TTL=32 days (auto-reset monthly)",
+      "Free tier limits: 2 uploads/month, 3 letters/month (configurable via settings)",
+      "Premium users (subscription_tier='premium') bypass rate limits entirely",
+      "HTTP 429 response with {error: 'rate_limit_exceeded', limit: 2, remaining: 0, reset_at: '2026-04-01'} when limit hit",
+      "Rate limit check middleware applied to: POST /api/v1/tradeline-extraction/upload, POST /api/v1/processing/process-pdf, POST /api/v1/disputes/generate-letter",
+      "Verify with: redis-cli keys 'ratelimit:*' after upload to confirm keys created"
+    ],
+    "implementation_approach": [
+      "Step 1: Read backend/services/cache_service.py - understand Redis connection and key pattern",
+      "Step 2: Create backend/services/rate_limit_service.py - use same Redis connection from cache_service",
+      "Step 3: Prefix all rate limit Redis keys with 'ratelimit:' to avoid cache_service collision",
+      "Step 4: Read profiles table subscription_tier to determine if user is premium (bypass limits)",
+      "Step 5: Add rate limit dependency to 3 identified endpoints using FastAPI Depends()",
+      "Step 6: Return HTTP 429 with informative error body on limit exceeded"
+    ],
+    "pre_analysis": [
+      "Read backend/services/cache_service.py - Redis connection object and key prefix pattern",
+      "Read backend/api/v1/routes/tradeline_extraction.py - upload endpoint for middleware injection point",
+      "Read backend/core/security.py - verify_supabase_jwt to understand how to extract user_id"
+    ]
+  },
+  "flow_control": {
+    "execution_mode": "sequential",
+    "parallel_with": ["IMPL-003"],
+    "requires": ["IMPL-001", "IMPL-002"],
+    "blocks": ["IMPL-011"]
+  }
+}

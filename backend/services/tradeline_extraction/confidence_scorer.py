@@ -1,6 +1,6 @@
 """Confidence scoring for tradeline validation.
 
-Aggregates multiple component scores into a final score on 0-100 scale and
+Aggregates multiple component scores into a final score on a 0.0-1.0 scale and
 returns both score and contribution breakdown.
 """
 
@@ -62,16 +62,16 @@ class ConfidenceScorer:
             + ocr_quality * self.OCR_QUALITY_W
         )
 
-        score_0_100 = round(max(0.0, min(1.0, overall)) * 100, 2)
+        score = round(max(0.0, min(1.0, overall)), 4)
 
         contributions = {
-            'field_completeness': round(field_completeness * 100, 2),
-            'format_validity': round(format_validity * 100, 2),
-            'cross_validation': round(cross_score * 100, 2),
-            'ocr_quality': round(ocr_quality * 100, 2),
+            'field_completeness': round(field_completeness, 4),
+            'format_validity': round(format_validity, 4),
+            'cross_validation': round(cross_score, 4),
+            'ocr_quality': round(ocr_quality, 4),
         }
 
-        return score_0_100, contributions
+        return score, contributions
 
     def _parse(self, value: Any) -> float:
         if value is None:

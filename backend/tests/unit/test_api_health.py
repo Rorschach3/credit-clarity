@@ -4,11 +4,13 @@ Tests basic API functionality and health monitoring
 """
 import pytest
 from unittest.mock import patch, AsyncMock
-from fastapi.testclient import TestClient
 
-def test_root_endpoint(client: TestClient):
+pytestmark = pytest.mark.asyncio
+
+async def test_root_endpoint(async_client):
     """Test API root endpoint."""
-    response = client.get("/")
+    client = async_client
+    response = await client.get("/")
     
     assert response.status_code == 200
     data = response.json()
@@ -18,9 +20,10 @@ def test_root_endpoint(client: TestClient):
     assert data["architecture"] == "modular"
     assert data["status"] == "operational"
 
-def test_simple_health_check(client: TestClient):
+async def test_simple_health_check(async_client):
     """Test simple health check endpoint."""
-    response = client.get("/health")
+    client = async_client
+    response = await client.get("/health")
     
     assert response.status_code == 200
     data = response.json()
@@ -29,8 +32,9 @@ def test_simple_health_check(client: TestClient):
     assert "timestamp" in data
     assert data["version"] == "3.0.0"
 
-def test_detailed_health_check(client: TestClient):
+async def test_detailed_health_check(async_client):
     """Test detailed health check endpoint."""
+    client = async_client
     with patch('services.background_jobs.job_processor') as mock_jobs, \
          patch('services.cache_service.cache') as mock_cache, \
          patch('services.monitoring.metrics_collector') as mock_metrics:
@@ -43,7 +47,7 @@ def test_detailed_health_check(client: TestClient):
             "issues": []
         }
         
-        response = client.get("/api/v1/health/")
+        response = await client.get("/api/v1/health/")
         
         assert response.status_code == 200
         data = response.json()
@@ -54,9 +58,10 @@ def test_detailed_health_check(client: TestClient):
         assert "services" in data["data"]
         assert "version" in data["data"]
 
-def test_liveness_probe(client: TestClient):
+async def test_liveness_probe(async_client):
     """Test Kubernetes liveness probe."""
-    response = client.get("/api/v1/health/live")
+    client = async_client
+    response = await client.get("/api/v1/health/live")
     
     assert response.status_code == 200
     data = response.json()
@@ -64,12 +69,13 @@ def test_liveness_probe(client: TestClient):
     assert data["success"] is True
     assert data["data"]["status"] == "alive"
 
-def test_readiness_probe(client: TestClient):
+async def test_readiness_probe(async_client):
     """Test Kubernetes readiness probe."""
+    client = async_client
     with patch('services.background_jobs.job_processor') as mock_jobs:
         mock_jobs.is_running = True
         
-        response = client.get("/api/v1/health/ready")
+        response = await client.get("/api/v1/health/ready")
         
         assert response.status_code == 200
         data = response.json()
@@ -79,8 +85,9 @@ def test_readiness_probe(client: TestClient):
         assert "services" in data["data"]
 
 @patch('services.monitoring.metrics_collector')
-def test_basic_metrics_endpoint(mock_metrics, client: TestClient, auth_headers):
+async def test_basic_metrics_endpoint(mock_metrics, async_client, auth_headers):
     """Test basic metrics endpoint."""
+    client = async_client
     # Mock metrics data
     mock_metrics.get_system_metrics_summary.return_value = {
         "avg_cpu_percent": 45.2,
@@ -100,7 +107,7 @@ def test_basic_metrics_endpoint(mock_metrics, client: TestClient, auth_headers):
         }
     }
     
-    response = client.get(
+    response = await client.get(
         "/api/v1/health/metrics?minutes=30",
         headers=auth_headers
     )
@@ -113,13 +120,14 @@ def test_basic_metrics_endpoint(mock_metrics, client: TestClient, auth_headers):
     assert "api" in data["data"]
     assert "business" in data["data"]
 
-def test_health_check_with_service_failures(client: TestClient):
+async def test_health_check_with_service_failures(async_client):
     """Test health check when services are failing."""
+    client = async_client
     with patch('services.monitoring.metrics_collector') as mock_metrics:
         # Simulate metrics collection failure
         mock_metrics.get_health_status.side_effect = Exception("Metrics unavailable")
         
-        response = client.get("/api/v1/health/")
+        response = await client.get("/api/v1/health/")
         
         assert response.status_code == 200
         data = response.json()
@@ -128,9 +136,10 @@ def test_health_check_with_service_failures(client: TestClient):
         assert data["success"] is True
         assert data["data"]["status"] == "healthy"
 
-def test_health_check_response_format(client: TestClient):
+async def test_health_check_response_format(async_client):
     """Test that health check follows standard response format."""
-    response = client.get("/api/v1/health/")
+    client = async_client
+    response = await client.get("/api/v1/health/")
     
     assert response.status_code == 200
     data = response.json()
@@ -142,16 +151,18 @@ def test_health_check_response_format(client: TestClient):
     assert "timestamp" in data
     assert "version" in data
 
-def test_api_version_headers(client: TestClient):
+async def test_api_version_headers(async_client):
     """Test that API version headers are set correctly."""
-    response = client.get("/api/v1/health/")
+    client = async_client
+    response = await client.get("/api/v1/health/")
     
     assert response.headers["X-API-Version"] == "1.0"
     assert response.headers["X-API-Revision"] == "2025.01"
 
-def test_performance_headers(client: TestClient):
+async def test_performance_headers(async_client):
     """Test that performance headers are added."""
-    response = client.get("/api/v1/health/")
+    client = async_client
+    response = await client.get("/api/v1/health/")
     
     assert "X-Process-Time" in response.headers
     assert "X-Request-ID" in response.headers
@@ -168,31 +179,34 @@ async def test_health_check_async(async_client):
     assert data["success"] is True
     assert "data" in data
 
-def test_health_check_caching(client: TestClient):
+async def test_health_check_caching(async_client):
     """Test that health check results can be cached."""
+    client = async_client
     # First request
-    response1 = client.get("/api/v1/health/")
+    response1 = await client.get("/api/v1/health/")
     assert response1.status_code == 200
     
     # Second request (should potentially use cache)
-    response2 = client.get("/api/v1/health/")
+    response2 = await client.get("/api/v1/health/")
     assert response2.status_code == 200
     
     # Both should return same structure
     assert response1.json()["data"]["status"] == response2.json()["data"]["status"]
 
-def test_cors_headers_on_health_check(client: TestClient):
+async def test_cors_headers_on_health_check(async_client):
     """Test CORS headers are properly set on health checks."""
+    client = async_client
     # Preflight request
-    response = client.options("/api/v1/health/")
+    response = await client.options("/api/v1/health/")
     
     # Should handle OPTIONS request
     assert response.status_code in [200, 405]  # 405 if OPTIONS not explicitly handled
 
-def test_request_id_generation(client: TestClient):
+async def test_request_id_generation(async_client):
     """Test that each request gets a unique request ID."""
-    response1 = client.get("/api/v1/health/")
-    response2 = client.get("/api/v1/health/")
+    client = async_client
+    response1 = await client.get("/api/v1/health/")
+    response2 = await client.get("/api/v1/health/")
     
     id1 = response1.headers.get("X-Request-ID")
     id2 = response2.headers.get("X-Request-ID")
@@ -201,13 +215,14 @@ def test_request_id_generation(client: TestClient):
     assert id2 is not None
     assert id1 != id2
 
-def test_error_handling_in_health_check(client: TestClient):
+async def test_error_handling_in_health_check(async_client):
     """Test error handling in health check endpoint."""
+    client = async_client
     with patch('services.monitoring.metrics_collector') as mock_metrics:
         # Simulate a critical error
         mock_metrics.get_health_status.side_effect = Exception("Critical system error")
         
-        response = client.get("/api/v1/health/")
+        response = await client.get("/api/v1/health/")
         
         # Should still return 200 but with degraded status
         assert response.status_code == 200

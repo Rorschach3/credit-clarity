@@ -29,7 +29,7 @@ def test_validation_happy_path():
 
     assert result['severity'] in ('INFO', 'WARNING')
     assert 'confidence' in result
-    assert result['confidence'] >= 50.0
+    assert result['confidence'] >= 0.5
     assert result['tradeline_id'] is None or True
 
 

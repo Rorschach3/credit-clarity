@@ -1,0 +1,48 @@
+{
+  "target": "credit-report-upload",
+  "variant": 1,
+  "variant_name": "Step Wizard",
+  "description": "Stepper UI: Upload → Processing → Review. Clean vertical progress indicator. Full-width results panel with 3-bureau columns.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-upload-v1",
+      "children": [
+        { "tag": "nav", "class": "navbar" },
+        {
+          "tag": "main",
+          "class": "upload-container",
+          "children": [
+            { "tag": "div", "class": "upload-stepper" },
+            {
+              "tag": "div",
+              "class": "upload-body",
+              "children": [
+                { "tag": "div", "class": "upload-dropzone" },
+                { "tag": "div", "class": "processing-panel" },
+                {
+                  "tag": "div",
+                  "class": "results-panel",
+                  "children": [
+                    { "tag": "div", "class": "bureau-columns" }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "css_layout_rules": {
+      ".layout-upload-v1": "min-height: 100vh; display: flex; flex-direction: column;",
+      ".upload-container": "max-width: 1200px; margin: 0 auto; padding: 2rem; width: 100%;",
+      ".upload-stepper": "display: flex; justify-content: center; gap: 0; margin-bottom: 2.5rem;",
+      ".upload-dropzone": "border: 2px dashed var(--border); border-radius: 1rem; padding: 4rem; text-align: center; cursor: pointer;",
+      ".processing-panel": "padding: 2rem; text-align: center;",
+      ".bureau-columns": "display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem;",
+      "@media (max-width: 768px)": {
+        ".bureau-columns": "grid-template-columns: 1fr;"
+      }
+    }
+  }
+}

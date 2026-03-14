@@ -37,30 +37,15 @@ const validateFile = (file: File): void => {
     console.error('❌ NOT A FILE INSTANCE:', typeof file, file);
     throw new Error(`Expected File instance, got ${typeof file}`);
   }
-  
-  console.log('✅ File validation passed:', {
-    name: file.name,
-    type: file.type, 
-    size: file.size,
-    isFile: file instanceof File,
-    constructor: file.constructor.name
-  });
 };
 
 // Shared FormData creation utility
 const createFormData = (file: File, userId?: string): FormData => {
   const formData = new FormData();
-  formData.append('file', file); // Raw File object, no JSON, no toString()
+  formData.append('file', file);
   if (userId) {
     formData.append('user_id', userId);
   }
-  
-  // Debug FormData contents
-  console.log('📦 FormData entries:');
-  for (const [key, value] of formData.entries()) {
-    console.log(`  ${key}:`, value instanceof File ? `File(${value.name})` : value);
-  }
-  
   return formData;
 };
 
@@ -148,14 +133,6 @@ export const processWithAI = async (
   onProgress?: (message: string) => void,
   retryCount: number = 0
 ): Promise<ProcessingResult> => {
-  console.log('🔧 TEMPORARY DEBUG: processWithAI called with:', {
-    fileName: file.name,
-    fileSize: file.size,
-    fileType: file.type,
-    userId: userId,
-    retryCount: retryCount
-  });
-
   // BULLETPROOF FILE VALIDATION
   validateFile(file);
 
@@ -169,9 +146,9 @@ export const processWithAI = async (
     // Progress callback
     onProgress?.('📤 Uploading file...');
     
-    // Set timeout based on file size (1 minute per MB, minimum 2 minutes, max 8 minutes)
+    // Set timeout based on file size (2 minutes per MB, minimum 5 minutes, max 15 minutes)
     const fileSizeMB = file.size / (1024 * 1024);
-    const timeoutMinutes = Math.max(2, Math.min(8, Math.ceil(fileSizeMB * 1)));
+    const timeoutMinutes = Math.max(5, Math.min(15, Math.ceil(fileSizeMB * 2)));
     
     timeoutId = setTimeout(() => {
       console.log(`⏰ Request timeout after ${timeoutMinutes} minutes`);
@@ -189,17 +166,6 @@ export const processWithAI = async (
     
     const startTime = Date.now();
     
-    console.log('🚀 Making fetch request...');
-    console.log('🔧 TEMPORARY DEBUG: About to send request to:', `${API_BASE_URL}/api/process-credit-report`);
-    console.log('🔧 TEMPORARY DEBUG: FormData contents:');
-    for (const [key, value] of formData.entries()) {
-      if (value instanceof File) {
-        console.log(`  ${key}: File(${value.name}, ${value.size} bytes, ${value.type})`);
-      } else {
-        console.log(`  ${key}: ${value}`);
-      }
-    }
-
     const headers = await buildAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/api/process-credit-report`, {
       method: 'POST',
@@ -245,17 +211,7 @@ export const processWithAI = async (
       }
     }
     
-    console.log('📥 Parsing response...');
     const result = await response.json();
-    console.log('✅ Processing Complete!', result);
-    console.log('🔧 TEMPORARY DEBUG: Backend response details:', {
-      success: result.success,
-      tradelines_found: result.tradelines_found,
-      tradelines_saved: result.tradelines_saved,
-      processing_method: result.processing_method,
-      has_tradelines: !!(result.tradelines && result.tradelines.length > 0),
-      tradelines_count: result.tradelines ? result.tradelines.length : 0
-    });
     
     // Check if this is a background job response
     if (result.success && result.job_id) {
@@ -339,11 +295,24 @@ export const processWithAI = async (
         if (retryCount < 1) {
           console.log(`🔄 Retrying request (attempt ${retryCount + 1}/2)...`);
           onProgress?.('🔄 Retrying request...');
-          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+          await new Promise(resolve => setTimeout(resolve, 2000));
           return processWithAI(file, userId, onProgress, retryCount + 1);
         }
-        onProgress?.('❌ Request timed out');
-        throw new Error('Processing timed out - the file may be too large or the server may be overloaded. Please try again.');
+        // AI timed out after retry — fall back to OCR-only processing
+        console.warn('⚠️ AI processing timed out after retry, falling back to OCR extraction');
+        onProgress?.('⏰ AI timed out — switching to OCR fallback...');
+        try {
+          const extractedText = await processWithOCR(file, userId);
+          onProgress?.('✅ OCR extraction complete (AI unavailable)');
+          return {
+            tradelines: [],
+            stats: { found: 0, saved: 0, failed: 0 },
+            processingMethod: 'ocr_fallback'
+          };
+        } catch (ocrError) {
+          onProgress?.('❌ Both AI and OCR processing failed');
+          throw new Error('Processing timed out and OCR fallback also failed. Please try again with a smaller file or contact support.');
+        }
       } else if (error.message?.includes('Failed to fetch')) {
         onProgress?.('❌ Cannot connect to server');
         throw new Error('Cannot connect to server - please ensure the backend is running');

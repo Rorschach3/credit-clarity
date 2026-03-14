@@ -15,16 +15,26 @@ from schemas.tradelines import (
     TradeLinesStats,
     BulkTradelineOperation
 )
-from services.database_optimizer import db_optimizer
+import services.database_optimizer as database_optimizer
+from utils.async_utils import maybe_await
 from services.monitoring import monitor_api_call, track_user_activity
 
 router = APIRouter(prefix="/tradelines", tags=["Tradelines"])
+
+async def get_pagination_params(
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    limit: int = Query(50, ge=1, le=100, description="Items per page"),
+    sort_by: Optional[str] = Query(None, description="Field to sort by"),
+    sort_order: str = Query("desc", description="Sort order (asc|desc)"),
+) -> PaginationParams:
+    # Use the pydantic model for validation/coercion, but source values from query params.
+    return PaginationParams(page=page, limit=limit, sort_by=sort_by, sort_order=sort_order)
 
 @router.get("/", response_model=PaginatedResponse[TradelineResponse])
 @monitor_api_call
 async def get_user_tradelines(
     current_user: Dict[str, Any] = Depends(get_supabase_user),
-    pagination: PaginationParams = Depends(),
+    pagination: PaginationParams = Depends(get_pagination_params),
     credit_bureau: Optional[str] = Query(None, description="Filter by credit bureau"),
     account_type: Optional[str] = Query(None, description="Filter by account type"),
     is_negative: Optional[bool] = Query(None, description="Filter by negative status"),
@@ -49,14 +59,14 @@ async def get_user_tradelines(
         filters['dispute_count'] = {'$gt': 0} if disputed else {'$eq': 0}
     
     # Get paginated results
-    result = await db_optimizer.get_user_tradelines_paginated(
+    result = await maybe_await(database_optimizer.db_optimizer.get_user_tradelines_paginated(
         user_id=user_id,
         page=pagination.page,
         limit=pagination.limit,
         filters=filters,
         sort_by=pagination.sort_by,
         sort_order=pagination.sort_order
-    )
+    ))
     
     return PaginatedResponse[TradelineResponse](
         success=True,
@@ -74,7 +84,7 @@ async def get_tradeline(
     """Get specific tradeline by ID."""
     user_id = current_user.get('id')
     
-    tradeline = await db_optimizer.get_tradeline_by_id(tradeline_id, user_id)
+    tradeline = await maybe_await(database_optimizer.db_optimizer.get_tradeline_by_id(tradeline_id, user_id))
     
     if not tradeline:
         raise HTTPException(status_code=404, detail="Tradeline not found")
@@ -100,7 +110,7 @@ async def create_tradeline(
     tradeline_dict['user_id'] = user_id
     
     # Create tradeline
-    created_tradeline = await db_optimizer.create_tradeline(tradeline_dict)
+    created_tradeline = await maybe_await(database_optimizer.db_optimizer.create_tradeline(tradeline_dict))
     
     return APIResponse[TradelineResponse](
         success=True,
@@ -120,7 +130,7 @@ async def update_tradeline(
     track_user_activity("update_tradeline", user_id)
     
     # Verify ownership
-    existing = await db_optimizer.get_tradeline_by_id(tradeline_id, user_id)
+    existing = await maybe_await(database_optimizer.db_optimizer.get_tradeline_by_id(tradeline_id, user_id))
     if not existing:
         raise HTTPException(status_code=404, detail="Tradeline not found")
     
@@ -130,7 +140,7 @@ async def update_tradeline(
     if not update_dict:
         raise HTTPException(status_code=400, detail="No update data provided")
     
-    updated_tradeline = await db_optimizer.update_tradeline(tradeline_id, update_dict)
+    updated_tradeline = await maybe_await(database_optimizer.db_optimizer.update_tradeline(tradeline_id, update_dict))
     
     return APIResponse[TradelineResponse](
         success=True,
@@ -149,12 +159,12 @@ async def delete_tradeline(
     track_user_activity("delete_tradeline", user_id)
     
     # Verify ownership
-    existing = await db_optimizer.get_tradeline_by_id(tradeline_id, user_id)
+    existing = await maybe_await(database_optimizer.db_optimizer.get_tradeline_by_id(tradeline_id, user_id))
     if not existing:
         raise HTTPException(status_code=404, detail="Tradeline not found")
     
     # Delete tradeline
-    deleted = await db_optimizer.delete_tradeline(tradeline_id, user_id)
+    deleted = await maybe_await(database_optimizer.db_optimizer.delete_tradeline(tradeline_id, user_id))
     
     if not deleted:
         raise HTTPException(status_code=400, detail="Failed to delete tradeline")
@@ -174,7 +184,7 @@ async def get_tradelines_stats(
     user_id = current_user.get('id')
     track_user_activity("get_tradeline_stats", user_id)
     
-    stats = await db_optimizer.get_tradelines_statistics(user_id)
+    stats = await maybe_await(database_optimizer.db_optimizer.get_tradelines_statistics(user_id))
     
     return APIResponse[TradeLinesStats](
         success=True,
@@ -194,7 +204,7 @@ async def bulk_tradeline_operation(
     
     # Verify all tradelines belong to user
     for tradeline_id in operation.tradeline_ids:
-        existing = await db_optimizer.get_tradeline_by_id(tradeline_id, user_id)
+        existing = await maybe_await(database_optimizer.db_optimizer.get_tradeline_by_id(tradeline_id, user_id))
         if not existing:
             raise HTTPException(
                 status_code=404, 
@@ -206,26 +216,26 @@ async def bulk_tradeline_operation(
         if not operation.update_data:
             raise HTTPException(status_code=400, detail="Update data required")
         
-        result = await db_optimizer.bulk_update_tradelines(
+        result = await maybe_await(database_optimizer.db_optimizer.bulk_update_tradelines(
             tradeline_ids=operation.tradeline_ids,
             update_data=operation.update_data,
             batch_size=operation.batch_size
-        )
+        ))
         
     elif operation.operation == "delete":
-        result = await db_optimizer.bulk_delete_tradelines(
+        result = await maybe_await(database_optimizer.db_optimizer.bulk_delete_tradelines(
             tradeline_ids=operation.tradeline_ids,
             user_id=user_id,
             batch_size=operation.batch_size
-        )
+        ))
         
     elif operation.operation == "dispute":
         # Increment dispute count for selected tradelines
-        result = await db_optimizer.bulk_update_tradelines(
+        result = await maybe_await(database_optimizer.db_optimizer.bulk_update_tradelines(
             tradeline_ids=operation.tradeline_ids,
             update_data={"dispute_count": "increment"},
             batch_size=operation.batch_size
-        )
+        ))
         
     else:
         raise HTTPException(status_code=400, detail="Invalid operation")

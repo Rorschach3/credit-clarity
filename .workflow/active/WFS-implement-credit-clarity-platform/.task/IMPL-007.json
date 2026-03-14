@@ -1,0 +1,54 @@
+{
+  "id": "IMPL-007",
+  "title": "CROA Compliance Gate",
+  "status": "pending",
+  "context_package_path": ".workflow/active/WFS-implement-credit-clarity-platform/.process/context-package.json",
+  "meta": {
+    "priority": "critical",
+    "effort_estimate": "2 days",
+    "phase": "Phase 1 - Compliance",
+    "type": "fullstack",
+    "depends_on": ["IMPL-001", "IMPL-002"],
+    "tags": ["CROA", "compliance", "FCRA", "legal", "gate", "disclosure"]
+  },
+  "context": {
+    "description": "Implement CROA (Credit Repair Organizations Act) compliance gate that must be displayed and accepted before any dispute letter generation. Required by law for credit repair services. Frontend gate component + backend enforcement.",
+    "focus_paths": [
+      "frontend/src/pages/DisputeWizardPage.tsx",
+      "frontend/src/hooks/use-auth.tsx",
+      "frontend/src/components/",
+      "backend/api/v1/routes/",
+      "docs/PRD-Feature-Specifications.md",
+      "docs/PRD-Technical-Architecture.md"
+    ],
+    "acceptance_criteria": [
+      "frontend/src/components/croa/CROADisclosureModal.tsx renders CROA disclosure text (from PRD) with: title 'Important Legal Disclosure', body text explaining rights under CROA, checkbox 'I have read and understood the above disclosure', disabled Accept button until checkbox checked, timestamps acceptance",
+      "DisputeWizardPage.tsx checks use-auth().user.croa_disclosure_accepted before rendering wizard steps - if false, shows CROADisclosureModal as blocking overlay",
+      "On modal acceptance: calls POST /api/v1/users/croa-accept (authenticated), updates profiles table (croa_disclosure_accepted=true, croa_disclosure_timestamp=now()), updates local auth state",
+      "Backend POST /api/v1/users/croa-accept endpoint: validates JWT, upserts profiles record, returns {accepted: true, timestamp: ISO string}",
+      "Backend: dispute letter generation endpoints check croa_disclosure_accepted=true, return HTTP 403 if false",
+      "Once accepted, modal never shows again for that user (persisted in Supabase profiles)",
+      "Verify: New user visits DisputeWizardPage → CROA modal appears → accept → wizard loads"
+    ],
+    "implementation_approach": [
+      "Step 1: Read frontend/src/pages/DisputeWizardPage.tsx to find entry point for gate",
+      "Step 2: Read frontend/src/hooks/use-auth.tsx to understand how to add croa_disclosure_accepted to user state",
+      "Step 3: Create frontend/src/components/croa/ directory",
+      "Step 4: Create CROADisclosureModal.tsx with disclosure text (refer to PRD or CROA Act section 1679b)",
+      "Step 5: Add useEffect in DisputeWizardPage.tsx to check croa_disclosure_accepted, show modal if false",
+      "Step 6: Add croa-accept endpoint to backend/api/v1/routes/users.py (or new croa.py route)",
+      "Step 7: Add croa_disclosure_accepted field read to use-auth.tsx user state initialization"
+    ],
+    "pre_analysis": [
+      "Read frontend/src/pages/DisputeWizardPage.tsx - current wizard flow structure",
+      "Read frontend/src/hooks/use-auth.tsx - user state initialization and Supabase profile fetch",
+      "Read backend/api/v1/routes/users.py - existing user route pattern for adding croa-accept endpoint"
+    ]
+  },
+  "flow_control": {
+    "execution_mode": "sequential",
+    "parallel_with": ["IMPL-006", "IMPL-008"],
+    "requires": ["IMPL-001", "IMPL-002"],
+    "blocks": ["IMPL-011"]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "template": {
+    "id": "profile-layout-2",
+    "target": "profile",
+    "variant": 2,
+    "name": "Tab-Panel Layout",
+    "device": "responsive",
+    "dom_structure": {
+      "sections": [
+        { "id": "profile-hero", "layout": "gradient-banner", "children": ["avatar", "name", "email", "stats-pills"] },
+        { "id": "tabs", "layout": "horizontal-tabs", "children": ["tab-personal", "tab-security", "tab-notifications", "tab-billing"] },
+        { "id": "tab-content", "layout": "card-panel", "children": ["active-tab-form"] }
+      ]
+    },
+    "css_layout_rules": {
+      "profile_hero": "padding: 3rem 1.5rem 0; background: var(--gradient-hero); display: flex; flex-direction: column; align-items: center; gap: 1rem; text-align: center;",
+      "profile_hero_md": "@media(min-width:768px){ .profile-hero { flex-direction: row; text-align: left; gap: 2rem; } }",
+      "tabs_container": "display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border); overflow-x: auto; padding: 0 1.5rem; -webkit-overflow-scrolling: touch;",
+      "tab_btn": "flex-shrink: 0; padding: 0.75rem 1.25rem; font-size: 0.875rem; border-bottom: 2px solid transparent; transition: color 150ms ease, border-color 150ms ease;",
+      "tab_active": "border-bottom-color: var(--brand-primary); color: var(--brand-primary);",
+      "tab_content": "max-width: 672px; margin: 0 auto; padding: 2rem 1.5rem 4rem;",
+      "content_card": "background: var(--surface-card); border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 2rem;"
+    }
+  }
+}

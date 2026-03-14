@@ -1,0 +1,29 @@
+{
+  "target": "profile",
+  "variant": 3,
+  "variant_name": "Compact Single-Page",
+  "description": "All settings on one scrollable page. Avatar hero at top, sections stacked below in accordion groups.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-profile-v3",
+      "children": [
+        { "tag": "aside", "class": "sidebar" },
+        {
+          "tag": "main",
+          "class": "profile-page",
+          "children": [
+            { "tag": "div", "class": "profile-hero" },
+            { "tag": "div", "class": "profile-body" }
+          ]
+        }
+      ]
+    },
+    "css_layout_rules": {
+      ".layout-profile-v3": "display: grid; grid-template-columns: 260px 1fr; min-height: 100vh;",
+      ".profile-page": "overflow-y: auto;",
+      ".profile-hero": "padding: 3rem 2rem 2rem; text-align: center; border-bottom: 1px solid var(--border);",
+      ".profile-body": "padding: 2rem; max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 1rem;"
+    }
+  }
+}

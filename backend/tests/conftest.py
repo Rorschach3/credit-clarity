@@ -5,12 +5,12 @@ Test setup, database fixtures, and mocking utilities
 import asyncio
 import os
 import tempfile
-from typing import AsyncGenerator, Generator, Dict, Any
+from typing import AsyncGenerator, Dict, Any, Generator
 from unittest.mock import Mock, AsyncMock
 
 import pytest
 import pytest_asyncio
-from fastapi.testclient import TestClient
+import httpx
 from httpx import AsyncClient
 
 # Set testing environment
@@ -36,17 +36,18 @@ def settings():
     """Get test settings."""
     return get_settings()
 
-@pytest.fixture
-def client() -> Generator[TestClient, None, None]:
-    """Create test client for synchronous tests."""
-    with TestClient(app) as test_client:
+@pytest_asyncio.fixture
+async def client() -> AsyncGenerator[AsyncClient, None]:
+    """Create async ASGI client for tests (TestClient hangs on this platform)."""
+    transport = httpx.ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as test_client:
         yield test_client
 
+
 @pytest_asyncio.fixture
-async def async_client() -> AsyncGenerator[AsyncClient, None]:
-    """Create async test client for asynchronous tests."""
-    async with AsyncClient(app=app, base_url="http://test") as test_client:
-        yield test_client
+async def async_client(client: AsyncClient) -> AsyncGenerator[AsyncClient, None]:
+    """Backwards-compatible alias."""
+    yield client
 
 @pytest.fixture
 def mock_user() -> Dict[str, Any]:
@@ -88,6 +89,8 @@ def admin_auth_headers(mock_admin_user) -> Dict[str, str]:
 def sample_tradeline() -> Dict[str, Any]:
     """Sample tradeline data for tests."""
     return {
+        "id": 1,
+        "user_id": "test_user_123",
         "creditor_name": "Test Credit Card",
         "account_number": "****1234",
         "account_type": "Credit Card",
@@ -98,7 +101,9 @@ def sample_tradeline() -> Dict[str, Any]:
         "date_opened": "2020-01-01",
         "credit_bureau": "Experian",
         "is_negative": False,
-        "dispute_count": 0
+        "dispute_count": 0,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": None,
     }
 
 @pytest.fixture
@@ -106,36 +111,60 @@ def sample_tradelines() -> list[Dict[str, Any]]:
     """Multiple sample tradelines for testing."""
     return [
         {
+            "id": 1,
+            "user_id": "test_user_123",
             "creditor_name": "Test Credit Card 1",
             "account_type": "Credit Card",
             "account_status": "Open",
             "credit_bureau": "Experian",
             "is_negative": False,
-            "dispute_count": 0
+            "dispute_count": 0,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": None,
         },
         {
+            "id": 2,
+            "user_id": "test_user_123",
             "creditor_name": "Test Loan",
             "account_type": "Auto Loan", 
             "account_status": "Closed",
             "credit_bureau": "Equifax",
             "is_negative": True,
-            "dispute_count": 1
+            "dispute_count": 1,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": None,
         },
         {
+            "id": 3,
+            "user_id": "test_user_123",
             "creditor_name": "Test Mortgage",
             "account_type": "Mortgage",
             "account_status": "Open",
             "credit_bureau": "TransUnion",
             "is_negative": False,
-            "dispute_count": 0
+            "dispute_count": 0,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": None,
         }
     ]
 
 @pytest.fixture
 def sample_pdf_content() -> bytes:
     """Sample PDF content for testing."""
-    # Minimal PDF structure for testing
-    return b"""%PDF-1.4
+    # Prefer generating a valid PDF via PyMuPDF when available. The previous hand-written
+    # bytes were accepted by some libraries but could cause hangs/warnings in others.
+    try:
+        import fitz  # type: ignore
+
+        doc = fitz.open()
+        page = doc.new_page()
+        page.insert_text((72, 72), "Test Credit Report")
+        data = doc.tobytes()
+        doc.close()
+        return data
+    except Exception:
+        # Minimal PDF structure fallback (kept for environments without PyMuPDF).
+        return b"""%PDF-1.4
 1 0 obj
 << /Type /Pages /Kids [2 0 R] /Count 1 >>
 endobj

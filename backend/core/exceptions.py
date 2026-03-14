@@ -85,6 +85,9 @@ class ResourceNotFoundError(CreditClarityException):
             status_code=404
         )
 
+# Backwards-compatible alias used by some tests and older modules.
+NotFoundError = ResourceNotFoundError
+
 class ProcessingError(CreditClarityException):
     """PDF processing related errors."""
     

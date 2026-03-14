@@ -176,16 +176,25 @@ class TradelineExtractionPipeline:
 
     async def get_pipeline_statistics(self) -> Dict[str, Any]:
         """Return current pipeline configuration for monitoring."""
+        parser_stats = {
+            'parsing_method': self.parser.__class__.__name__,
+        }
         return {
             'pdf_extractor': {
                 'supported_extensions': list(self.pdf_extractor.supported_extensions),
                 'max_file_size_mb': self.pdf_extractor.max_file_size_mb,
                 'extraction_timeout_seconds': self.pdf_extractor.extraction_timeout_seconds
             },
-            'parser': {
-                'parsing_method': self.parser.__class__.__name__,
-            },
+            # New key name used across the codebase.
+            'parser': parser_stats,
+            # Backwards-compatible alias expected by older tests/docs.
+            'tradeline_parser': parser_stats,
             'storage': {
+                'table_name': self.storage_service.table_name,
+                'batch_size': self.storage_service.batch_size
+            },
+            # Backwards-compatible alias expected by older tests/docs.
+            'storage_service': {
                 'table_name': self.storage_service.table_name,
                 'batch_size': self.storage_service.batch_size
             },

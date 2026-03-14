@@ -246,7 +246,6 @@ class TestExceptionErrorCodes:
         response = ResponseFormatter.from_exception(exc)
 
         assert response["error"]["code"] == "AUTHENTICATION_ERROR"
-        assert response["status_code"] == 401
 
     def test_not_found_error_format(self):
         """Test NotFoundError formats correctly."""

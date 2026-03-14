@@ -219,16 +219,7 @@ async def get_supported_formats() -> Dict[str, Any]:
     }
 
 
-# Error handlers
-@router.exception_handler(HTTPException)
-async def http_exception_handler(request, exc):
-    """Handle HTTP exceptions with consistent response format"""
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "success": False,
-            "error": exc.detail,
-            "timestamp": asyncio.get_event_loop().time(),
-            "version": "1.0.0"
-        }
-    )
+"""
+Note: APIRouter does not support per-router exception handlers.
+All exception handling is centralized via app-level middleware/handlers.
+"""

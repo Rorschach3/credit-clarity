@@ -13,11 +13,14 @@ from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, asdict
 from unittest.mock import Mock, patch
 
-import pandas as pd
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
-import matplotlib.pyplot as plt
-import seaborn as sns
+pd = pytest.importorskip("pandas")
+reportlab_canvas = pytest.importorskip("reportlab.pdfgen.canvas")
+reportlab_pagesizes = pytest.importorskip("reportlab.lib.pagesizes")
+plt = pytest.importorskip("matplotlib.pyplot")
+sns = pytest.importorskip("seaborn")
+
+canvas = reportlab_canvas.canvas
+letter = reportlab_pagesizes.letter
 
 # Import Phase 4 components
 import sys

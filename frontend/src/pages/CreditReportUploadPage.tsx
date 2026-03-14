@@ -2,6 +2,7 @@ import React, { useEffect, useCallback, useState, Suspense, useRef } from "react
 import { Card, CardContent } from "@/components/ui/card";
 import { toast as sonnerToast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
+import { supabase } from '@/integrations/supabase/client';
 import { saveTradelinesToDatabase, ParsedTradeline, loadAllTradelinesFromDatabase } from "@/utils/tradelineParser";
 import { updateTradelineFields } from "@/utils/fuzzyTradelineMatching";
 import { usePersistentTradelines } from "@/hooks/usePersistentTradelines";
@@ -312,10 +313,20 @@ const CreditReportUploadPage = () => {
     }
   }, [user?.id, refreshTradelines]);
 
-  // Handle tradeline deletion
-  const handleTradelineDelete = useCallback((tradelineId: string) => {
-    setExtractedTradelines(prev => prev.filter(t => t.id !== tradelineId));
-    sonnerToast.success("Tradeline removed");
+  // Handle tradeline deletion — removes from DB then local state
+  const handleTradelineDelete = useCallback(async (tradelineId: string) => {
+    try {
+      const { error } = await supabase
+        .from('tradelines')
+        .delete()
+        .eq('id', tradelineId);
+      if (error) throw error;
+      setExtractedTradelines(prev => prev.filter(t => t.id !== tradelineId));
+      sonnerToast.success("Tradeline deleted");
+    } catch (err) {
+      console.error('[CreditReportUpload] Delete tradeline failed:', err);
+      sonnerToast.error("Failed to delete tradeline");
+    }
   }, []);
 
   // Handle tradeline updates with debounced auto-save

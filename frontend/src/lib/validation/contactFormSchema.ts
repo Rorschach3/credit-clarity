@@ -1,27 +1,10 @@
 import { z } from 'zod';
 
 export const contactFormSchema = z.object({
-  first_name: z.string().min(2, 'Name is required').max(50, 'Name is too long'),
-  last_name: z.string().min(2, 'Name is required').max(50, 'Name is too long'),
+  name: z.string().min(2, 'Name is required').max(100, 'Name is too long'),
   email: z.string().email('Invalid email address'),
-  phone_number: z.string().optional(),
-  address1: z.string().min(5, 'Address is required').max(100, 'Address is too long'),
-  address2: z.string().optional(),
-  city: z.string().min(2, 'City is required').max(50, 'City is too long'),
-  state: z.string().length(2, 'State must be 2 characters').refine((val) => {
-    const US_STATES = [
-      'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
-      'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
-      'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
-      'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
-      'SD', 'TN', 'TX', 'UT', 'VT', 'VA',
-      'WA', 'WV', 'WI', 'WY'
-    ];
-    return US_STATES.includes(val);
-  }, 'Please select a valid state'),
-  zip_code: z.string().regex(/^\d{5}$/, 'ZIP code must be exactly 5 digits'),
-  dob: z.string().optional(),
-  last_four_of_ssn: z.string().optional(),
+  phone: z.string().optional(),
+  message: z.string().min(10, 'Message must be at least 10 characters').max(1000, 'Message is too long'),
 });
 
 export type ContactFormInputs = z.infer<typeof contactFormSchema>;

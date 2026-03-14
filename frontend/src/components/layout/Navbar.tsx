@@ -2,140 +2,192 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { CreditsBalance } from "@/components/credits/CreditsBalance";
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Menu } from "lucide-react";
-import { ModeToggle } from "@/components/layout/ModeToggle";
-import { CurrentUserAvatar } from "@/components/current-user-avatar";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const { user, signOut } = useAuth();
 
   return (
-    <header className="bg-background border-b">
-      <div className="container flex items-center justify-between h-10">
-        <Link to="/" className="font-bold text-xl">
-          Credit Clarity
+    <header
+      className="navbar-midnight px-6 md:px-10"
+      style={{ paddingLeft: '2.5rem', paddingRight: '2.5rem' }}
+    >
+      <div className="w-full flex items-center justify-between gap-6">
+
+        {/* Logo */}
+        <Link
+          to="/"
+          className="text-gold-gradient font-extrabold text-lg tracking-tight flex-shrink-0"
+          style={{ letterSpacing: '-0.02em' }}
+        >
+          CreditClarity
         </Link>
 
-        <nav className="hidden md:flex items-center gap-6">
-          <Link to="/dashboard" className="text-sm font-medium transition-colors hover:text-primary">
-            Home
+        {/* Desktop nav links */}
+        <nav className="hidden md:flex items-center gap-1 flex-1">
+          <Link
+            to="/dashboard"
+            className="px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+          >
+            Dashboard
           </Link>
-          <Link to="/admin" className="text-sm font-medium transition-colors hover:text-primary">
-            Admin
+          <Link
+            to="/credit-report-upload"
+            className="px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+          >
+            Upload
           </Link>
-          {/* <Link to="/blog" className="text-sm font-medium transition-colors hover:text-primary">
-            Blog
-          </Link> */}
-          <Link to="/about" className="text-sm font-medium transition-colors hover:text-primary">
-            About
+          <Link
+            to="/tradelines"
+            className="px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+          >
+            Tradelines
           </Link>
-          {/* Other links commented out */}
-          <Link to="/faq" className="text-sm font-medium transition-colors hover:text-primary">
-            FAQ
+          <Link
+            to="/dispute-wizard"
+            className="px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+          >
+            Disputes
+          </Link>
+          {user && (
+            <Link
+              to="/dispute-history"
+              className="px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+            >
+              History
+            </Link>
+          )}
+          <Link
+            to="/pricing"
+            className="px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+          >
+            Pricing
           </Link>
         </nav>
 
-        <div className="flex items-center gap-4">
-          <ModeToggle />
+        {/* Desktop CTA */}
+        <div className="hidden md:flex items-center gap-2 flex-shrink-0">
           {user ? (
-            <div className="hidden md:flex items-center gap-2">
+            <>
+              <CreditsBalance />
               <Link to="/profile">
-                <Button variant="outline" size="sm">
-                  <CurrentUserAvatar user={user} />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground hover:bg-white/5"
+                >
+                  {user.email?.split('@')[0] ?? 'Profile'}
                 </Button>
               </Link>
               <Button
-                variant="outline"
                 size="sm"
-                className="rounded-full"
+                className="btn-gold rounded-md px-4"
                 onClick={signOut}
               >
                 Sign Out
               </Button>
-            </div>
+            </>
           ) : (
-            <div className="hidden md:flex items-center gap-2">
+            <>
               <Link to="/login">
-                <Button variant="outline" size="sm" className="rounded-full">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground hover:bg-white/5"
+                >
                   Sign In
                 </Button>
               </Link>
               <Link to="/signup">
-                <Button size="sm">Sign Up</Button>
+                <Button size="sm" className="btn-gold rounded-md px-5">
+                  Get Started
+                </Button>
               </Link>
-            </div>
+            </>
           )}
         </div>
 
+        {/* Mobile hamburger */}
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
           <SheetTrigger asChild className="md:hidden">
-            <Button variant="ghost" size="icon">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground hover:bg-white/5"
+            >
               <Menu className="h-5 w-5" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="sm:max-w-sm">
+          <SheetContent
+            side="left"
+            className="sm:max-w-xs"
+            style={{ background: '#0C1220', borderRight: '1px solid #1E2D47' }}
+          >
             <SheetHeader>
-              <SheetTitle>Menu</SheetTitle>
-              <SheetDescription>
-                Explore our site and discover how we can help you.
-              </SheetDescription>
+              <SheetTitle className="text-gold-gradient font-extrabold text-lg">
+                CreditClarity
+              </SheetTitle>
             </SheetHeader>
-            <div className="grid gap-4 py-2">
-              <Link to="/dashboard" className="block text-sm font-medium transition-colors hover:text-primary">
-                Home
-              </Link>
-              <Link to="/about" className="block text-sm font-medium transition-colors hover:text-primary">
-                About
-              </Link>
-              <Link to="/blog" className="block text-sm font-medium transition-colors hover:text-primary">
-                Blog
-              </Link>
-              <Link to="/credit-reports" className="block text-sm font-medium transition-colors hover:text-primary">
-                Credit Reports
-              </Link>
-              <Link to="/credit-report-upload" className="block text-sm font-medium transition-colors hover:text-primary">
-                Credit Report Upload
-              </Link>
-              <Link to="/faq" className="block text-sm font-medium transition-colors hover:text-primary">
-                FAQ
-              </Link>
-              <Link to="/pricing" className="block text-sm font-medium transition-colors hover:text-primary">
-                Pricing
-              </Link>
-              <Link to="/profile" className="block text-sm font-medium transition-colors hover:text-primary">
-                Profile
-              </Link>
-              {!user ? (
-                <>
-                  <Link to="/login" className="block text-sm font-medium transition-colors hover:text-primary">
-                    Sign In
-                  </Link>
-                  <Link to="/signup" className="block text-sm font-medium transition-colors hover:text-primary">
-                    Sign Up
-                  </Link>
-                </>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  <Link to="/profile" className="block text-sm font-medium transition-colors hover:text-primary">
-                    <CurrentUserAvatar user={user} />
-                  </Link>
-                  <Button variant="outline" size="sm" onClick={signOut} className="rounded-full">
-                    Sign Out
-                  </Button>
-                </div>
-              )}
-            </div>
+            <nav className="flex flex-col gap-1 mt-6">
+              {[
+                { to: '/dashboard', label: 'Dashboard' },
+                { to: '/credit-report-upload', label: 'Upload Report' },
+                { to: '/tradelines', label: 'Tradelines' },
+                { to: '/dispute-wizard', label: 'Dispute Wizard' },
+                ...(user ? [{ to: '/dispute-history', label: 'Dispute History' }] : []),
+                { to: '/pricing', label: 'Pricing' },
+                { to: '/about', label: 'About' },
+                { to: '/faq', label: 'FAQ' },
+              ].map(({ to, label }) => (
+                <Link
+                  key={to}
+                  to={to}
+                  onClick={() => setIsOpen(false)}
+                  className="px-3 py-2.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+                >
+                  {label}
+                </Link>
+              ))}
+              <div className="mt-4 pt-4 border-t border-[#1E2D47] flex flex-col gap-2">
+                {user ? (
+                  <>
+                    <Link to="/profile" onClick={() => setIsOpen(false)}>
+                      <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground">
+                        {user.email?.split('@')[0] ?? 'Profile'}
+                      </Button>
+                    </Link>
+                    <Button size="sm" className="btn-gold rounded-md w-full" onClick={signOut}>
+                      Sign Out
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Link to="/login" onClick={() => setIsOpen(false)}>
+                      <Button variant="ghost" size="sm" className="w-full text-muted-foreground">
+                        Sign In
+                      </Button>
+                    </Link>
+                    <Link to="/signup" onClick={() => setIsOpen(false)}>
+                      <Button size="sm" className="btn-gold rounded-md w-full">
+                        Get Started
+                      </Button>
+                    </Link>
+                  </>
+                )}
+              </div>
+            </nav>
           </SheetContent>
         </Sheet>
+
       </div>
     </header>
   );

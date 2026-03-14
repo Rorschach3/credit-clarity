@@ -5,10 +5,18 @@ Tests full authentication workflows with mocked Supabase
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
+import httpx
+from httpx import AsyncClient
+
+pytestmark = pytest.mark.asyncio
 
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+
+def make_client(app):
+    # httpx>=0.28 removed the `app=` kwarg; use ASGITransport instead.
+    return AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
 
 
 # Mock Supabase client
@@ -34,9 +42,8 @@ class TestRegistrationFlow:
     """Test user registration flow."""
     
     @patch('api.v1.routes.auth.supabase_client')
-    def test_register_success(self, mock_supabase):
+    async def test_register_success(self, mock_supabase):
         """Test successful registration."""
-        from fastapi.testclient import TestClient
         from api.v1.routes.auth import router
         from fastapi import FastAPI
         
@@ -49,18 +56,20 @@ class TestRegistrationFlow:
         # Create app
         app = FastAPI()
         app.include_router(router)
-        client = TestClient(app)
-        
-        # Make request
-        response = client.post(
-            "/auth/register",
-            json={
-                "email": "newuser@example.com",
-                "password": "SecureP@ss123",
-                "first_name": "Jane",
-                "last_name": "Smith"
-            }
-        )
+        client = make_client(app)
+        try:
+            # Make request
+            response = await client.post(
+                "/auth/register",
+                json={
+                    "email": "newuser@example.com",
+                    "password": "SecureP@ss123",
+                    "first_name": "Jane",
+                    "last_name": "Smith"
+                }
+            )
+        finally:
+            await client.aclose()
         
         assert response.status_code == 201
         data = response.json()
@@ -70,9 +79,8 @@ class TestRegistrationFlow:
         mock_supabase.auth.sign_up.assert_called_once()
     
     @patch('api.v1.routes.auth.supabase_client')
-    def test_register_duplicate_email(self, mock_supabase):
+    async def test_register_duplicate_email(self, mock_supabase):
         """Test registration with duplicate email."""
-        from fastapi.testclient import TestClient
         from api.v1.routes.auth import router
         from fastapi import FastAPI
         
@@ -81,63 +89,67 @@ class TestRegistrationFlow:
         
         app = FastAPI()
         app.include_router(router)
-        client = TestClient(app)
-        
-        response = client.post(
-            "/auth/register",
-            json={
-                "email": "existing@example.com",
-                "password": "SecureP@ss123",
-                "first_name": "John",
-                "last_name": "Doe"
-            }
-        )
+        client = make_client(app)
+        try:
+            response = await client.post(
+                "/auth/register",
+                json={
+                    "email": "existing@example.com",
+                    "password": "SecureP@ss123",
+                    "first_name": "John",
+                    "last_name": "Doe"
+                }
+            )
+        finally:
+            await client.aclose()
         
         assert response.status_code == 409
         data = response.json()
         assert data["success"] == False
     
-    def test_register_invalid_password(self):
+    async def test_register_invalid_password(self):
         """Test registration with invalid password."""
-        from fastapi.testclient import TestClient
         from api.v1.routes.auth import router
         from fastapi import FastAPI
         
         app = FastAPI()
         app.include_router(router)
-        client = TestClient(app)
-        
-        response = client.post(
-            "/auth/register",
-            json={
-                "email": "test@example.com",
-                "password": "weak",
-                "first_name": "John",
-                "last_name": "Doe"
-            }
-        )
+        client = make_client(app)
+        try:
+            response = await client.post(
+                "/auth/register",
+                json={
+                    "email": "test@example.com",
+                    "password": "weak",
+                    "first_name": "John",
+                    "last_name": "Doe"
+                }
+            )
+        finally:
+            await client.aclose()
         
         assert response.status_code == 422  # Validation error
     
-    def test_register_invalid_email(self):
+    async def test_register_invalid_email(self):
         """Test registration with invalid email."""
-        from fastapi.testclient import TestClient
         from api.v1.routes.auth import router
         from fastapi import FastAPI
         
         app = FastAPI()
         app.include_router(router)
-        client = TestClient(app)
-        
-        response = client.post(
-            "/auth/register",
-            json={
-                "email": "not-an-email",
-                "password": "SecureP@ss123",
-                "first_name": "John",
-                "last_name": "Doe"
-            }
-        )
+        client = make_client(app)
+        try:
+            response = await client.post(
+                "/auth/register",
+                json={
+                    "email": "not-an-email",
+                    "password": "SecureP@ss123",
+                    "first_name": "John",
+                    "last_name": "Doe"
+                }
+            )
+        finally:
+            await client.aclose()
         
         assert response.status_code == 422  # Validation error
 
@@ -146,9 +158,8 @@ class TestLoginFlow:
     """Test user login flow."""
     
     @patch('api.v1.routes.auth.supabase_client')
-    def test_login_success(self, mock_supabase):
+    async def test_login_success(self, mock_supabase):
         """Test successful login."""
-        from fastapi.testclient import TestClient
         from api.v1.routes.auth import router
         from fastapi import FastAPI
         
@@ -170,15 +181,17 @@ class TestLoginFlow:
         
         app = FastAPI()
         app.include_router(router)
-        client = TestClient(app)
-        
-        response = client.post(
-            "/auth/login",
-            json={
-                "email": "test@example.com",
-                "password": "SecureP@ss123"
-            }
-        )
+        client = make_client(app)
+        try:
+            response = await client.post(
+                "/auth/login",
+                json={
+                    "email": "test@example.com",
+                    "password": "SecureP@ss123"
+                }
+            )
+        finally:
+            await client.aclose()
         
         assert response.status_code == 200
         data = response.json()
@@ -187,9 +200,8 @@ class TestLoginFlow:
         assert data["data"]["tokens"]["access_token"] == "access-token-123"
     
     @patch('api.v1.routes.auth.supabase_client')
-    def test_login_invalid_credentials(self, mock_supabase):
+    async def test_login_invalid_credentials(self, mock_supabase):
         """Test login with invalid credentials."""
-        from fastapi.testclient import TestClient
         from api.v1.routes.auth import router
         from fastapi import FastAPI
         
@@ -197,15 +209,17 @@ class TestLoginFlow:
         
         app = FastAPI()
         app.include_router(router)
-        client = TestClient(app)
-        
-        response = client.post(
-            "/auth/login",
-            json={
-                "email": "test@example.com",
-                "password": "wrongpassword"
-            }
-        )
+        client = make_client(app)
+        try:
+            response = await client.post(
+                "/auth/login",
+                json={
+                    "email": "test@example.com",
+                    "password": "wrongpassword"
+                }
+            )
+        finally:
+            await client.aclose()
         
         assert response.status_code == 401
         data = response.json()
@@ -213,9 +227,8 @@ class TestLoginFlow:
     
     @patch('api.v1.routes.auth.supabase_client')
     @patch('api.v1.routes.auth.check_rate_limit')
-    def test_login_rate_limited(self, mock_rate_limit, mock_supabase):
+    async def test_login_rate_limited(self, mock_rate_limit, mock_supabase):
         """Test login rate limiting."""
-        from fastapi.testclient import TestClient
         from api.v1.routes.auth import router
         from fastapi import FastAPI
         
@@ -223,15 +236,17 @@ class TestLoginFlow:
         
         app = FastAPI()
         app.include_router(router)
-        client = TestClient(app)
-        
-        response = client.post(
-            "/auth/login",
-            json={
-                "email": "test@example.com",
-                "password": "SecureP@ss123"
-            }
-        )
+        client = make_client(app)
+        try:
+            response = await client.post(
+                "/auth/login",
+                json={
+                    "email": "test@example.com",
+                    "password": "SecureP@ss123"
+                }
+            )
+        finally:
+            await client.aclose()
         
         assert response.status_code == 429
         data = response.json()
@@ -243,9 +258,8 @@ class TestLogoutFlow:
     """Test user logout flow."""
     
     @patch('api.v1.routes.auth.supabase_client')
-    def test_logout_success(self, mock_supabase):
+    async def test_logout_success(self, mock_supabase):
         """Test successful logout."""
-        from fastapi.testclient import TestClient
         from api.v1.routes.auth import router
         from fastapi import FastAPI
         
@@ -253,14 +267,16 @@ class TestLogoutFlow:
         
         app = FastAPI()
         app.include_router(router)
-        client = TestClient(app)
-        
-        response = client.post(
-            "/auth/logout",
-            json={
-                "access_token": "test-access-token"
-            }
-        )
+        client = make_client(app)
+        try:
+            response = await client.post(
+                "/auth/logout",
+                json={
+                    "access_token": "test-access-token"
+                }
+            )
+        finally:
+            await client.aclose()
         
         assert response.status_code == 200
         data = response.json()
@@ -273,9 +289,8 @@ class TestPasswordResetFlow:
     """Test password reset flow."""
     
     @patch('api.v1.routes.auth.supabase_client')
-    def test_password_reset_request_success(self, mock_supabase):
+    async def test_password_reset_request_success(self, mock_supabase):
         """Test password reset request."""
-        from fastapi.testclient import TestClient
         from api.v1.routes.auth import router
         from fastapi import FastAPI
         
@@ -283,14 +298,16 @@ class TestPasswordResetFlow:
         
         app = FastAPI()
         app.include_router(router)
-        client = TestClient(app)
-        
-        response = client.post(
-            "/auth/password-reset/request",
-            json={
-                "email": "test@example.com"
-            }
-        )
+        client = make_client(app)
+        try:
+            response = await client.post(
+                "/auth/password-reset/request",
+                json={
+                    "email": "test@example.com"
+                }
+            )
+        finally:
+            await client.aclose()
         
         assert response.status_code == 200
         data = response.json()
@@ -300,9 +317,8 @@ class TestPasswordResetFlow:
     
     @patch('api.v1.routes.auth.supabase_client')
     @patch('api.v1.routes.auth.verify_supabase_jwt')
-    def test_password_reset_confirm_success(self, mock_verify_jwt, mock_supabase):
+    async def test_password_reset_confirm_success(self, mock_verify_jwt, mock_supabase):
         """Test password reset confirmation."""
-        from fastapi.testclient import TestClient
         from api.v1.routes.auth import router
         from fastapi import FastAPI
         
@@ -311,15 +327,17 @@ class TestPasswordResetFlow:
         
         app = FastAPI()
         app.include_router(router)
-        client = TestClient(app)
-        
-        response = client.post(
-            "/auth/password-reset/confirm",
-            json={
-                "new_password": "NewSecure@456",
-                "access_token": "valid-token"
-            }
-        )
+        client = make_client(app)
+        try:
+            response = await client.post(
+                "/auth/password-reset/confirm",
+                json={
+                    "new_password": "NewSecure@456",
+                    "access_token": "valid-token"
+                }
+            )
+        finally:
+            await client.aclose()
         
         assert response.status_code == 200
         data = response.json()
@@ -331,9 +349,8 @@ class TestTokenRefreshFlow:
     """Test token refresh flow."""
     
     @patch('api.v1.routes.auth.supabase_client')
-    def test_refresh_token_success(self, mock_supabase):
+    async def test_refresh_token_success(self, mock_supabase):
         """Test successful token refresh."""
-        from fastapi.testclient import TestClient
         from api.v1.routes.auth import router
         from fastapi import FastAPI
         
@@ -349,14 +366,16 @@ class TestTokenRefreshFlow:
         
         app = FastAPI()
         app.include_router(router)
-        client = TestClient(app)
-        
-        response = client.post(
-            "/auth/refresh",
-            json={
-                "refresh_token": "old-refresh-token"
-            }
-        )
+        client = make_client(app)
+        try:
+            response = await client.post(
+                "/auth/refresh",
+                json={
+                    "refresh_token": "old-refresh-token"
+                }
+            )
+        finally:
+            await client.aclose()
         
         assert response.status_code == 200
         data = response.json()
@@ -365,9 +384,8 @@ class TestTokenRefreshFlow:
         assert data["data"]["refresh_token"] == "new-refresh-token"
     
     @patch('api.v1.routes.auth.supabase_client')
-    def test_refresh_token_invalid(self, mock_supabase):
+    async def test_refresh_token_invalid(self, mock_supabase):
         """Test refresh with invalid token."""
-        from fastapi.testclient import TestClient
         from api.v1.routes.auth import router
         from fastapi import FastAPI
         
@@ -375,14 +393,16 @@ class TestTokenRefreshFlow:
         
         app = FastAPI()
         app.include_router(router)
-        client = TestClient(app)
-        
-        response = client.post(
-            "/auth/refresh",
-            json={
-                "refresh_token": "invalid-token"
-            }
-        )
+        client = make_client(app)
+        try:
+            response = await client.post(
+                "/auth/refresh",
+                json={
+                    "refresh_token": "invalid-token"
+                }
+            )
+        finally:
+            await client.aclose()
         
         assert response.status_code == 401
         data = response.json()
@@ -393,9 +413,8 @@ class TestAuthResponseFormat:
     """Test response format consistency."""
     
     @patch('api.v1.routes.auth.supabase_client')
-    def test_response_includes_request_id(self, mock_supabase):
+    async def test_response_includes_request_id(self, mock_supabase):
         """Test that all responses include request_id."""
-        from fastapi.testclient import TestClient
         from api.v1.routes.auth import router
         from fastapi import FastAPI
         
@@ -409,24 +428,25 @@ class TestAuthResponseFormat:
         
         app = FastAPI()
         app.include_router(router)
-        client = TestClient(app)
-        
-        response = client.post(
-            "/auth/login",
-            json={
-                "email": "test@example.com",
-                "password": "SecureP@ss123"
-            }
-        )
+        client = make_client(app)
+        try:
+            response = await client.post(
+                "/auth/login",
+                json={
+                    "email": "test@example.com",
+                    "password": "SecureP@ss123"
+                }
+            )
+        finally:
+            await client.aclose()
         
         data = response.json()
         assert "request_id" in data
         assert data["request_id"] is not None
     
     @patch('api.v1.routes.auth.supabase_client')
-    def test_response_includes_version(self, mock_supabase):
+    async def test_response_includes_version(self, mock_supabase):
         """Test that all responses include version."""
-        from fastapi.testclient import TestClient
         from api.v1.routes.auth import router
         from fastapi import FastAPI
         
@@ -440,15 +460,17 @@ class TestAuthResponseFormat:
         
         app = FastAPI()
         app.include_router(router)
-        client = TestClient(app)
-        
-        response = client.post(
-            "/auth/login",
-            json={
-                "email": "test@example.com",
-                "password": "SecureP@ss123"
-            }
-        )
+        client = make_client(app)
+        try:
+            response = await client.post(
+                "/auth/login",
+                json={
+                    "email": "test@example.com",
+                    "password": "SecureP@ss123"
+                }
+            )
+        finally:
+            await client.aclose()
         
         data = response.json()
         assert "version" in data

@@ -285,8 +285,8 @@ class TestRedisJobQueue:
     @pytest.mark.asyncio
     async def test_get_queue_stats(self, redis_queue, mock_redis):
         """Test getting queue statistics."""
-        mock_redis.zcard = AsyncMock(side_effect=[5, 10, 2, 3, 1])  # pending, completed, failed, dead_letter
-        mock_redis.hlen = AsyncMock(side_effect=[2, 3])  # running
+        mock_redis.zcard = AsyncMock(return_value=5)  # pending (sorted set)
+        mock_redis.hlen = AsyncMock(side_effect=[2, 10, 3])  # running, completed, failed (hashes)
         mock_redis.llen = AsyncMock(return_value=1)
         mock_redis.zcount = AsyncMock(return_value=2)
         mock_redis.zrange = AsyncMock(return_value=[])
@@ -298,7 +298,7 @@ class TestRedisJobQueue:
         assert stats['completed'] == 10
         assert stats['failed'] == 3
         assert stats['dead_letter'] == 1
-        assert stats['total'] == 21
+        assert stats['total'] == 20
         assert stats['connected'] is True
     
     @pytest.mark.asyncio
@@ -477,11 +477,12 @@ class TestBackgroundJobProcessor:
     @pytest.mark.asyncio
     async def test_submit_job(self, processor):
         """Test job submission."""
+        from services.background_jobs import JobPriority
         job_id = await processor.submit_job(
             task_name='cleanup_old_data',
             task_args={'days_old': 30},
             user_id='user123',
-            priority=processor.job_queue._memory_queue.__class__.__name__
+            priority=JobPriority.NORMAL
         )
         
         assert job_id is not None

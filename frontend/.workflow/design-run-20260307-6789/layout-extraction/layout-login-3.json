@@ -1,0 +1,32 @@
+{
+  "target": "login",
+  "variant": 3,
+  "variant_name": "Floating Modal on Animated BG",
+  "description": "Full-viewport animated background (gradient/particles), floating glassmorphism auth card centered.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-login-v3",
+      "children": [
+        { "tag": "div", "class": "animated-bg" },
+        {
+          "tag": "div",
+          "class": "auth-floating",
+          "children": [
+            { "tag": "div", "class": "auth-logo" },
+            { "tag": "div", "class": "auth-tabs" },
+            { "tag": "form", "class": "auth-form" },
+            { "tag": "div", "class": "auth-footer" }
+          ]
+        }
+      ]
+    },
+    "css_layout_rules": {
+      ".layout-login-v3": "min-height: 100vh; position: relative; display: flex; align-items: center; justify-content: center;",
+      ".animated-bg": "position: fixed; inset: 0; z-index: 0;",
+      ".auth-floating": "position: relative; z-index: 10; width: 100%; max-width: 400px; border-radius: 1.5rem; padding: 2.5rem; backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);",
+      ".auth-tabs": "display: flex; border-radius: 0.75rem; overflow: hidden; margin-bottom: 1.5rem;",
+      ".auth-form": "display: flex; flex-direction: column; gap: 1.25rem;"
+    }
+  }
+}

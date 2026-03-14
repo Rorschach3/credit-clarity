@@ -1,0 +1,32 @@
+{
+  "target": "pricing",
+  "variant": 2,
+  "variant_name": "Feature Matrix Table",
+  "description": "Comparison-first layout. Large feature matrix table with plan columns. Plans lock at top when scrolling.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-pricing-v2",
+      "children": [
+        { "tag": "nav", "class": "navbar" },
+        {
+          "tag": "main",
+          "class": "pricing-page",
+          "children": [
+            { "tag": "div", "class": "pricing-hero" },
+            { "tag": "div", "class": "comparison-table-wrapper" },
+            { "tag": "div", "class": "pricing-cta" }
+          ]
+        },
+        { "tag": "footer", "class": "footer" }
+      ]
+    },
+    "css_layout_rules": {
+      ".pricing-page": "max-width: 1000px; margin: 0 auto; padding: 4rem 2rem;",
+      ".pricing-hero": "text-align: center; margin-bottom: 3rem;",
+      ".comparison-table-wrapper": "overflow-x: auto;",
+      ".comparison-table-wrapper table": "width: 100%; border-collapse: collapse;",
+      ".comparison-table-wrapper thead": "position: sticky; top: 64px; z-index: 20;"
+    }
+  }
+}

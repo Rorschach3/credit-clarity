@@ -1,0 +1,35 @@
+{
+  "target": "tradelines",
+  "variant": 1,
+  "variant_name": "Bureau Columns + Filter Rail",
+  "description": "Left filter/sort rail, main area with 3-bureau kanban columns. Tradeline cards with status indicators.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-tradelines-v1",
+      "children": [
+        { "tag": "aside", "class": "sidebar" },
+        {
+          "tag": "main",
+          "class": "tradelines-main",
+          "children": [
+            { "tag": "div", "class": "tradelines-header" },
+            { "tag": "div", "class": "filter-bar" },
+            { "tag": "div", "class": "bureau-columns" }
+          ]
+        }
+      ]
+    },
+    "css_layout_rules": {
+      ".layout-tradelines-v1": "display: grid; grid-template-columns: 260px 1fr; min-height: 100vh;",
+      ".tradelines-main": "padding: 2rem; overflow-y: auto;",
+      ".tradelines-header": "display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;",
+      ".filter-bar": "display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.5rem;",
+      ".bureau-columns": "display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem;",
+      "@media (max-width: 1024px)": {
+        ".layout-tradelines-v1": "grid-template-columns: 1fr;",
+        ".bureau-columns": "grid-template-columns: 1fr;"
+      }
+    }
+  }
+}

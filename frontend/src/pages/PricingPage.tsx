@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useNavigate } from "react-router-dom";
-import MainLayout from "@/components/layout/MainLayout";
 import { Helmet } from "react-helmet-async";
 
 export default function PricingPage() {
@@ -97,7 +96,7 @@ export default function PricingPage() {
   };
 
   return (
-   <MainLayout>
+   <div className="has-navbar">
     <Helmet>
       <title>Pricing Plans - Credit Clarity | Affordable Credit Repair</title>
       <meta name="description" content="Choose from flexible pricing plans for AI-powered credit repair. From free basic analysis to unlimited dispute letters with expert support." />
@@ -114,55 +113,55 @@ export default function PricingPage() {
     <div className="py-16 px-4 container">
      <div className="max-w-3xl mx-auto text-center mb-12">
       <h1 className="text-4xl font-bold mb-4">Simple, Transparent Pricing</h1>
-      <p className="text-xl text-gray-600 mb-8">
+      <p className="text-xl text-muted-foreground mb-8">
        Choose the plan that fits your credit repair needs
       </p>
 
-      <div className="inline-flex items-center p-1 bg-gray-100 rounded-lg mb-8">
+      <div className="inline-flex items-center p-1 bg-[#1A2340] rounded-lg mb-8 border border-[#1E2D47]">
        <button
         onClick={() => setBillingCycle("monthly")}
-        className={`px-4 py-2 rounded-md ${
-         billingCycle === "monthly" 
-          ? "bg-white shadow-sm text-brand-600" 
-          : "text-gray-600"
+        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+         billingCycle === "monthly"
+          ? "bg-[#D4A853] text-[#0F1629] shadow-sm"
+          : "text-muted-foreground hover:text-foreground"
         }`}
        >
         Monthly
        </button>
        <button
         onClick={() => setBillingCycle("yearly")}
-        className={`px-4 py-2 rounded-md ${
-         billingCycle === "yearly" 
-          ? "bg-white shadow-sm text-brand-600" 
-          : "text-gray-600"
+        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+         billingCycle === "yearly"
+          ? "bg-[#D4A853] text-[#0F1629] shadow-sm"
+          : "text-muted-foreground hover:text-foreground"
         }`}
        >
-        Yearly <span className="text-xs text-green-600 font-medium ml-1">Save 17%</span>
+        Yearly <span className="text-xs text-[#22C55E] font-medium ml-1">Save 17%</span>
        </button>
       </div>
      </div>
 
      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
       {plans.map((plan) => (
-       <Card 
-        key={plan.id} 
-        className={`relative ${
-         plan.recommended ? "border-brand-600 shadow-lg" : "border-gray-200"
+       <Card
+        key={plan.id}
+        className={`relative card-midnight ${
+         plan.recommended ? "border-[rgba(212,168,83,0.4)] shadow-gold" : ""
         }`}
        >
         {plan.recommended && (
-         <div className="absolute -top-4 left-0 right-0 mx-auto w-max bg-brand-600 text-white px-4 py-1 rounded-full text-sm font-medium">
+         <div className="absolute -top-4 left-0 right-0 mx-auto w-max bg-[#D4A853] text-[#0F1629] px-4 py-1 rounded-full text-sm font-bold">
           Most Popular
          </div>
         )}
         <CardHeader>
          <CardTitle className="text-2xl">{plan.name}</CardTitle>
-         <p className="text-gray-600 mt-2">{plan.description}</p>
+         <p className="text-muted-foreground mt-2">{plan.description}</p>
         </CardHeader>
         <CardContent>
          <div className="mb-6">
           <p className="text-4xl font-bold">${plan.price}</p>
-          <p className="text-gray-500">per {billingCycle === "monthly" ? "month" : "year"}</p>
+          <p className="text-muted-foreground text-sm">per {billingCycle === "monthly" ? "month" : "year"}</p>
          </div>
          <ul className="space-y-3">
           {plan.features.map((feature, i) => (
@@ -174,9 +173,8 @@ export default function PricingPage() {
          </ul>
         </CardContent>
         <CardFooter>
-         <Button 
-          className="w-full" 
-          variant={plan.recommended ? "default" : "outline"}
+         <Button
+          className={`w-full ${plan.recommended ? "btn-gold" : "btn-gold-outline"}`}
           onClick={() => handleSubscribe(plan)}
           disabled={isLoading === plan.id}
          >
@@ -192,31 +190,31 @@ export default function PricingPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left mt-8">
        <div>
         <h3 className="font-semibold text-lg mb-2">How does the service work?</h3>
-        <p className="text-gray-600">
+        <p className="text-muted-foreground">
          Upload your credit reports, and our AI will analyze them to identify errors. We then generate and mail professionally formatted dispute letters to credit bureaus on your behalf.
         </p>
        </div>
        <div>
         <h3 className="font-semibold text-lg mb-2">How long does credit repair take?</h3>
-        <p className="text-gray-600">
+        <p className="text-muted-foreground">
          Results vary, but most customers see improvements within 30-45 days after dispute letters are sent. Comprehensive credit repair may take 3-6 months.
         </p>
        </div>
        <div>
         <h3 className="font-semibold text-lg mb-2">Can I cancel my subscription?</h3>
-        <p className="text-gray-600">
+        <p className="text-muted-foreground">
          Yes, you can cancel your subscription at any time from your account settings. There are no long-term contracts or cancellation fees.
         </p>
        </div>
        <div>
         <h3 className="font-semibold text-lg mb-2">Is there a guarantee?</h3>
-        <p className="text-gray-600">
+        <p className="text-muted-foreground">
          We offer a 30-day money-back guarantee if you're not satisfied with our service. However, we cannot guarantee specific credit score increases as results vary by individual.
         </p>
        </div>
       </div>
      </div>
     </div>
-   </MainLayout>
+   </div>
   );
 }

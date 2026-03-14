@@ -77,7 +77,8 @@ def test_validator_accepts_consistent_negative_flag(validator):
         "credit_bureau": "Equifax",
         "is_negative": True,
         "monthly_payment": "$0.00",
-        "account_balance": "$1,000"
+        "account_balance": "$1,000",
+        "date_opened": "01/01/2020",
     }
 
     result = validator.validate_tradeline(tradeline)

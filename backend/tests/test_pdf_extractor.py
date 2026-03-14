@@ -7,10 +7,6 @@ from pathlib import Path
 import tempfile
 import os
 
-# Add the backend directory to the path
-import sys
-sys.path.append('/mnt/c/projects/credit-clarity/backend')
-
 from services.tradeline_extraction.pdf_extractor import (
     TransUnionPDFExtractor,
     PDFExtractionResult
@@ -28,57 +24,8 @@ class TestTransUnionPDFExtractor:
     @pytest.fixture
     def sample_pdf_path(self):
         """Path to sample PDF file"""
-        return Path("/mnt/c/projects/credit-clarity/TransUnion-06-10-2025.pdf")
-    
-    @pytest.fixture
-    def temp_pdf_file(self):
-        """Create temporary PDF file for testing"""
-        content = b"""%PDF-1.4
-1 0 obj
-<< /Type /Pages /Kids [2 0 R] /Count 1 >>
-endobj
-2 0 obj
-<< /Type /Page /Parent 1 0 R /MediaBox [0 0 612 792]
-   /Contents 3 0 R /Resources << /Font << /F1 4 0 R >> >>
->>
-endobj
-3 0 obj
-<< /Length 55 >>
-stream
-BT
-/F1 12 Tf
-100 700 Td
-(Test Credit Report) Tj
-ET
-endstream
-endobj
-4 0 obj
-<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
-endobj
-xref
-0 5
-0000000000 65535 f 
-0000000009 00000 n 
-0000000058 00000 n 
-0000000178 00000 n 
-0000000284 00000 n 
-trailer
-<< /Size 5 /Root 1 0 R >>
-startxref
-355
-%%EOF"""
-        
-        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as f:
-            f.write(content)
-            temp_path = f.name
-        
-        yield temp_path
-        
-        # Cleanup
-        try:
-            os.unlink(temp_path)
-        except FileNotFoundError:
-            pass
+        backend_dir = Path(__file__).resolve().parents[1]
+        return backend_dir / "TransUnion-06-10-2025.pdf"
     
     def test_extractor_initialization(self, extractor):
         """Test PDF extractor initialization"""
@@ -157,14 +104,15 @@ startxref
     @pytest.mark.asyncio
     async def test_extract_sample_transunion_text(self, extractor):
         """Test extraction of sample TransUnion text"""
-        # Test the sample PDF that should return our test data
-        sample_path = "/mnt/c/projects/credit-clarity/TransUnion-06-10-2025.pdf"
-        
+        if os.getenv("RUN_SLOW_PDF_TESTS") != "1":
+            pytest.skip("Set RUN_SLOW_PDF_TESTS=1 to run real-world PDF extraction tests")
+
         # Check if file exists first
-        if not Path(sample_path).exists():
+        sample_path = Path(__file__).resolve().parents[1] / "TransUnion-06-10-2025.pdf"
+        if not sample_path.exists():
             pytest.skip("Sample PDF file not available for testing")
         
-        result = await extractor.extract_text_from_pdf(sample_path)
+        result = await extractor.extract_text_from_pdf(str(sample_path))
         
         assert result.success is True
         assert result.text is not None

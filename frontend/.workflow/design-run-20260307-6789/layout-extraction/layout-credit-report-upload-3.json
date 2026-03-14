@@ -1,0 +1,49 @@
+{
+  "target": "credit-report-upload",
+  "variant": 3,
+  "variant_name": "Full-Width Kanban Bureau View",
+  "description": "Full-width page with upload at top, then a kanban-style 3-bureau column view below. Tradelines as draggable cards.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-upload-v3",
+      "children": [
+        { "tag": "nav", "class": "credit-navbar" },
+        {
+          "tag": "main",
+          "class": "upload-full",
+          "children": [
+            { "tag": "div", "class": "upload-header-bar" },
+            { "tag": "div", "class": "upload-zone-compact" },
+            { "tag": "div", "class": "progress-strip" },
+            {
+              "tag": "div",
+              "class": "kanban-board",
+              "children": [
+                { "tag": "div", "class": "kanban-col kanban-equifax" },
+                { "tag": "div", "class": "kanban-col kanban-experian" },
+                { "tag": "div", "class": "kanban-col kanban-transunion" },
+                { "tag": "div", "class": "kanban-col kanban-unassigned" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "css_layout_rules": {
+      ".layout-upload-v3": "min-height: 100vh; display: flex; flex-direction: column;",
+      ".upload-full": "flex: 1; padding: 1.5rem 2rem;",
+      ".upload-header-bar": "display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;",
+      ".upload-zone-compact": "border: 2px dashed var(--border); border-radius: 0.75rem; padding: 1.5rem 2rem; display: flex; align-items: center; gap: 2rem; margin-bottom: 1.5rem;",
+      ".progress-strip": "height: 6px; border-radius: 999px; overflow: hidden; margin-bottom: 2rem;",
+      ".kanban-board": "display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; align-items: start; flex: 1;",
+      ".kanban-col": "border-radius: 1rem; overflow: hidden; min-height: 400px;",
+      "@media (max-width: 1024px)": {
+        ".kanban-board": "grid-template-columns: repeat(2, 1fr);"
+      },
+      "@media (max-width: 640px)": {
+        ".kanban-board": "grid-template-columns: 1fr;"
+      }
+    }
+  }
+}

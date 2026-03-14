@@ -1,0 +1,56 @@
+{
+  "id": "IMPL-011",
+  "title": "Dispute Letter Generation Enhancements",
+  "status": "pending",
+  "context_package_path": ".workflow/active/WFS-implement-credit-clarity-platform/.process/context-package.json",
+  "meta": {
+    "priority": "high",
+    "effort_estimate": "2-3 days",
+    "phase": "Phase 1 - Core Feature Polish",
+    "type": "fullstack",
+    "depends_on": ["IMPL-004", "IMPL-006", "IMPL-007"],
+    "tags": ["dispute-letters", "FCRA", "templates", "rate-limit", "preview", "generation"]
+  },
+  "context": {
+    "description": "Enhance existing dispute letter generation with: 10-15 dispute reason options, letter preview before generation, PDF download, and rate limit enforcement UI with user-facing usage meter. CROA gate must be accepted before this flow (enforced by IMPL-007).",
+    "focus_paths": [
+      "frontend/src/pages/DisputeWizardPage.tsx",
+      "frontend/src/components/dispute-wizard/",
+      "supabase/functions/generate-dispute-letter/index.ts",
+      "backend/api/v1/routes/",
+      "docs/PRD-Feature-Specifications.md"
+    ],
+    "acceptance_criteria": [
+      "DisputeWizardPage.tsx Step 2 shows dispute reason selection with exactly 12 FCRA dispute reason options: 'Not my account', 'Account paid in full', 'Incorrect balance', 'Account past statute of limitations', 'Incorrect payment history', 'Incorrect account status', 'Duplicate account', 'Identity theft', 'Incorrect account ownership', 'Incorrect credit limit', 'Account included in bankruptcy', 'Incorrect date of first delinquency'",
+      "DisputeWizardPage.tsx Step 3 shows letter preview (rendered HTML/text) before PDF generation with 'Generate PDF' button",
+      "Rate limit usage meter in wizard header: 'Letters this month: 2/3' with progress bar, turns red at 3/3",
+      "When rate limit reached: wizard shows 'Monthly limit reached. Upgrade to Premium for unlimited letters.' with upgrade CTA linking to /pricing",
+      "Letter generation calls existing generate-dispute-letter edge function (do not rewrite, only extend if needed)",
+      "Generated letter PDF is downloadable via <a href={blob_url} download> pattern",
+      "notification_log entry written on letter generation (type='letter_sent', via email_worker from IMPL-009)",
+      "Letter generation success rate >=99% (verified by checking generate-dispute-letter edge function error rate in Supabase logs)",
+      "Verify: Generate 3 letters → 4th attempt shows rate limit message with upgrade CTA (links to /pricing page created in IMPL-006)"
+    ],
+    "implementation_approach": [
+      "Step 1: Read frontend/src/pages/DisputeWizardPage.tsx - current wizard steps",
+      "Step 2: Read supabase/functions/generate-dispute-letter/index.ts - letter generation API",
+      "Step 3: Read frontend/src/components/dispute-wizard/ - existing wizard components",
+      "Step 4: Add 12 dispute reason options to Step 2 of wizard (replace or extend current)",
+      "Step 5: Add letter preview component to Step 3 (call preview API or render template client-side)",
+      "Step 6: Add rate limit usage meter by calling GET /api/v1/rate-limits/status (new endpoint from IMPL-004)",
+      "Step 7: Add usage meter UI above wizard steps",
+      "Step 8: Add PDF download using URL.createObjectURL after letter generation"
+    ],
+    "pre_analysis": [
+      "Read frontend/src/pages/DisputeWizardPage.tsx - current step structure and letter generation call",
+      "Read supabase/functions/generate-dispute-letter/index.ts - generation response format",
+      "Read frontend/src/components/dispute-wizard/ directory"
+    ]
+  },
+  "flow_control": {
+    "execution_mode": "sequential",
+    "parallel_with": ["IMPL-010"],
+    "requires": ["IMPL-004", "IMPL-006", "IMPL-007"],
+    "blocks": ["IMPL-012"]
+  }
+}

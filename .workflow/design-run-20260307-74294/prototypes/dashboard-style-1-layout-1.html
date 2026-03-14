@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Credit Clarity</title>
+  <meta name="description" content="Your Credit Clarity dashboard. View tradelines, dispute history, and manage your credit repair progress.">
+  <meta property="og:title" content="Dashboard — Credit Clarity">
+  <meta property="og:description" content="Your credit dispute dashboard. AI-powered credit repair.">
+  <link rel="canonical" href="https://creditclarity.app/dashboard">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --base:#0A0F1E; --card:#0F1729; --elevated:#1A2340; --border:#1E2D47;
+      --border-subtle:rgba(30,45,71,0.6);
+      --gold:#D4A853; --gold-hover:#E8C06A; --gold-muted:rgba(212,168,83,0.15);
+      --gold-border:rgba(212,168,83,0.3);
+      --text:#F0F4FF; --text-muted:#8892A4;
+      --success:#22C55E; --error:#EF4444;
+      --font:'Inter', system-ui, sans-serif;
+      --sidebar-width:260px;
+    }
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    html { scroll-behavior:smooth; }
+    body { background:var(--base); color:var(--text); font-family:var(--font); line-height:1.5; -webkit-font-smoothing:antialiased; min-height:100vh; }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes pulseGold { 0%,100%{box-shadow:0 0 0 0 rgba(212,168,83,0)} 50%{box-shadow:0 0 0 8px rgba(212,168,83,0.12)} }
+    @media (prefers-reduced-motion:reduce) { *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important} }
+    .btn-gold { display:inline-flex;align-items:center;gap:0.5rem;background:linear-gradient(135deg,var(--gold),var(--gold-hover));color:#0A0F1E;font-weight:600;padding:0.625rem 1.25rem;border-radius:0.5rem;border:none;cursor:pointer;font-size:0.875rem;transition:transform 150ms ease,box-shadow 150ms ease;text-decoration:none; }
+    .btn-gold:hover { transform:translateY(-2px);box-shadow:0 8px 32px rgba(212,168,83,0.35); }
+    .btn-ghost { display:inline-flex;align-items:center;gap:0.5rem;background:transparent;border:1px solid var(--gold-border);color:var(--gold);padding:0.625rem 1.25rem;border-radius:0.5rem;cursor:pointer;font-size:0.875rem;transition:border-color 150ms ease,background 150ms ease;text-decoration:none; }
+    .btn-ghost:hover { border-color:var(--gold);background:var(--gold-muted); }
+    .card { background:var(--card);border:1px solid var(--border);border-radius:0.75rem; }
+    .badge { display:inline-flex;align-items:center;gap:0.4rem;padding:0.25rem 0.625rem;border-radius:9999px;font-size:0.6875rem;font-weight:600; }
+    .badge-gold { background:var(--gold-muted);color:var(--gold);border:1px solid var(--gold-border); }
+    .badge-success { background:rgba(34,197,94,0.1);color:#22C55E; }
+    .badge-error { background:rgba(239,68,68,0.1);color:#EF4444; }
+    .badge-warning { background:rgba(245,158,11,0.1);color:#F59E0B; }
+
+    /* LAYOUT */
+    .app-shell { display:flex; min-height:100vh; }
+
+    /* SIDEBAR */
+    .sidebar { width:var(--sidebar-width); background:var(--card); border-right:1px solid var(--border); display:flex; flex-direction:column; position:fixed; top:0; left:0; bottom:0; z-index:200; transform:translateX(-100%); transition:transform 300ms ease; }
+    .sidebar.open { transform:translateX(0); }
+    @media(min-width:1024px){ .sidebar{transform:translateX(0);position:sticky;top:0;height:100vh;} }
+    .sidebar-logo { padding:1.25rem 1.5rem; border-bottom:1px solid var(--border-subtle); }
+    .sidebar-logo a { font-size:1.0625rem; font-weight:700; color:var(--gold); text-decoration:none; display:flex; align-items:center; gap:0.4rem; }
+    .sidebar-nav { flex:1; padding:1rem 0.75rem; overflow-y:auto; }
+    .nav-item { display:flex; align-items:center; gap:0.75rem; padding:0.625rem 0.875rem; border-radius:0.5rem; color:var(--text-muted); text-decoration:none; font-size:0.9rem; font-weight:500; transition:background 150ms,color 150ms; cursor:pointer; margin-bottom:0.25rem; }
+    .nav-item:hover { background:var(--elevated); color:var(--text); }
+    .nav-item.active { background:var(--gold-muted); color:var(--gold); border:1px solid var(--gold-border); }
+    .nav-icon { font-size:1rem; flex-shrink:0; width:20px; text-align:center; }
+    .sidebar-user { padding:1rem 1.25rem; border-top:1px solid var(--border-subtle); display:flex; align-items:center; gap:0.75rem; }
+    .user-avatar { width:36px; height:36px; border-radius:50%; background:var(--gold-muted); border:1px solid var(--gold-border); display:flex; align-items:center; justify-content:center; font-size:0.8125rem; font-weight:700; color:var(--gold); flex-shrink:0; }
+    .user-info { flex:1; min-width:0; }
+    .user-name { font-size:0.875rem; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .signout-link { font-size:0.75rem; color:var(--text-muted); text-decoration:none; transition:color 150ms; }
+    .signout-link:hover { color:var(--error); }
+
+    /* MOBILE TOPBAR */
+    .mobile-topbar { display:flex; align-items:center; justify-content:space-between; padding:0 1rem; height:56px; background:var(--card); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:100; }
+    @media(min-width:1024px){ .mobile-topbar { display:none; } }
+    .hamburger { display:flex; flex-direction:column; gap:4px; cursor:pointer; padding:4px; background:none; border:none; }
+    .hamburger span { display:block; width:20px; height:2px; background:var(--text); border-radius:2px; }
+    .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:190; }
+    .sidebar-overlay.open { display:block; }
+
+    /* MAIN */
+    .main-content { flex:1; min-width:0; }
+    @media(min-width:1024px){ .main-content { margin-left:0; } }
+    .page-body { padding:1.5rem 1rem; }
+    @media(min-width:640px){ .page-body { padding:2rem 1.5rem; } }
+    @media(min-width:1024px){ .page-body { padding:2rem 2.5rem; } }
+
+    .page-header { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:2rem; }
+    .page-header h1 { font-size:1.375rem; font-weight:700; }
+    .page-date { font-size:0.8125rem; color:var(--text-muted); margin-top:0.25rem; }
+
+    /* STATS GRID */
+    .stats-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:1rem; margin-bottom:2rem; }
+    @media(min-width:768px){ .stats-grid { grid-template-columns:repeat(4,1fr); } }
+    .stat-card { padding:1.125rem; }
+    .stat-card-inner { display:flex; align-items:flex-start; justify-content:space-between; }
+    .stat-icon-wrap { width:40px; height:40px; border-radius:0.5rem; display:flex; align-items:center; justify-content:center; font-size:1.125rem; flex-shrink:0; }
+    .stat-num { font-size:1.625rem; font-weight:800; margin-top:0.75rem; }
+    .stat-label { font-size:0.75rem; color:var(--text-muted); margin-top:0.125rem; font-weight:500; }
+    .si-blue { background:rgba(59,130,246,0.12); }
+    .si-red { background:rgba(239,68,68,0.1); }
+    .si-yellow { background:rgba(245,158,11,0.1); }
+    .si-green { background:rgba(34,197,94,0.1); }
+
+    /* CONTENT GRID */
+    .content-grid { display:grid; grid-template-columns:1fr; gap:1.5rem; }
+    @media(min-width:1200px){ .content-grid { grid-template-columns:1fr 380px; } }
+
+    .card-header { display:flex; align-items:center; justify-content:space-between; padding:1.125rem 1.25rem; border-bottom:1px solid var(--border-subtle); }
+    .card-title { font-size:0.9375rem; font-weight:600; }
+    .card-body { padding:1.25rem; }
+
+    /* TRADELINES TABLE */
+    .tradelines-table { width:100%; border-collapse:collapse; font-size:0.875rem; }
+    .tradelines-table th { color:var(--text-muted); font-weight:500; text-align:left; padding:0.625rem 0.75rem; font-size:0.75rem; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid var(--border-subtle); }
+    .tradelines-table td { padding:0.75rem; border-bottom:1px solid var(--border-subtle); vertical-align:middle; }
+    .tradelines-table tr:last-child td { border-bottom:none; }
+    .tradelines-table tr.negative { border-left:3px solid var(--error); }
+    .tradelines-table tr:hover td { background:rgba(255,255,255,0.02); }
+    .dispute-btn { padding:0.3rem 0.75rem; border-radius:0.375rem; font-size:0.75rem; font-weight:600; background:rgba(239,68,68,0.1); color:#EF4444; border:1px solid rgba(239,68,68,0.3); cursor:pointer; transition:background 150ms; }
+    .dispute-btn:hover { background:rgba(239,68,68,0.2); }
+
+    /* RIGHT COLUMN */
+    .right-col { display:flex; flex-direction:column; gap:1.5rem; }
+
+    /* DISPUTES LIST */
+    .dispute-item { display:flex; align-items:center; gap:0.875rem; padding:0.875rem 0; border-bottom:1px solid var(--border-subtle); }
+    .dispute-item:last-child { border-bottom:none; }
+    .dispute-icon { width:36px; height:36px; border-radius:0.5rem; background:var(--elevated); display:flex; align-items:center; justify-content:center; font-size:1rem; flex-shrink:0; }
+    .dispute-name { font-size:0.875rem; font-weight:500; }
+    .dispute-date { font-size:0.75rem; color:var(--text-muted); margin-top:0.125rem; }
+
+    /* PROFILE PROGRESS */
+    .profile-progress { }
+    .progress-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; font-size:0.875rem; }
+    .progress-pct { font-weight:700; color:var(--gold); }
+    .progress-bar-wrap { height:8px; background:var(--elevated); border-radius:4px; overflow:hidden; margin-bottom:1rem; }
+    .progress-bar-fill { height:100%; background:linear-gradient(90deg,var(--gold),var(--gold-hover)); border-radius:4px; transition:width 600ms ease; }
+    .progress-items { display:flex; flex-direction:column; gap:0.5rem; }
+    .progress-item { display:flex; align-items:center; gap:0.625rem; font-size:0.8125rem; }
+    .pi-check { color:var(--success); }
+    .pi-pending { color:var(--text-muted); }
+
+    /* ACTION CARDS */
+    .action-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:2rem; }
+    @media(max-width:480px){ .action-row { grid-template-columns:1fr; } }
+    .action-card { padding:1.25rem; text-align:center; cursor:pointer; transition:transform 250ms ease,box-shadow 250ms ease,border-color 250ms ease; }
+    .action-card:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.5); border-color:var(--gold-border); }
+    .action-card.gold-card { border-color:var(--gold-border); background:var(--gold-muted); }
+    .action-icon { font-size:1.75rem; margin-bottom:0.5rem; }
+    .action-title { font-size:0.9375rem; font-weight:600; }
+    .action-desc { font-size:0.8125rem; color:var(--text-muted); margin-top:0.25rem; }
+  </style>
+</head>
+<body>
+
+<!-- SIDEBAR OVERLAY -->
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<div class="app-shell">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar" role="navigation" aria-label="App navigation">
+    <div class="sidebar-logo">
+      <a href="/">◈ Credit Clarity</a>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/dashboard" class="nav-item active" aria-current="page"><span class="nav-icon">🏠</span>Dashboard</a>
+      <a href="/report" class="nav-item"><span class="nav-icon">📊</span>Credit Report</a>
+      <a href="/disputes" class="nav-item"><span class="nav-icon">📝</span>Dispute Letters</a>
+      <a href="/history" class="nav-item"><span class="nav-icon">📜</span>History</a>
+      <a href="/profile" class="nav-item"><span class="nav-icon">👤</span>Profile</a>
+      <a href="/settings" class="nav-item"><span class="nav-icon">⚙</span>Settings</a>
+    </nav>
+    <div class="sidebar-user">
+      <div class="user-avatar">JS</div>
+      <div class="user-info">
+        <div class="user-name">Jane Smith</div>
+        <a href="/signout" class="signout-link">Sign Out</a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main-content">
+    <!-- Mobile Topbar -->
+    <div class="mobile-topbar">
+      <button class="hamburger" aria-label="Open menu" id="menu-btn">
+        <span></span><span></span><span></span>
+      </button>
+      <a href="/" style="font-size:1rem;font-weight:700;color:var(--gold);text-decoration:none;">◈ Credit Clarity</a>
+      <div class="user-avatar" style="width:32px;height:32px;font-size:0.75rem;">JS</div>
+    </div>
+
+    <main role="main" class="page-body">
+      <!-- PAGE HEADER -->
+      <div class="page-header">
+        <div>
+          <h1>Good morning, Jane 👋</h1>
+          <p class="page-date">Sunday, March 8, 2026</p>
+        </div>
+        <a href="/upload" class="btn-gold">📤 Upload Report</a>
+      </div>
+
+      <!-- STATS -->
+      <div class="stats-grid" role="region" aria-label="Credit statistics">
+        <div class="card stat-card">
+          <div class="stat-card-inner">
+            <div><div class="stat-num">12</div><div class="stat-label">Tradelines</div></div>
+            <div class="stat-icon-wrap si-blue">🗂</div>
+          </div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-inner">
+            <div><div class="stat-num" style="color:var(--error)">4</div><div class="stat-label">Negative Items</div></div>
+            <div class="stat-icon-wrap si-red">⚠</div>
+          </div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-inner">
+            <div><div class="stat-num" style="color:#F59E0B">2</div><div class="stat-label">Active Disputes</div></div>
+            <div class="stat-icon-wrap si-yellow">⏱</div>
+          </div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card-inner">
+            <div><div class="stat-num" style="color:var(--success)">1</div><div class="stat-label">Resolved</div></div>
+            <div class="stat-icon-wrap si-green">✅</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONTENT GRID -->
+      <div class="content-grid">
+        <!-- LEFT: Tradelines -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Your Tradelines</span>
+            <a href="/report" style="font-size:0.8125rem;color:var(--gold);text-decoration:none;">View All →</a>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="tradelines-table" aria-label="Your credit tradelines">
+              <thead>
+                <tr>
+                  <th>Creditor</th>
+                  <th>Status</th>
+                  <th>Balance</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="font-weight:500;">Capital One</td>
+                  <td><span class="badge badge-success">Current</span></td>
+                  <td>$2,400</td>
+                  <td style="color:var(--text-muted);font-size:0.75rem;">—</td>
+                </tr>
+                <tr>
+                  <td style="font-weight:500;">Chase Sapphire</td>
+                  <td><span class="badge badge-success">Current</span></td>
+                  <td>$0</td>
+                  <td style="color:var(--text-muted);font-size:0.75rem;">—</td>
+                </tr>
+                <tr class="negative">
+                  <td style="font-weight:500;">Midland Credit Mgmt</td>
+                  <td><span class="badge badge-error">Negative</span></td>
+                  <td>$892</td>
+                  <td><button class="dispute-btn">Dispute</button></td>
+                </tr>
+                <tr>
+                  <td style="font-weight:500;">SYNCB Amazon</td>
+                  <td><span class="badge badge-success">Current</span></td>
+                  <td>$156</td>
+                  <td style="color:var(--text-muted);font-size:0.75rem;">—</td>
+                </tr>
+                <tr class="negative">
+                  <td style="font-weight:500;">Navient</td>
+                  <td><span class="badge badge-error">Negative</span></td>
+                  <td>$12,400</td>
+                  <td><button class="dispute-btn">Dispute</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN -->
+        <div class="right-col">
+          <!-- Recent Disputes -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Recent Disputes</span>
+              <a href="/history" style="font-size:0.8125rem;color:var(--gold);text-decoration:none;">View All →</a>
+            </div>
+            <div class="card-body" style="padding-top:0.5rem;">
+              <div class="dispute-item">
+                <div class="dispute-icon">📝</div>
+                <div style="flex:1;min-width:0;">
+                  <div class="dispute-name">Midland Credit Mgmt</div>
+                  <div class="dispute-date">Sent Feb 12, 2026</div>
+                </div>
+                <span class="badge badge-warning">Pending</span>
+              </div>
+              <div class="dispute-item">
+                <div class="dispute-icon">✅</div>
+                <div style="flex:1;min-width:0;">
+                  <div class="dispute-name">Experian — Hard Inquiry</div>
+                  <div class="dispute-date">Resolved Jan 29, 2026</div>
+                </div>
+                <span class="badge badge-success">Resolved</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Profile Completion -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Profile Completion</span>
+              <span style="font-size:0.8125rem;color:var(--text-muted);">Required for letters</span>
+            </div>
+            <div class="card-body profile-progress">
+              <div class="progress-header">
+                <span style="font-size:0.875rem;color:var(--text-muted);">3 of 7 fields complete</span>
+                <span class="progress-pct">43%</span>
+              </div>
+              <div class="progress-bar-wrap">
+                <div class="progress-bar-fill" style="width:43%"></div>
+              </div>
+              <div class="progress-items">
+                <div class="progress-item"><span class="pi-check">✓</span>First &amp; Last Name</div>
+                <div class="progress-item"><span class="pi-check">✓</span>Date of Birth</div>
+                <div class="progress-item"><span class="pi-check">✓</span>Email Address</div>
+                <div class="progress-item"><span class="pi-pending">○</span><span style="color:var(--text-muted);">Mailing Address</span></div>
+                <div class="progress-item"><span class="pi-pending">○</span><span style="color:var(--text-muted);">Phone Number</span></div>
+                <div class="progress-item"><span class="pi-pending">○</span><span style="color:var(--text-muted);">Last 4 SSN</span></div>
+                <div class="progress-item"><span class="pi-pending">○</span><span style="color:var(--text-muted);">Signature</span></div>
+              </div>
+              <a href="/profile" class="btn-gold" style="margin-top:1.25rem;width:100%;justify-content:center;">Complete Profile →</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACTION CARDS -->
+      <div class="action-row">
+        <a href="/upload" class="card action-card gold-card" style="text-decoration:none;color:var(--text);">
+          <div class="action-icon">📤</div>
+          <div class="action-title">Upload New Report</div>
+          <p class="action-desc">Add a new credit report PDF for analysis</p>
+        </a>
+        <a href="/disputes/new" class="card action-card" style="text-decoration:none;color:var(--text);">
+          <div class="action-icon">📝</div>
+          <div class="action-title">Generate Dispute Letter</div>
+          <p class="action-desc">Create a new FCRA-compliant dispute letter</p>
+        </a>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+  const menuBtn=document.getElementById('menu-btn');
+  const sidebar=document.getElementById('sidebar');
+  const overlay=document.getElementById('sidebar-overlay');
+  function openSidebar(){sidebar.classList.add('open');overlay.classList.add('open');}
+  function closeSidebar(){sidebar.classList.remove('open');overlay.classList.remove('open');}
+  menuBtn.addEventListener('click',openSidebar);
+  overlay.addEventListener('click',closeSidebar);
+</script>
+</body>
+</html>

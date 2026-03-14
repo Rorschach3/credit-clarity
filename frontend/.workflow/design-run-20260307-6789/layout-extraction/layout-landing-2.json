@@ -1,0 +1,54 @@
+{
+  "target": "landing",
+  "variant": 2,
+  "variant_name": "Score-Centered Dashboard Preview",
+  "description": "Split layout — left copy, right animated credit score dashboard preview. Immediately shows the product value.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-landing-v2",
+      "children": [
+        { "tag": "nav", "class": "navbar navbar-floating" },
+        {
+          "tag": "section",
+          "class": "hero hero-split",
+          "children": [
+            {
+              "tag": "div",
+              "class": "hero-left",
+              "children": [
+                { "tag": "div", "class": "hero-eyebrow" },
+                { "tag": "h1", "class": "hero-headline" },
+                { "tag": "p", "class": "hero-subheadline" },
+                { "tag": "div", "class": "hero-stats-row" },
+                { "tag": "div", "class": "hero-cta-group" }
+              ]
+            },
+            {
+              "tag": "div",
+              "class": "hero-right",
+              "children": [
+                { "tag": "div", "class": "dashboard-preview-card" }
+              ]
+            }
+          ]
+        },
+        { "tag": "section", "class": "features-alternating" },
+        { "tag": "section", "class": "social-proof-grid" },
+        { "tag": "section", "class": "final-cta-banner" },
+        { "tag": "footer", "class": "footer-compact" }
+      ]
+    },
+    "css_layout_rules": {
+      ".hero-split": "display: grid; grid-template-columns: 1fr 1fr; min-height: 100vh; align-items: center; padding: 7rem 5rem 5rem; gap: 5rem;",
+      ".hero-stats-row": "display: flex; gap: 2rem; margin: 1.5rem 0; flex-wrap: wrap;",
+      ".dashboard-preview-card": "border-radius: 1.5rem; overflow: hidden; transform: perspective(1000px) rotateY(-5deg) rotateX(2deg); box-shadow: var(--shadow-xl);",
+      ".features-alternating": "padding: 6rem 5rem; display: flex; flex-direction: column; gap: 6rem;",
+      ".social-proof-grid": "padding: 6rem 5rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 2rem;",
+      "@media (max-width: 768px)": {
+        ".hero-split": "grid-template-columns: 1fr; padding: 6rem 1.5rem 3rem;",
+        ".dashboard-preview-card": "transform: none;"
+      }
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "id": "IMPL-001",
+  "title": "Supabase DB Schema Migrations",
+  "status": "pending",
+  "context_package_path": ".workflow/active/WFS-implement-credit-clarity-platform/.process/context-package.json",
+  "meta": {
+    "priority": "critical",
+    "effort_estimate": "3-4 days",
+    "phase": "Phase 1 - Infrastructure Foundation",
+    "type": "database",
+    "depends_on": [],
+    "tags": ["database", "migrations", "supabase", "schema", "rls"]
+  },
+  "context": {
+    "description": "Create all new Supabase DB migrations required for the platform monetization infrastructure. This is the foundational task - all other tasks depend on these schemas.",
+    "focus_paths": [
+      "supabase/migrations/",
+      "supabase/config.toml",
+      "docs/PRD-Data-Architecture.md",
+      "supabase/migrations/20250720_update_tradeline_unique_constraint.sql"
+    ],
+    "acceptance_criteria": [
+      "Migration 1: subscription_tier ENUM (free/premium) added to profiles table with croa_disclosure_accepted BOOLEAN DEFAULT false and croa_disclosure_timestamp TIMESTAMPTZ columns",
+      "Migration 2: payments table created (id UUID, user_id UUID FK profiles, stripe_payment_intent_id TEXT UNIQUE, amount_cents INTEGER, net_revenue_cents INTEGER GENERATED, status payment_status ENUM, created_at TIMESTAMPTZ) with RLS policy (user sees own rows only)",
+      "Migration 3: stripe_webhook_events table (id UUID, stripe_event_id TEXT UNIQUE, event_type TEXT, processed_at TIMESTAMPTZ, payload JSONB) with RLS admin-only",
+      "Migration 4: notification_log table (id UUID, user_id UUID FK, notification_type TEXT CHECK IN ('croa_disclosure','letter_sent','mailing_dispatched','fcra_day1','fcra_day3','fcra_day25','dispute_update'), sent_at TIMESTAMPTZ, metadata JSONB) with RLS user-owns",
+      "Migration 5: user_analytics TABLE with trigger (fires on INSERT/UPDATE to tradelines, disputes - increments total_scans, total_letters, total_mailings counters per user_id)",
+      "Migration 6: status_history table (id UUID DEFAULT gen_random_uuid(), dispute_id UUID REFERENCES disputes(id), tradeline_id UUID REFERENCES tradelines(id), old_status TEXT, new_status TEXT, changed_at TIMESTAMPTZ DEFAULT now(), changed_by UUID REFERENCES profiles(id)) with RLS user-owns via dispute_id join",
+      "Migration 7: from_address fields added to profiles table (from_address_line1 TEXT, from_address_line2 TEXT, from_address_city TEXT, from_address_state TEXT, from_address_zip TEXT)",
+      "All migrations are idempotent (IF NOT EXISTS / CREATE OR REPLACE)",
+      "All tables have RLS enabled with appropriate policies matching existing tradelines pattern",
+      "Verify with: SELECT tablename FROM pg_tables WHERE schemaname='public' to confirm all 6 new tables/columns exist"
+    ],
+    "implementation_approach": [
+      "Step 1: Read existing migration 20250720_update_tradeline_unique_constraint.sql to understand RLS policy pattern",
+      "Step 2: Read docs/PRD-Data-Architecture.md sections on payments, notifications, and analytics schemas",
+      "Step 3: Create supabase/migrations/YYYYMMDD_subscription_tier.sql - ALTER profiles table",
+      "Step 4: Create supabase/migrations/YYYYMMDD_payments_schema.sql - payments + stripe_webhook_events",
+      "Step 5: Create supabase/migrations/YYYYMMDD_notification_log.sql - notification_log table",
+      "Step 6: Create supabase/migrations/YYYYMMDD_user_analytics_trigger.sql - user_analytics table + trigger function",
+      "Step 7: Create supabase/migrations/YYYYMMDD_status_history.sql - status_history table with RLS",
+      "Step 8: Create supabase/migrations/YYYYMMDD_profiles_address_fields.sql - ADD COLUMN from_address_* to profiles",
+      "Use timestamp prefix format matching existing migrations (YYYYMMDD_description.sql)"
+    ],
+    "pre_analysis": [
+      "Read supabase/migrations/20250720_update_tradeline_unique_constraint.sql for RLS pattern",
+      "Read docs/PRD-Data-Architecture.md for exact schema specifications",
+      "Read supabase/migrations/20250630093534-4ed8874c-cf67-464c-8437-07b6d248ea29.sql for baseline schema"
+    ]
+  },
+  "flow_control": {
+    "execution_mode": "sequential",
+    "parallel_with": [],
+    "requires": [],
+    "blocks": ["IMPL-003", "IMPL-004", "IMPL-005", "IMPL-007", "IMPL-008"]
+  }
+}

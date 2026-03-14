@@ -32,6 +32,7 @@ interface UsePersistentProfileReturn {
   updateProfile: (updates: Partial<Profile>) => Promise<void>;
   isProfileComplete: boolean;
   missingFields: string[];
+  croaAccepted: boolean;
 }
 
 // Cache for profile data to avoid excessive database calls
@@ -43,17 +44,18 @@ let profileCache: {
 
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+// Deduplicates concurrent in-flight fetches — all callers share the same promise
+const pendingFetches = new Map<string, Promise<Profile | null>>();
+
 const getCachedProfile = (userId: string): Profile | null => {
   if (!profileCache || profileCache.userId !== userId) {
     return null;
   }
-  
   const now = Date.now();
   if (now - profileCache.timestamp > CACHE_DURATION) {
     profileCache = null;
     return null;
   }
-  
   return profileCache.profile;
 };
 
@@ -67,6 +69,7 @@ const setCachedProfile = (userId: string, profile: Profile): void => {
 
 const clearProfileCache = (): void => {
   profileCache = null;
+  pendingFetches.clear();
 };
 
 export const usePersistentProfile = (): UsePersistentProfileReturn => {
@@ -81,48 +84,53 @@ export const usePersistentProfile = (): UsePersistentProfileReturn => {
       return;
     }
 
+    // Check cache — skip network if fresh
+    const cached = getCachedProfile(user.id);
+    if (cached) {
+      setProfile(cached);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      console.log('[DEBUG] Refreshing profile from database for user:', user.id);
-      
-      // Check cache first
-      const cached = getCachedProfile(user.id);
-      if (cached) {
-        console.log('[DEBUG] Using cached profile');
-        setProfile(cached);
-        setLoading(false);
-        return;
+      // Deduplicate: if a fetch is already in-flight for this user, reuse it
+      let fetchPromise = pendingFetches.get(user.id);
+      if (!fetchPromise) {
+        fetchPromise = supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', user.id)
+          .single()
+          .then(({ data, error: fetchError }) => {
+            pendingFetches.delete(user.id);
+            if (fetchError) {
+              if (fetchError.code === 'PGRST116') return null; // no row yet
+              // Handle JWT expiry — clear session and let auth redirect handle it
+              if (fetchError.code === 'PGRST301') {
+                supabase.auth.refreshSession().catch(() => {});
+                return null;
+              }
+              throw fetchError;
+            }
+            if (data) setCachedProfile(user.id, data);
+            return data ?? null;
+          })
+          .catch(err => {
+            pendingFetches.delete(user.id);
+            throw err;
+          });
+        pendingFetches.set(user.id, fetchPromise);
       }
 
-      // Load from database
-      const { data, error: fetchError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-
-      if (fetchError) {
-        if (fetchError.code === 'PGRST116') {
-          // No profile found - this is okay, user hasn't created one yet
-          console.log('[INFO] No profile found for user');
-          setProfile(null);
-        } else {
-          throw fetchError;
-        }
-      } else if (data) {
-        console.log('[SUCCESS] ✅ Profile loaded successfully');
-        setProfile(data);
-        setCachedProfile(user.id, data);
-      }
+      const data = await fetchPromise;
+      setProfile(data);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load profile';
       console.error('[ERROR] Failed to load profile:', err);
       setError(errorMessage);
-      toast.error('Failed to load profile', {
-        description: errorMessage
-      });
+      toast.error('Failed to load profile', { description: errorMessage });
     } finally {
       setLoading(false);
     }
@@ -196,9 +204,12 @@ export const usePersistentProfile = (): UsePersistentProfileReturn => {
   } : null;
 
   // Check if profile is complete for dispute letter generation
-  const requiredFields = ['first_name', 'last_name', 'address1', 'city', 'state', 'zip_code'];
+  // last_four_of_ssn is required so bureaus can verify identity
+  const requiredFields = ['first_name', 'last_name', 'address1', 'city', 'state', 'zip_code', 'last_four_of_ssn'];
   const missingFields = requiredFields.filter(field => !profile?.[field as keyof Profile]);
   const isProfileComplete = missingFields.length === 0;
+
+  const croaAccepted = profile?.croa_disclosure_accepted === true;
 
   return {
     profile,
@@ -208,7 +219,8 @@ export const usePersistentProfile = (): UsePersistentProfileReturn => {
     refreshProfile,
     updateProfile,
     isProfileComplete,
-    missingFields
+    missingFields,
+    croaAccepted
   };
 };
 

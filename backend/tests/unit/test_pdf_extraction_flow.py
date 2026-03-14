@@ -16,7 +16,8 @@ import os
 import sys
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
-from fastapi.testclient import TestClient
+
+pytestmark = pytest.mark.asyncio
 
 # Ensure backend is on the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
@@ -67,7 +68,7 @@ MOCK_PROCESSOR_RESULT = {
 class TestPDFExtractionFlow:
     """Verify the extraction flow: backend extracts+parses, frontend saves."""
 
-    def test_endpoint_returns_tradelines_without_db_insert(self, client: TestClient, auth_headers):
+    async def test_endpoint_returns_tradelines_without_db_insert(self, async_client, auth_headers):
         """
         Step 3→4 in diagram: backend extracts text and returns parsed
         tradelines to the frontend. The Supabase insert must NOT be called.
@@ -87,7 +88,7 @@ class TestPDFExtractionFlow:
             mock_table = MagicMock()
             mock_supabase.table.return_value = mock_table
 
-            response = client.post(
+            response = await async_client.post(
                 "/api/process-credit-report",
                 files={"file": ("report.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
                 data={"use_background": "false"},
@@ -110,7 +111,7 @@ class TestPDFExtractionFlow:
             "Only the frontend saveTradelines call should persist data."
         )
 
-    def test_endpoint_returns_all_required_fields(self, client: TestClient, auth_headers):
+    async def test_endpoint_returns_all_required_fields(self, async_client, auth_headers):
         """Response shape must give the frontend enough data to display and save."""
         pdf_bytes = _make_minimal_pdf()
 
@@ -123,7 +124,7 @@ class TestPDFExtractionFlow:
             patch("main.LegacyCreditReportProcessor", return_value=mock_processor),
             patch("main.supabase"),
         ):
-            response = client.post(
+            response = await async_client.post(
                 "/api/process-credit-report",
                 files={"file": ("report.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
                 data={"use_background": "false"},
@@ -138,8 +139,8 @@ class TestPDFExtractionFlow:
             f"Response missing keys: {required_keys - set(data.keys())}"
         )
 
-    def test_background_job_path_does_not_return_tradelines_directly(
-        self, client: TestClient, auth_headers
+    async def test_background_job_path_does_not_return_tradelines_directly(
+        self, async_client, auth_headers
     ):
         """
         For background jobs the endpoint returns a job_id instead of tradelines.
@@ -151,7 +152,7 @@ class TestPDFExtractionFlow:
         fake_job_id = "job-abc-123"
 
         with patch("services.background_jobs.submit_pdf_processing_job", new=AsyncMock(return_value=fake_job_id)):
-            response = client.post(
+            response = await async_client.post(
                 "/api/process-credit-report",
                 files={"file": ("report.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
                 data={"use_background": "true"},
@@ -167,9 +168,9 @@ class TestPDFExtractionFlow:
         # No tradelines in response — frontend polls and saves after job completes
         assert "tradelines" not in data or data.get("tradelines") is None
 
-    def test_invalid_file_type_rejected(self, client: TestClient, auth_headers):
+    async def test_invalid_file_type_rejected(self, async_client, auth_headers):
         """Non-PDF files must be rejected before any processing."""
-        response = client.post(
+        response = await async_client.post(
             "/api/process-credit-report",
             files={"file": ("report.txt", io.BytesIO(b"not a pdf"), "text/plain")},
             data={"use_background": "false"},
@@ -181,9 +182,9 @@ class TestPDFExtractionFlow:
         assert data["success"] is False
         assert "PDF" in data.get("error", "")
 
-    def test_tiny_file_rejected(self, client: TestClient, auth_headers):
+    async def test_tiny_file_rejected(self, async_client, auth_headers):
         """Files below minimum size must be rejected."""
-        response = client.post(
+        response = await async_client.post(
             "/api/process-credit-report",
             files={"file": ("report.pdf", io.BytesIO(b"%PDF-tiny"), "application/pdf")},
             data={"use_background": "false"},

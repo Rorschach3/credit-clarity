@@ -1,0 +1,59 @@
+{
+  "id": "IMPL-008",
+  "title": "Lob Mailing Service Integration",
+  "status": "pending",
+  "context_package_path": ".workflow/active/WFS-implement-credit-clarity-platform/.process/context-package.json",
+  "meta": {
+    "priority": "critical",
+    "effort_estimate": "4-5 days",
+    "phase": "Phase 1 - Core Feature",
+    "type": "fullstack",
+    "depends_on": ["IMPL-001", "IMPL-002", "IMPL-005"],
+    "tags": ["lob", "mailing", "dispute", "paid-feature", "address", "FCRA"]
+  },
+  "context": {
+    "description": "Implement paid automated mailing via Lob API. Users who purchased a mailing credit can dispatch dispute letters to credit bureaus via physical mail. Includes address collection UI, mailing dispatch backend, and dispute status tracking in the wizard flow.",
+    "focus_paths": [
+      "frontend/src/pages/DisputeWizardPage.tsx",
+      "frontend/src/components/disputes/",
+      "supabase/functions/generate-dispute-letter/index.ts",
+      "backend/api/v1/routes/",
+      "backend/services/",
+      "docs/PRD-Feature-Specifications.md",
+      "docs/PRD-Technical-Architecture.md"
+    ],
+    "acceptance_criteria": [
+      "backend/services/lob_service.py implements: send_dispute_letter(user_id, letter_pdf_bytes, bureau_address, from_address) -> {lob_letter_id, tracking_number, expected_delivery_date}, get_letter_status(lob_letter_id) -> {status, tracking}",
+      "backend/api/v1/routes/mailing.py implements: POST /dispatch (authenticated, payment verified, dispatches via Lob, records in disputes/notification_log), GET /{dispute_id}/status (tracking status)",
+      "Frontend: DisputeWizardPage.tsx adds Step 4 'Mail Your Letters' after letter generation - shows bureau addresses pre-filled, user confirms own address (collected and stored in profiles), 'Send Letters ($X each)' button (disabled if no payment)",
+      "Address collection: User profile includes from_address fields - if not set, wizard shows address form before mailing step",
+      "Bureau addresses hardcoded: Experian PO Box 4500 Allen TX 75013, Equifax PO Box 740256 Atlanta GA 30374, TransUnion PO Box 2000 Chester PA 19016",
+      "Lob dispatch: Creates letter via Lob API, records lob_letter_id in disputes table, writes notification_log entry (type='mailing_dispatched')",
+      "Payment gate: /mailing/dispatch verifies user has unused payment credit before calling Lob API",
+      "Lob delivery webhook: POST /api/v1/mailing/lob-webhook receives Lob event callbacks (letter_delivered, letter_returned), updates disputes.tracking_status, writes notification_log entry",
+      "Full payment+mailing flow (checkout to Lob dispatch confirmation) completes in <2 minutes end-to-end",
+      "Verify with: Lob test mode letter appears in Lob dashboard after dispatch; webhook test event updates dispute tracking_status"
+    ],
+    "implementation_approach": [
+      "Step 1: Read supabase/functions/generate-dispute-letter/index.ts to understand letter PDF generation",
+      "Step 2: Read frontend/src/pages/DisputeWizardPage.tsx to map wizard steps and add Step 4",
+      "Step 3: Create backend/services/lob_service.py with lob-python client using settings.LOB_API_KEY",
+      "Step 4: Create backend/api/v1/routes/mailing.py with /dispatch and /{id}/status endpoints",
+      "Step 5: Add address fields to profiles table (if not already in IMPL-001 migration)",
+      "Step 6: Add Step 4 'Mail Letters' to frontend DisputeWizardPage.tsx",
+      "Step 7: Create frontend address collection form component",
+      "Step 8: Integrate payment credit check using subscriptions/payments API"
+    ],
+    "pre_analysis": [
+      "Read supabase/functions/generate-dispute-letter/index.ts - letter generation output format",
+      "Read frontend/src/pages/DisputeWizardPage.tsx - wizard step structure",
+      "Read frontend/src/components/disputes/ - existing dispute components to extend"
+    ]
+  },
+  "flow_control": {
+    "execution_mode": "sequential",
+    "parallel_with": ["IMPL-007", "IMPL-009"],
+    "requires": ["IMPL-001", "IMPL-002", "IMPL-005"],
+    "blocks": ["IMPL-012"]
+  }
+}

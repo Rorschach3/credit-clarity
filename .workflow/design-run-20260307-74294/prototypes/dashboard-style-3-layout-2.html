@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Credit Clarity</title>
+  <meta name="description" content="Your Credit Clarity dashboard. Monitor tradelines, track dispute progress, and improve your credit score.">
+  <meta property="og:title" content="Dashboard — Credit Clarity">
+  <meta property="og:description" content="AI-powered credit repair dashboard.">
+  <link rel="canonical" href="https://creditclarity.app/dashboard">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --base:#060B18; --card:#0B1220; --elevated:#152035; --border:#1B2B42;
+      --border-subtle:rgba(27,43,66,0.7);
+      --gold:#C9A84C; --gold-hover:#DFC060; --gold-muted:rgba(201,168,76,0.1);
+      --gold-border:rgba(201,168,76,0.28);
+      --text:#E8EDF8; --text-muted:#7B8BA8;
+      --success:#22C55E; --error:#EF4444;
+      --font:'Inter',system-ui,sans-serif;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{background:var(--base);color:var(--text);font-family:var(--font);line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes pulseGold{0%,100%{box-shadow:0 0 0 0 rgba(201,168,76,0)}50%{box-shadow:0 0 0 8px rgba(201,168,76,0.1)}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}}
+    .btn-gold{display:inline-flex;align-items:center;gap:0.5rem;background:linear-gradient(135deg,var(--gold),var(--gold-hover));color:#0A0F1E;font-weight:600;padding:0.625rem 1.25rem;border-radius:0.5rem;border:none;cursor:pointer;font-size:0.875rem;transition:transform 150ms ease,box-shadow 150ms ease;text-decoration:none}
+    .btn-gold:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(201,168,76,0.3)}
+    .btn-ghost{display:inline-flex;align-items:center;gap:0.5rem;background:transparent;border:1px solid var(--gold-border);color:var(--gold);padding:0.625rem 1.25rem;border-radius:0.5rem;cursor:pointer;font-size:0.875rem;transition:border-color 150ms,background 150ms;text-decoration:none}
+    .btn-ghost:hover{border-color:var(--gold);background:var(--gold-muted)}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:0.75rem}
+    .badge{display:inline-flex;align-items:center;gap:0.4rem;padding:0.25rem 0.625rem;border-radius:9999px;font-size:0.6875rem;font-weight:600}
+    .badge-success{background:rgba(34,197,94,0.1);color:#22C55E}
+    .badge-error{background:rgba(239,68,68,0.1);color:#EF4444}
+    .badge-warning{background:rgba(245,158,11,0.1);color:#F59E0B}
+    .badge-gold{background:var(--gold-muted);color:var(--gold);border:1px solid var(--gold-border)}
+
+    /* TOP NAV */
+    .topnav{position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:1rem;padding:0 1.25rem;height:60px;background:rgba(10,15,30,0.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+    .topnav-logo{font-size:1rem;font-weight:700;color:var(--gold);text-decoration:none;white-space:nowrap;margin-right:0.5rem}
+    .topnav-links{display:none;gap:0.25rem}
+    @media(min-width:768px){.topnav-links{display:flex}}
+    .topnav-link{padding:0.4rem 0.75rem;border-radius:0.375rem;font-size:0.875rem;color:var(--text-muted);text-decoration:none;transition:color 150ms,background 150ms}
+    .topnav-link:hover{color:var(--text);background:var(--elevated)}
+    .topnav-link.active{color:var(--gold)}
+    .topnav-spacer{flex:1}
+    .notif-btn{width:36px;height:36px;border-radius:0.5rem;background:var(--elevated);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;font-size:1rem;transition:border-color 150ms}
+    .notif-btn:hover{border-color:var(--gold-border)}
+    .notif-dot{position:absolute;top:6px;right:6px;width:7px;height:7px;background:#EF4444;border-radius:50%;border:1.5px solid var(--card)}
+    .topnav-avatar{width:34px;height:34px;border-radius:50%;background:var(--gold-muted);border:1.5px solid var(--gold-border);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;color:var(--gold);cursor:pointer;flex-shrink:0}
+
+    /* HERO BAND */
+    .hero-band{background:linear-gradient(135deg,#0A0F1E 0%,#1A2340 60%,#0F1729 100%);padding:2.5rem 1.25rem 2rem;border-bottom:1px solid var(--border)}
+    .hero-inner{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:1.5rem}
+    @media(min-width:768px){.hero-inner{flex-direction:row;align-items:center;justify-content:space-between}}
+    .hero-text h1{font-size:1.25rem;font-weight:700;animation:fadeUp 500ms ease both}
+    .hero-text p{color:var(--text-muted);font-size:0.875rem;margin-top:0.25rem;animation:fadeUp 500ms 100ms ease both}
+    .quick-pills{display:flex;flex-wrap:wrap;gap:0.625rem;margin-top:1rem;animation:fadeUp 500ms 200ms ease both}
+    .pill{padding:0.5rem 1rem;border-radius:9999px;font-size:0.8125rem;font-weight:600;cursor:pointer;transition:transform 150ms,box-shadow 150ms}
+    .pill-gold{background:linear-gradient(135deg,var(--gold),var(--gold-hover));color:#0A0F1E;border:none}
+    .pill-gold:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(212,168,83,0.3)}
+    .pill-outline{background:transparent;border:1px solid var(--gold-border);color:var(--gold)}
+    .pill-outline:hover{background:var(--gold-muted)}
+
+    /* SCORE RING */
+    .score-ring-wrap{display:flex;align-items:center;gap:1.25rem;animation:fadeUp 500ms 150ms ease both}
+    .score-ring{position:relative;width:90px;height:90px;flex-shrink:0}
+    .score-ring svg{transform:rotate(-90deg)}
+    .score-ring-num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .score-num{font-size:1.25rem;font-weight:800;color:var(--gold)}
+    .score-max{font-size:0.6rem;color:var(--text-muted)}
+    .score-label{font-size:0.8rem;font-weight:600;color:var(--text)}
+    .score-sub{font-size:0.7rem;color:var(--text-muted)}
+
+    /* PAGE BODY */
+    .page-body{max-width:1280px;margin:0 auto;padding:1.5rem 1.25rem 3rem}
+
+    /* STATS */
+    .stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:1.5rem}
+    @media(min-width:1024px){.stats-grid{grid-template-columns:repeat(4,1fr)}}
+    .stat-card{padding:1.125rem;transition:transform 250ms,box-shadow 250ms,border-color 250ms}
+    .stat-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.5);border-color:var(--gold-border)}
+    .stat-num{font-size:1.625rem;font-weight:800;margin-top:0.5rem}
+    .stat-label{font-size:0.75rem;color:var(--text-muted);margin-top:0.125rem;font-weight:500}
+    .stat-icon{font-size:1.125rem}
+    .si-blue{color:#3B82F6}.si-red{color:#EF4444}.si-yellow{color:#F59E0B}.si-green{color:#22C55E}
+
+    /* MAIN GRID */
+    .main-grid{display:grid;grid-template-columns:1fr;gap:1.5rem}
+    @media(min-width:1200px){.main-grid{grid-template-columns:1fr 340px}}
+
+    /* TABLE */
+    .card-header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:1px solid var(--border-subtle)}
+    .card-title{font-size:0.9375rem;font-weight:600}
+    .tradelines-table{width:100%;border-collapse:collapse;font-size:0.875rem}
+    .tradelines-table th{color:var(--text-muted);font-weight:500;text-align:left;padding:0.625rem 0.75rem;font-size:0.75rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border-subtle)}
+    .tradelines-table td{padding:0.75rem;border-bottom:1px solid var(--border-subtle);vertical-align:middle}
+    .tradelines-table tr:last-child td{border-bottom:none}
+    .tradelines-table tr.neg{border-left:3px solid var(--error)}
+    .tradelines-table tr:hover td{background:rgba(255,255,255,0.02)}
+    .dispute-btn{padding:0.3rem 0.75rem;border-radius:0.375rem;font-size:0.75rem;font-weight:600;background:rgba(239,68,68,0.1);color:#EF4444;border:1px solid rgba(239,68,68,0.3);cursor:pointer;transition:background 150ms}
+    .dispute-btn:hover{background:rgba(239,68,68,0.2)}
+
+    /* WIDGETS */
+    .widget{padding:1.125rem;display:flex;flex-direction:column;gap:0.875rem}
+    .dispute-item{display:flex;align-items:center;gap:0.75rem;padding:0.75rem 0;border-bottom:1px solid var(--border-subtle)}
+    .dispute-item:last-child{border-bottom:none}
+    .di-icon{width:34px;height:34px;border-radius:0.5rem;background:var(--elevated);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .di-name{font-size:0.875rem;font-weight:500}
+    .di-date{font-size:0.75rem;color:var(--text-muted)}
+    .tip-card{background:var(--gold-muted);border:1px solid var(--gold-border);border-radius:0.75rem;padding:1.125rem}
+    .tip-label{font-size:0.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--gold);margin-bottom:0.5rem}
+    .tip-text{font-size:0.875rem;color:var(--text-muted);line-height:1.55}
+
+    /* UPLOAD BANNER */
+    .upload-banner{margin-top:1.5rem;background:linear-gradient(135deg,var(--card),var(--elevated));border:1px solid var(--gold-border);border-radius:0.75rem;padding:1.5rem;display:flex;flex-direction:column;gap:1rem;align-items:flex-start}
+    @media(min-width:640px){.upload-banner{flex-direction:row;align-items:center;justify-content:space-between}}
+    .upload-banner h3{font-size:0.9375rem;font-weight:600}
+    .upload-banner p{font-size:0.8125rem;color:var(--text-muted);margin-top:0.25rem}
+  </style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<header class="topnav" role="banner">
+  <a href="/" class="topnav-logo">◈ Credit Clarity</a>
+  <nav class="topnav-links" aria-label="Main navigation">
+    <a href="/dashboard" class="topnav-link active" aria-current="page">Dashboard</a>
+    <a href="/report" class="topnav-link">Credit Report</a>
+    <a href="/disputes" class="topnav-link">Disputes</a>
+    <a href="/history" class="topnav-link">History</a>
+  </nav>
+  <div class="topnav-spacer"></div>
+  <button class="notif-btn" aria-label="Notifications">
+    🔔<span class="notif-dot"></span>
+  </button>
+  <div class="topnav-avatar" role="button" aria-label="User menu" tabindex="0">JS</div>
+</header>
+
+<!-- HERO SUMMARY BAND -->
+<section class="hero-band" aria-label="Account overview">
+  <div class="hero-inner">
+    <div class="hero-text">
+      <h1>Good morning, Jane 👋</h1>
+      <p>Here's your credit health overview for March 8, 2026</p>
+      <div class="quick-pills">
+        <button class="pill pill-gold">📤 Upload Report</button>
+        <button class="pill pill-outline">📝 New Dispute</button>
+        <button class="pill pill-outline">📜 History</button>
+      </div>
+    </div>
+    <div class="score-ring-wrap">
+      <div class="score-ring" role="img" aria-label="Credit score 680 out of 850">
+        <svg width="90" height="90" viewBox="0 0 90 90">
+          <circle cx="45" cy="45" r="38" fill="none" stroke="#1E2D47" stroke-width="8"/>
+          <circle cx="45" cy="45" r="38" fill="none" stroke="#4FACDE" stroke-width="8"
+            stroke-dasharray="239" stroke-dashoffset="57" stroke-linecap="round"/>
+        </svg>
+        <div class="score-ring-num">
+          <span class="score-num">680</span>
+          <span class="score-max">/850</span>
+        </div>
+      </div>
+      <div>
+        <div class="score-label">Credit Score</div>
+        <div class="score-sub" style="color:#F59E0B;">Fair — Room to improve</div>
+        <div class="score-sub" style="margin-top:0.25rem;">Updated Mar 1, 2026</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<main role="main" class="page-body">
+  <!-- STATS -->
+  <div class="stats-grid" role="region" aria-label="Credit statistics">
+    <div class="card stat-card">
+      <div class="stat-icon si-blue">🗂</div>
+      <div class="stat-num">12</div>
+      <div class="stat-label">Tradelines</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-icon si-red">⚠</div>
+      <div class="stat-num" style="color:var(--error)">4</div>
+      <div class="stat-label">Negative Items</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-icon si-yellow">⏱</div>
+      <div class="stat-num" style="color:#F59E0B">2</div>
+      <div class="stat-label">Active Disputes</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-icon si-green">✅</div>
+      <div class="stat-num" style="color:var(--success)">1</div>
+      <div class="stat-label">Resolved</div>
+    </div>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+    <!-- Tradelines Table -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Your Tradelines</span>
+        <a href="/report" style="font-size:0.8125rem;color:var(--gold);text-decoration:none;">View All →</a>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="tradelines-table" aria-label="Credit tradelines">
+          <thead>
+            <tr><th>Creditor</th><th>Status</th><th>Balance</th><th>Action</th></tr>
+          </thead>
+          <tbody>
+            <tr><td style="font-weight:500">Capital One</td><td><span class="badge badge-success">Current</span></td><td>$2,400</td><td style="color:var(--text-muted);font-size:0.75rem">—</td></tr>
+            <tr><td style="font-weight:500">Chase Sapphire</td><td><span class="badge badge-success">Current</span></td><td>$0</td><td style="color:var(--text-muted);font-size:0.75rem">—</td></tr>
+            <tr class="neg"><td style="font-weight:500">Midland Credit Mgmt</td><td><span class="badge badge-error">Negative</span></td><td>$892</td><td><button class="dispute-btn">Dispute</button></td></tr>
+            <tr><td style="font-weight:500">SYNCB Amazon</td><td><span class="badge badge-success">Current</span></td><td>$156</td><td style="color:var(--text-muted);font-size:0.75rem">—</td></tr>
+            <tr class="neg"><td style="font-weight:500">Navient</td><td><span class="badge badge-error">Negative</span></td><td>$12,400</td><td><button class="dispute-btn">Dispute</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Right Widgets -->
+    <div style="display:flex;flex-direction:column;gap:1rem;">
+      <!-- Dispute Progress -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Recent Disputes</span>
+          <a href="/history" style="font-size:0.8125rem;color:var(--gold);text-decoration:none;">View All →</a>
+        </div>
+        <div style="padding:0.5rem 1.25rem 1rem;">
+          <div class="dispute-item">
+            <div class="di-icon">📝</div>
+            <div style="flex:1;min-width:0"><div class="di-name">Midland Credit Mgmt</div><div class="di-date">Sent Feb 12, 2026</div></div>
+            <span class="badge badge-warning">Pending</span>
+          </div>
+          <div class="dispute-item">
+            <div class="di-icon">✅</div>
+            <div style="flex:1;min-width:0"><div class="di-name">Experian — Hard Inquiry</div><div class="di-date">Resolved Jan 29, 2026</div></div>
+            <span class="badge badge-success">Resolved</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tip Card -->
+      <div class="tip-card">
+        <div class="tip-label">💡 Pro Tip</div>
+        <p class="tip-text">Disputing negative items from more than 7 years ago? Under FCRA §605, you may request early removal — include a date-of-first-delinquency in your letter.</p>
+        <a href="/disputes/new" class="btn-ghost" style="margin-top:0.875rem;font-size:0.8125rem;">Generate Letter →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- UPLOAD BANNER -->
+  <div class="upload-banner">
+    <div>
+      <h3>📤 Upload your latest credit report</h3>
+      <p>Get fresh AI analysis and find new errors to dispute.</p>
+    </div>
+    <a href="/upload" class="btn-gold" style="animation:pulseGold 2.5s ease-in-out infinite;flex-shrink:0;">Upload PDF →</a>
+  </div>
+</main>
+
+</body>
+</html>

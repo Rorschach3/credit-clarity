@@ -6,7 +6,10 @@ Combines bookkeeping from the previous tradeline normalizers and adds OCR correc
 import logging
 import re
 from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Dict, Any, List, Optional, Tuple
+
+from .date_parser import CreditReportDateParser
 
 logger = logging.getLogger(__name__)
 
@@ -14,13 +17,19 @@ logger = logging.getLogger(__name__)
 class EnhancedTradelineNormalizer:
     """Normalizer that merges the prior tradeline_normalizer and improved_tradeline_normalizer logic."""
 
-    OCR_CORRECTIONS = {
-        '0': 'O',
+    OCR_CORRECTIONS_NUMERIC = {
         'O': '0',
+        'o': '0',
         'l': '1',
         'I': '1',
         'S': '5',
         's': '5',
+    }
+
+    OCR_CORRECTIONS_TEXT = {
+        '0': 'O',
+        '1': 'I',
+        '5': 'S',
     }
 
     CREDIT_BUREAUS = {"experian": "Experian", "equifax": "Equifax", "transunion": "TransUnion"}
@@ -119,6 +128,9 @@ class EnhancedTradelineNormalizer:
         "collection", "recovery", "portfolio", "midland", "cavalry", "lvnv", "resurgent", "radius"
     ]
 
+    def __init__(self):
+        self._date_parser = CreditReportDateParser()
+
     def normalize_tradeline(self, tradeline: Dict[str, Any]) -> Dict[str, Any]:
         """Normalize a single tradeline entry."""
         normalized = {
@@ -146,8 +158,8 @@ class EnhancedTradelineNormalizer:
         }
 
         # Classifier-driven negative detection
-        # normalize dates with confidence
-        parsed_date, date_conf = self._normalize_date(tradeline.get('date_opened', ''))
+        # Normalize dates (MM/DD/YYYY) with confidence metadata.
+        parsed_date, date_conf = self._normalize_date_with_confidence(tradeline.get('date_opened', ''))
         normalized['date_opened'] = parsed_date
         normalized['date_opened_confidence'] = date_conf
 
@@ -166,7 +178,7 @@ class EnhancedTradelineNormalizer:
         if not value or not str(value).strip():
             return None
 
-        cleaned = self._apply_ocr_corrections(str(value)).upper()
+        cleaned = self._apply_ocr_corrections(str(value), mode="text").upper()
         creditor_mappings = {
             "BANK 0F": "BANK OF",
             "CHAS[E3]": "CHASE",
@@ -198,7 +210,11 @@ class EnhancedTradelineNormalizer:
             return None
 
         account = str(value)
-        account = self._apply_ocr_corrections(account)
+        account = self._apply_ocr_corrections(account, mode="numeric")
+
+        # Remove common masking markers (keep only the meaningful suffix/prefix).
+        account = re.sub(r'[Xx*•]+', '', account)
+
         cleaned = re.sub(r'[^A-Za-z0-9]', '', account)
 
         if len(cleaned) < 4 or not any(char.isdigit() for char in cleaned):
@@ -206,9 +222,16 @@ class EnhancedTradelineNormalizer:
 
         return cleaned.upper()
 
-    def _apply_ocr_corrections(self, value: str) -> str:
+    def _apply_ocr_corrections(self, value: str, *, mode: str) -> str:
+        if mode == "numeric":
+            mapping = self.OCR_CORRECTIONS_NUMERIC
+        elif mode == "text":
+            mapping = self.OCR_CORRECTIONS_TEXT
+        else:
+            return value
+
         corrected = value
-        for wrong, right in self.OCR_CORRECTIONS.items():
+        for wrong, right in mapping.items():
             corrected = corrected.replace(wrong, right)
         return corrected
 
@@ -217,79 +240,59 @@ class EnhancedTradelineNormalizer:
             return None
 
         text = str(value).strip()
-        text = self._apply_ocr_corrections(text)
-        text = re.sub(r'[$,\s]', '', text)
+        text = self._apply_ocr_corrections(text, mode="numeric")
 
-        is_negative = text.startswith('-') or ('(' in text and ')' in text)
-        text = text.replace('(', '').replace(')', '').replace('-', '')
+        is_negative = False
+        if '(' in text and ')' in text:
+            is_negative = True
+        text = text.replace('(', '').replace(')', '').strip()
+
+        if text.startswith('-'):
+            is_negative = True
+            text = text[1:]
+
+        text = re.sub(r'[$,\s]', '', text)
 
         if not text:
             return None
 
         try:
-            amount = float(text)
-        except ValueError:
+            amount = Decimal(text)
+        except (InvalidOperation, ValueError):
             return None
 
         abs_amount = abs(amount)
-        formatted = f"${abs_amount:,.2f}"
 
-        return f"-{formatted}" if amount < 0 else formatted
+        # Field-specific formatting requirements:
+        # - monthly_payment: always two decimals
+        # - credit_limit/account_balance: whole dollars (rounded half-up)
+        if field_name in {"credit_limit", "account_balance"}:
+            rounded = int(abs_amount.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+            if rounded == 0:
+                return None
+            formatted = f"${rounded:,}"
+        else:
+            cents = abs_amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if cents == 0:
+                return None
+            formatted = f"${cents:,.2f}"
 
-    def _normalize_date(self, value: str) -> Tuple[Optional[str], float]:
-        """Return (ISO_date_str_or_None, confidence_score[0.0-1.0])."""
-        if not value or not str(value).strip():
-            return None, 0.0
+        return f"-{formatted}" if is_negative else formatted
 
-        text = str(value).strip()
-        text = self._apply_ocr_corrections(text)
-        text = text.replace('-', '/')
+    def _normalize_date(self, value: str) -> Optional[str]:
+        """Normalize to MM/DD/YYYY or return None."""
+        return self._date_parser.parse_date(value)
 
-        confidence = 0.0
-
-        patterns = [
-            (r'^(\d{1,2})/(\d{1,2})/(\d{4})$', '%m/%d/%Y'),
-            (r'^(\d{1,2})/(\d{2})$', '%m/%y'),
-            (r'^(\d{4})/(\d{1,2})/(\d{1,2})$', '%Y/%m/%d'),
-            (r'^(\d{1,2})-(\d{1,2})-(\d{4})$', '%m-%d-%Y'),
-            (r'^(\d{4})-(\d{1,2})-(\d{1,2})$', '%Y-%m-%d'),
-            (r'^[A-Za-z]{3} \d{1,2}, \d{4}$', '%b %d, %Y'),
-        ]
-
-        for pattern, fmt in patterns:
-            match = re.match(pattern, text)
-            if match:
-                try:
-                    parsed = datetime.strptime(text, fmt)
-                    iso = parsed.strftime('%Y-%m-%d')
-                    return iso, 1.0
-                except Exception:
-                    continue
-
-        # relative dates
-        rl = text.lower()
-        if 'last month' in rl:
-            dt = datetime.utcnow() - timedelta(days=30)
-            return dt.strftime('%Y-%m-%d'), 0.6
-        m = re.search(r'(\d+)\s*days?\s*ago', rl)
-        if m:
-            dt = datetime.utcnow() - timedelta(days=int(m.group(1)))
-            return dt.strftime('%Y-%m-%d'), 0.6
-
-        # year-only fallback
-        year_match = re.search(r'(19|20)\d{2}', text)
-        if year_match:
-            year = int(year_match.group())
-            return f"{year}-01-01", 0.5
-
-        # cannot parse
-        return None, 0.0
+    def _normalize_date_with_confidence(self, value: str) -> Tuple[Optional[str], float]:
+        """Return (MM/DD/YYYY_or_None, confidence_score[0.0-1.0])."""
+        details = self._date_parser.parse_date_with_details(value)
+        return details.value, details.confidence
 
     def _normalize_account_type(self, value: str) -> str:
         if not value:
             return "Unknown"
 
-        cleaned = self._apply_ocr_corrections(value).lower().strip()
+        cleaned = self._apply_ocr_corrections(value, mode="text").lower().strip()
         for key, mapped in self.ACCOUNT_TYPE_MAPPING.items():
             if key in cleaned:
                 return mapped
@@ -299,7 +302,7 @@ class EnhancedTradelineNormalizer:
         if not value:
             return "Unknown"
 
-        cleaned = self._apply_ocr_corrections(value).lower().strip()
+        cleaned = self._apply_ocr_corrections(value, mode="text").lower().strip()
         for key, mapped in self.ACCOUNT_STATUS_MAPPING.items():
             if key in cleaned:
                 return mapped

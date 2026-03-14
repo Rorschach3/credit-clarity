@@ -112,6 +112,7 @@ export type Database = {
         Row: {
           amount: number
           created_at: string | null
+          description: string | null
           id: string
           letter_id: string | null
           type: string
@@ -120,6 +121,7 @@ export type Database = {
         Insert: {
           amount: number
           created_at?: string | null
+          description?: string | null
           id?: string
           letter_id?: string | null
           type: string
@@ -128,6 +130,7 @@ export type Database = {
         Update: {
           amount?: number
           created_at?: string | null
+          description?: string | null
           id?: string
           letter_id?: string | null
           type?: string
@@ -221,12 +224,68 @@ export type Database = {
         }
         Relationships: []
       }
+      blog_posts: {
+        Row: {
+          id: string
+          title: string
+          slug: string
+          excerpt: string | null
+          content: string
+          published: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          slug: string
+          excerpt?: string | null
+          content: string
+          published?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          title?: string
+          slug?: string
+          excerpt?: string | null
+          content?: string
+          published?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      credit_bureaus: {
+        Row: {
+          id: string
+          name: string
+          address: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          address: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          address?: string
+        }
+        Relationships: []
+      }
       disputes: {
         Row: {
+          account_number_masked: string | null
+          bureau: string | null
           created_at: string | null
           credit_report_id: string
+          creditor_name: string | null
+          dispute_reason: string | null
           email: string | null
           id: string
+          letter_text: string | null
           lob_id: string | null
           mailing_address: string
           modified_at: string | null
@@ -236,10 +295,15 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_number_masked?: string | null
+          bureau?: string | null
           created_at?: string | null
           credit_report_id: string
+          creditor_name?: string | null
+          dispute_reason?: string | null
           email?: string | null
           id?: string
+          letter_text?: string | null
           lob_id?: string | null
           mailing_address: string
           modified_at?: string | null
@@ -249,10 +313,15 @@ export type Database = {
           user_id: string
         }
         Update: {
+          account_number_masked?: string | null
+          bureau?: string | null
           created_at?: string | null
           credit_report_id?: string
+          creditor_name?: string | null
+          dispute_reason?: string | null
           email?: string | null
           id?: string
+          letter_text?: string | null
           lob_id?: string | null
           mailing_address?: string
           modified_at?: string | null
@@ -374,6 +443,48 @@ export type Database = {
         }
         Relationships: []
       }
+      dispute_packets: {
+        Row: {
+          id: string
+          user_id: string
+          filename: string
+          bureau_count: number
+          tradeline_count: number
+          letters_data: unknown | null
+          dispute_letter_url: string | null
+          packet_status: string
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          filename: string
+          bureau_count?: number
+          tradeline_count?: number
+          letters_data?: unknown | null
+          dispute_letter_url?: string | null
+          packet_status?: string
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          filename?: string
+          bureau_count?: number
+          tradeline_count?: number
+          letters_data?: unknown | null
+          dispute_letter_url?: string | null
+          packet_status?: string
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           id: string
@@ -389,6 +500,9 @@ export type Database = {
           user_id: string
           zip_code: string | null
           dob: string | null
+          avatar_url: string | null
+          croa_disclosure_accepted: boolean | null
+          croa_disclosure_timestamp: string | null
         }
         Insert: {
           id: string
@@ -404,9 +518,12 @@ export type Database = {
           user_id: string
           zip_code?: string | null
           dob?: string | null
+          avatar_url?: string | null
+          croa_disclosure_accepted?: boolean | null
+          croa_disclosure_timestamp?: string | null
         }
         Update: {
-          id: string
+          id?: string
           first_name?: string | null
           last_name?: string | null
           address1?: string | null
@@ -419,6 +536,9 @@ export type Database = {
           user_id?: string
           zip_code?: string | null
           dob?: string | null
+          avatar_url?: string | null
+          croa_disclosure_accepted?: boolean | null
+          croa_disclosure_timestamp?: string | null
         }
         Relationships: []
       }
@@ -590,6 +710,24 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      user_credits: {
+        Row: {
+          user_id: string
+          balance: number
+          updated_at: string | null
+        }
+        Insert: {
+          user_id: string
+          balance?: number
+          updated_at?: string | null
+        }
+        Update: {
+          user_id?: string
+          balance?: number
+          updated_at?: string | null
         }
         Relationships: []
       }

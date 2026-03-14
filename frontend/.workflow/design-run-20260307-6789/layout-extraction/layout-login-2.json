@@ -1,0 +1,44 @@
+{
+  "target": "login",
+  "variant": 2,
+  "variant_name": "Split Brand + Auth",
+  "description": "Left half: brand story, testimonial, feature highlights. Right half: auth form. Classic SaaS split.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-login-v2",
+      "children": [
+        {
+          "tag": "div",
+          "class": "auth-brand-panel",
+          "children": [
+            { "tag": "div", "class": "brand-logo" },
+            { "tag": "div", "class": "brand-headline" },
+            { "tag": "div", "class": "brand-testimonial" },
+            { "tag": "div", "class": "brand-stats" }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "auth-form-panel",
+          "children": [
+            { "tag": "div", "class": "auth-header" },
+            { "tag": "form", "class": "auth-form" },
+            { "tag": "div", "class": "auth-footer" }
+          ]
+        }
+      ]
+    },
+    "css_layout_rules": {
+      ".layout-login-v2": "display: grid; grid-template-columns: 1fr 1fr; min-height: 100vh;",
+      ".auth-brand-panel": "display: flex; flex-direction: column; justify-content: center; padding: 4rem; position: relative; overflow: hidden;",
+      ".auth-form-panel": "display: flex; flex-direction: column; justify-content: center; padding: 4rem; max-width: 480px; margin: 0 auto; width: 100%;",
+      ".auth-form": "display: flex; flex-direction: column; gap: 1.25rem; margin: 2rem 0;",
+      ".brand-stats": "display: flex; gap: 2rem; margin-top: 2rem;",
+      "@media (max-width: 768px)": {
+        ".layout-login-v2": "grid-template-columns: 1fr;",
+        ".auth-brand-panel": "display: none;"
+      }
+    }
+  }
+}

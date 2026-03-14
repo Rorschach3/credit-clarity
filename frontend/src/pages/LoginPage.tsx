@@ -150,8 +150,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
-      <Card className="w-full max-w-md">
+    <div className="has-navbar flex min-h-screen items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <Card className="w-full max-w-md card-midnight border-[#1E2D47]">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">Log in to your account</CardTitle>
           <CardDescription className="text-center">
@@ -194,7 +194,7 @@ export default function LoginPage() {
               <div className="space-y-2 mt-4">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">Password</Label>
-                  <Link to="/forgot-password" className="text-sm text-brand-600 hover:text-brand-500">
+                  <Link to="/forgot-password" className="text-sm text-[#D4A853] hover:text-[#E8C06A]">
                     Forgot password?
                   </Link>
                 </div>
@@ -210,7 +210,7 @@ export default function LoginPage() {
                   />
                   <button
                     type="button"
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
                     onClick={() => setShowPassword(!showPassword)}
                     aria-label={showPassword ? "Hide password" : "Show password"}
                   >
@@ -292,7 +292,7 @@ export default function LoginPage() {
               <span className="w-full border-t" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-muted-foreground">Or continue with</span>
+              <span className="bg-[#111827] px-2 text-muted-foreground">Or continue with</span>
             </div>
           </div>
 
@@ -339,9 +339,9 @@ export default function LoginPage() {
           </div>
         </CardContent>
         <CardFooter className="flex justify-center">
-          <div className="text-sm text-gray-500">
+          <div className="text-sm text-muted-foreground">
             Don't have an account?{" "}
-            <Link to="/signup" className="font-medium text-brand-600 hover:text-brand-500">
+            <Link to="/signup" className="font-medium text-[#D4A853] hover:text-[#E8C06A]">
               Sign up
             </Link>
           </div>

@@ -1,0 +1,100 @@
+{
+  "project_structure": "Repository is a client-server monorepo with separate frontend/ (React + Vite) and backend/ (FastAPI services) layers, plus supabase/ migrations for database schema and .workflow/ artifacts for PRD planning. The core runtime architecture centers on a backend processing pipeline (OCR + parsing + validation + storage) with background jobs, while the frontend routes users through upload, tradeline review, and dispute letter flows.",
+  "relevant_files": [
+    {
+      "path": "backend/main.py",
+      "relevance": 0.95,
+      "rationale": "Backend entry point wiring application lifecycle and background jobs."
+    },
+    {
+      "path": "backend/api/v1/routes/processing_v2.py",
+      "relevance": 0.9,
+      "rationale": "Primary processing API surface for PDF uploads and pipeline selection."
+    },
+    {
+      "path": "backend/services/tradeline_extraction/pipeline.py",
+      "relevance": 0.92,
+      "rationale": "Core pipeline orchestration for extraction, validation, and storage."
+    },
+    {
+      "path": "backend/services/background_jobs.py",
+      "relevance": 0.82,
+      "rationale": "Async background processing architecture for long-running tasks."
+    },
+    {
+      "path": "frontend/src/App.tsx",
+      "relevance": 0.9,
+      "rationale": "Client routing, providers, and top-level layout for user flows."
+    },
+    {
+      "path": "frontend/src/pages/DisputeWizardPage.tsx",
+      "relevance": 0.78,
+      "rationale": "Primary dispute letter workflow UI coordinating data and generation steps."
+    },
+    {
+      "path": "frontend/src/components/dashboard/CreditDashboard.tsx",
+      "relevance": 0.75,
+      "rationale": "Dashboard aggregation for credit scores and tradeline visibility."
+    },
+    {
+      "path": "supabase/migrations/",
+      "relevance": 0.7,
+      "rationale": "Schema migrations for credit report storage and analytics."
+    },
+    {
+      "path": "docs/ARCHITECTURE_GUIDE.md",
+      "relevance": 0.88,
+      "rationale": "Declared architecture patterns and integration guidance."
+    },
+    {
+      "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/guidance-specification.md",
+      "relevance": 0.86,
+      "rationale": "Confirmed architecture decisions and feature scope for the PRD."
+    },
+    {
+      "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/system-architect/analysis.md",
+      "relevance": 0.8,
+      "rationale": "System architecture analysis that informs target platform design."
+    },
+    {
+      "path": ".workflow/active/WFS-brainstorm-for-a-prd/.brainstorming/data-architect/analysis.md",
+      "relevance": 0.8,
+      "rationale": "Data architecture analysis for multi-bureau tracking and analytics."
+    }
+  ],
+  "patterns": "- Monorepo separation: frontend/ for React UI, backend/ for FastAPI services, supabase/ for migrations.\n- Service layer orchestration: pipeline class coordinates extract -> parse -> normalize -> validate -> store.\n- Background processing: job queue and status tracking for large PDF processing.\n- Frontend routing: App.tsx defines public, auth, and dashboard routes with lazy loading.\n- Analytics and monitoring hooks are placed at API boundaries and UI entry points.",
+  "dependencies": "INTERNAL: backend/main.py -> services/background_jobs.py; processing_v2 routes -> tradeline_extraction pipeline; frontend App routes -> DisputeWizardPage and CreditDashboard.\nEXTERNAL: FastAPI (backend), React + React Router (frontend), Supabase (auth/db), Document AI + Gemini (OCR/LLM), Stripe (payments)",
+  "integration_points": "- backend/main.py:88-105 initializes FastAPI app and background job startup/shutdown hooks.\n- backend/api/v1/routes/processing_v2.py:71-119 handles PDF upload and pipeline routing.\n- backend/services/tradeline_extraction/pipeline.py:50-116 orchestrates processing stages and storage.\n- frontend/src/App.tsx:51-134 wires routing and providers for the UI.\n- frontend/src/pages/DisputeWizardPage.tsx:56-196 coordinates dispute workflow state and PDF generation.",
+  "constraints": "- Architecture decisions must align with PRD guidance in .brainstorming artifacts.\n- Sensitive credit data requires FCRA-aware handling and Supabase RLS enforcement.\n- Background jobs must preserve async interfaces to avoid blocking API handlers.",
+  "clarification_needs": [
+    {
+      "question": "Should architectural references prioritize current code structure or planned PRD target state?",
+      "context": "Brainstorming artifacts include future-state decisions (e.g., analytics extensions) while the codebase reflects current runtime. The context package should clarify which layer is authoritative for planning.",
+      "options": [
+        "Current implementation only",
+        "Planned PRD target state only",
+        "Blend current state with explicit future-state callouts"
+      ],
+      "recommended": 2
+    },
+    {
+      "question": "Should background processing be described as async job queues only, or include future Celery-style workers?",
+      "context": "Current background_jobs.py uses asyncio/Redis queue patterns, while PRD guidance mentions worker-based pipelines. Clarify how to represent this in architecture context.",
+      "options": [
+        "Async job queue only",
+        "Include Celery/worker plans as future architecture",
+        "Describe both with current vs future labels"
+      ],
+      "recommended": 2
+    }
+  ],
+  "_metadata": {
+    "timestamp": "2026-03-03T15:31:39.480858+00:00",
+    "task_description": "Resume workflow planning by completing Phase 2 context gathering for session WFS-brainstorm-for-a-prd; regenerate stale context-package.json using architecture, patterns, dependencies, and integration-points explorations.",
+    "source": "cli-explore-agent",
+    "exploration_angle": "architecture",
+    "exploration_index": 1,
+    "total_explorations": 4,
+    "duration_seconds": 120
+  }
+}

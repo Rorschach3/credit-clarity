@@ -187,6 +187,14 @@ class JobQueue:
     def fail_job(self, job_id: str, error: str) -> None:
         """Mark job as failed."""
         job = self._running_jobs.pop(job_id, None)
+        if job is None:
+            # Some tests (and certain admin/manual flows) attempt to fail a job by id
+            # even if it's currently queued for retry. Support that by resolving from
+            # pending jobs as well.
+            for idx, pending in enumerate(self._pending_jobs):
+                if pending.job_id == job_id:
+                    job = self._pending_jobs.pop(idx)
+                    break
         if job:
             job.status = JobStatus.FAILED
             job.completed_at = datetime.now()
