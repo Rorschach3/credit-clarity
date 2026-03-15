@@ -20,7 +20,5 @@
     "concurrently": "^9.2.0",
     "vercel": "^50.28.0"
   },
-  "dependencies": {
-    "@sentry/react": "^10.32.1"
-  }
+  "dependencies": {}
 }
