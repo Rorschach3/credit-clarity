@@ -25,6 +25,7 @@ import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
+import AuthCallbackPage from '@/pages/AuthCallbackPage';
 import DisputeLetterPage from './pages/DisputeLetterPage';
 import FaqPage from './pages/FaqPage';
 import PricingPage from './pages/PricingPage';
@@ -96,6 +97,7 @@ function AppContent() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route path="/profile" element={
               <Suspense fallback={<ProfileLoading />}>
                 <ProfilePage />

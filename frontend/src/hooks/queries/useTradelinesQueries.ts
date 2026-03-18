@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/use-auth';
 import { tradelinesApi } from '@/services/api';
 import { queryKeys } from '@/lib/react-query';
+import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
 
 type Tradeline = Database["public"]["Tables"]["tradelines"]["Row"];
@@ -88,12 +89,15 @@ export const useUpdateTradeline = () => {
       }
 
       // Invalidate bureau-specific queries
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: queryKeys.tradelinesByBureau(user.id)
       });
+
+      toast.success('Tradeline saved');
     },
     onError: (error) => {
       console.error('Error updating tradeline:', error);
+      toast.error('Failed to save tradeline. Please try again.');
     },
   });
 };

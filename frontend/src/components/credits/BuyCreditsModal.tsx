@@ -43,7 +43,7 @@ export const BuyCreditsModal: React.FC<BuyCreditsModalProps> = ({
       style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}
     >
       <div
-        className="relative w-full max-w-lg rounded-xl border shadow-2xl"
+        className="relative w-full max-w-lg rounded-xl border shadow-2xl max-h-[90vh] overflow-y-auto"
         style={{ background: '#0F1729', borderColor: '#1E2D47' }}
       >
         {/* Header */}

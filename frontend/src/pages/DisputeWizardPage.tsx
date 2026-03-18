@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useLocation, useNavigate } from "react-router-dom";
-import { CreditNavbar } from "@/components/navbar/CreditNavbar";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import { supabase } from '@/integrations/supabase/client';
@@ -396,7 +395,6 @@ const DisputeWizardPage = () => {
   if (isLoading || profileLoading) {
     return (
       <div className="min-h-screen bg-background text-foreground py-10 px-4 md:px-10">
-        <CreditNavbar />
         <Card className="max-w-6xl mx-auto">
           <CardContent className="p-8">
             <div className="flex items-center justify-center space-x-2">
@@ -423,7 +421,6 @@ const DisputeWizardPage = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground py-10 px-4 md:px-10">
-      <CreditNavbar />
       <Card className="max-w-6xl mx-auto space-y-6">
         <DisputeWizardHeader />
         

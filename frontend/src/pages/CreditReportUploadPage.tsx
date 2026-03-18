@@ -6,7 +6,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { saveTradelinesToDatabase, ParsedTradeline, loadAllTradelinesFromDatabase } from "@/utils/tradelineParser";
 import { updateTradelineFields } from "@/utils/fuzzyTradelineMatching";
 import { usePersistentTradelines } from "@/hooks/usePersistentTradelines";
-import { CreditNavbar } from "@/components/navbar/CreditNavbar";
 import { TradelinesStatus } from "@/components/ui/tradelines-status";
 import { ComponentLoading } from "@/components/ui/loading";
 
@@ -394,12 +393,11 @@ const CreditReportUploadPage = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground py-10 px-4 md:px-10">
-      <CreditNavbar />
       
       <div className="max-w-6xl mx-auto space-y-6">
         
         {/* Header */}
-        <Card>
+        <Card className="bg-white/5 border-white/10 backdrop-blur-sm">
           <CreditUploadHeader />
         </Card>
 
