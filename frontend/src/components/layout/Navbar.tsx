@@ -17,11 +17,8 @@ export function Navbar() {
   const { user, signOut } = useAuth();
 
   return (
-    <header
-      className="navbar-midnight px-6 md:px-10"
-      style={{ paddingLeft: '2.5rem', paddingRight: '2.5rem' }}
-    >
-      <div className="w-full flex items-center justify-between gap-6">
+    <header className="navbar-midnight px-4 md:px-10">
+      <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 md:grid md:grid-cols-[auto,minmax(0,1fr),auto]">
 
         {/* Logo */}
         <Link
@@ -33,7 +30,7 @@ export function Navbar() {
         </Link>
 
         {/* Desktop nav links */}
-        <nav className="hidden md:flex items-center gap-1 flex-1">
+        <nav className="hidden min-w-0 items-center justify-center gap-2 md:flex">
           <Link
             to="/dashboard"
             className="px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
@@ -75,7 +72,7 @@ export function Navbar() {
         </nav>
 
         {/* Desktop CTA */}
-        <div className="hidden md:flex items-center gap-2 flex-shrink-0">
+        <div className="hidden items-center justify-end gap-2 md:flex">
           {user ? (
             <>
               <CreditsBalance />
