@@ -190,8 +190,8 @@ export const DisputeLetterGeneration: React.FC<DisputeLetterGenerationProps> = (
                       </div>
                     </div>
                   ) : (
-                    <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
-                      <pre className="whitespace-pre-wrap text-sm font-mono leading-relaxed">
+                    <div className="rounded-lg border border-slate-200 bg-white p-6 text-black shadow-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                      <pre className="mx-auto max-w-2xl whitespace-pre-wrap font-serif text-[15px] leading-7">
                         {letter.letterContent}
                       </pre>
                     </div>

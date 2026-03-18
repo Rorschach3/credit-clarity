@@ -144,11 +144,20 @@ serve(async (req) => {
 })
 
 function createDisputeLetterPrompt({ personalInfo, tradelines, bureau, letterType, customInstructions }: any) {
-  const currentDate = new Date().toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
+  const now = new Date()
+  const day = now.getDate()
+  const teen = day % 100
+  const suffix =
+    teen >= 11 && teen <= 13
+      ? 'th'
+      : day % 10 === 1
+        ? 'st'
+        : day % 10 === 2
+          ? 'nd'
+          : day % 10 === 3
+            ? 'rd'
+            : 'th'
+  const currentDate = `${now.toLocaleDateString('en-US', { month: 'long' })} ${day}${suffix} ${now.getFullYear()}`
 
   const bureauAddresses = {
     'Experian': `Experian
@@ -162,11 +171,12 @@ P.O. Box 740256
 Atlanta, GA 30374`
   }
 
-  const tradelineDescriptions = tradelines.map((t: any, index: number) => {
-    return `${index + 1}. Creditor: ${t.creditor_name}
-   Account Number: ${t.account_number}
-   Current Status: ${t.account_status || 'Unknown'}
-   Reason for Dispute: This information is inaccurate/unverifiable${t.dispute_reason ? ` - ${t.dispute_reason}` : ''}`
+  const tradelineDescriptions = tradelines.map((t: any) => {
+    return `- ${t.creditor_name}
+  # ${t.account_number}
+  ${t.account_balance || ''}
+  ${t.date_opened || ''}
+  ${t.account_status || t.dispute_reason || 'Negative information reported in error'}`
   }).join('\n\n')
 
   return `Generate a professional, FCRA-compliant credit dispute letter with the following details:
@@ -187,60 +197,74 @@ DISPUTED ITEMS:
 ${tradelineDescriptions}
 
 REQUIREMENTS:
-- Use professional business letter format
-- Reference Fair Credit Reporting Act (FCRA) Section 611
-- Request investigation within 30 days as required by law
-- Include standard dispute language about accuracy verification
-- Mention enclosures (copy of ID, SSN card, utility bill)
-- Request removal if items cannot be verified
-- Professional but assertive tone
-- Include signature line
+- Match a plain one-page consumer dispute letter style, not a formal legal memo
+- Start with the bureau mailing address, then the date, then "Dear Sir or Madam,"
+- Use two short body paragraphs in simple language
+- Ask for proof of the investigation results within 30 days
+- State that the items should be deleted if they cannot be verified
+- After the body, list the disputed items as a simple stacked list with creditor name and supporting details, not a table
+- End with "Sincerely," followed by the consumer's name, address, and masked SSN in the format "SS: XXX-XX-1234"
+- Do not include a "Re:" line
+- Do not include an enclosures section
+- Keep the tone direct and professional, similar to a traditional mailed consumer dispute letter
 ${customInstructions ? `- Custom instructions: ${customInstructions}` : ''}
 
 Generate only the letter content, properly formatted for printing and mailing.`
 }
 
 function generateFallbackLetter(personalInfo: any, tradelines: any[], bureau: string): string {
-  const currentDate = new Date().toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
+  const now = new Date()
+  const day = now.getDate()
+  const teen = day % 100
+  const suffix =
+    teen >= 11 && teen <= 13
+      ? 'th'
+      : day % 10 === 1
+        ? 'st'
+        : day % 10 === 2
+          ? 'nd'
+          : day % 10 === 3
+            ? 'rd'
+            : 'th'
+  const currentDate = `${now.toLocaleDateString('en-US', { month: 'long' })} ${day}${suffix} ${now.getFullYear()}`
 
-  const disputedItems = tradelines.map((t, index) => {
-    return `${index + 1}. Creditor Name: ${t.creditor_name}
-   Account Number: ${t.account_number}
-   Reason for Dispute: This information is inaccurate and should be removed from my credit report.`
+  const bureauAddresses = {
+    'Experian': `Experian
+P.O. Box 4500
+Allen, TX 75013`,
+    'TransUnion': `TransUnion
+P.O. Box 2000
+Chester, PA 19016`,
+    'Equifax': `Equifax Information Services LLC
+P.O. Box 740256
+Atlanta, GA 30374`
+  }
+
+  const disputedItems = tradelines.map((t: any) => {
+    const lines = [`- ${t.creditor_name}`]
+    if (t.account_number) lines.push(`  # ${t.account_number}`)
+    if (t.account_balance) lines.push(`  ${t.account_balance}`)
+    if (t.date_opened) lines.push(`  ${t.date_opened}`)
+    if (t.account_status || t.dispute_reason) lines.push(`  ${t.account_status || t.dispute_reason}`)
+    return lines.join('\n')
   }).join('\n\n')
 
-  return `${personalInfo.firstName} ${personalInfo.lastName}
-${personalInfo.address}${personalInfo.address2 ? '\n' + personalInfo.address2 : ''}
-${personalInfo.city}, ${personalInfo.state} ${personalInfo.zip}
-${personalInfo.phone || '[Phone Number]'}
+  return `${bureauAddresses[bureau as keyof typeof bureauAddresses] ?? `${bureau} Consumer Dispute Department`}
 
 ${currentDate}
 
-${bureau} Consumer Dispute Department
-[Address will be inserted based on bureau]
+Dear Sir or Madam,
 
-Re: Dispute of Credit Report Information
+I found incorrect information being reported on my credit report. I need these accounts verified for accuracy. Please send all proof of the investigation results to me within 30 days. If no proof is sent to me, please delete these items from my credit report.
 
-Dear Sir or Madam:
-
-I am writing to dispute the following information in my credit report. I have circled the items I dispute on the attached copy of the report I received.
-
-The following items are inaccurate or incomplete:
+The items listed below should be corrected or removed if they cannot be fully verified.
 
 ${disputedItems}
-
-Under the Fair Credit Reporting Act, I have the right to request that you verify the accuracy of this information. I am requesting that the item be removed or corrected. Enclosed are copies of documents supporting my position. Please investigate this matter and correct the disputed item as soon as possible.
 
 Sincerely,
 
 ${personalInfo.firstName} ${personalInfo.lastName}
-
-Enclosures:
-- Copy of photo identification
-- Copy of Social Security card  
-- Copy of utility bill or bank statement`
+${personalInfo.address}${personalInfo.address2 ? '\n' + personalInfo.address2 : ''}
+${personalInfo.city} ${personalInfo.state} ${personalInfo.zip}
+SS: XXX-XX-${personalInfo.lastFourSSN || 'XXXX'}`
 }

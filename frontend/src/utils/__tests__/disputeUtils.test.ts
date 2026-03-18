@@ -153,8 +153,7 @@ describe('Dispute Utils', () => {
       city: 'Anytown',
       state: 'CA',
       zipCode: '12345',
-      dateOfBirth: '01/01/1990',
-      ssn: '123456789',
+      lastFourSSN: '6789',
     };
 
     const mockTradelines: ParsedTradeline[] = [
@@ -179,40 +178,42 @@ describe('Dispute Utils', () => {
       const content = generateDisputeLetterContent(mockTradelines, 'Experian', mockProfile);
       
       expect(content).toContain('John Doe');
-      expect(content).toContain('123 Main St');
-      expect(content).toContain('Anytown, CA 12345');
       expect(content).toContain('Experian');
+      expect(content).toContain('Dear Sir or Madam,');
       expect(content).toContain('Test Bank');
-      expect(content).toContain('Fair Credit Reporting Act');
-      expect(content).toContain('Request for Investigation');
+      expect(content).toContain('I found incorrect information being reported on my credit report.');
+      expect(content).toContain('Sincerely,');
     });
 
     it('should mask SSN in letter content', () => {
       const content = generateDisputeLetterContent(mockTradelines, 'Experian', mockProfile);
       
-      expect(content).toContain('***-**-6789');
-      expect(content).not.toContain('123456789');
+      expect(content).toContain('SS: XXX-XX-6789');
+      expect(content).not.toContain('[SSN]');
     });
 
     it('should mask account number in letter content', () => {
       const content = generateDisputeLetterContent(mockTradelines, 'Experian', mockProfile);
       
-      expect(content).toContain('****7890');
+      expect(content).toContain('# ****7890');
       expect(content).not.toContain('1234567890');
     });
 
     it('should include bureau address information', () => {
       const content = generateDisputeLetterContent(mockTradelines, 'Experian', mockProfile);
       
-      expect(content).toContain('P.O. Box 4000');
+      expect(content).toContain('P.O. Box 4500');
       expect(content).toContain('Allen, TX 75013');
     });
 
-    it('should include account table with tradeline information', () => {
+    it('should include stacked tradeline details instead of a table', () => {
       const content = generateDisputeLetterContent(mockTradelines, 'Experian', mockProfile);
       
-      expect(content).toContain('Creditor Name | Account Number | Date Opened | Dispute Reason');
-      expect(content).toContain('Test Bank | ****7890 | 01/01/2020 | Inaccurate Information');
+      expect(content).toContain('- Test Bank');
+      expect(content).toContain('$1,000');
+      expect(content).toContain('01/01/2020');
+      expect(content).toContain('Open');
+      expect(content).not.toContain('Creditor Name | Account Number | Date Opened | Dispute Reason');
     });
   });
 

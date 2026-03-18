@@ -13,7 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 export const CREDIT_BUREAU_ADDRESSES = {
   'Experian': {
     name: 'Experian',
-    address: 'P.O. Box 4000',
+    address: 'P.O. Box 4500',
     city: 'Allen',
     state: 'TX',
     zip: '75013'
@@ -49,6 +49,139 @@ export interface PacketProgress {
   message: string;
 }
 
+const formatLetterDate = (date: Date = new Date()): string => {
+  const day = date.getDate();
+  const teen = day % 100;
+  const suffix =
+    teen >= 11 && teen <= 13
+      ? 'th'
+      : day % 10 === 1
+        ? 'st'
+        : day % 10 === 2
+          ? 'nd'
+          : day % 10 === 3
+            ? 'rd'
+            : 'th';
+
+  return `${date.toLocaleDateString('en-US', { month: 'long' })} ${day}${suffix} ${date.getFullYear()}`;
+};
+
+const getProfileLine = (profile: any, keys: string[]): string =>
+  keys
+    .map((key) => profile?.[key])
+    .find((value) => typeof value === 'string' && value.trim().length > 0)
+    ?.trim() ?? '';
+
+const getProfileCityStateZipLine = (profile: any): string => {
+  const city = getProfileLine(profile, ['city']);
+  const state = getProfileLine(profile, ['state']);
+  const zip = getProfileLine(profile, ['zipCode', 'zip']);
+
+  return [city, state, zip].filter(Boolean).join(' ');
+};
+
+const getSignatureBlock = (profile: any): string[] => {
+  const name = [getProfileLine(profile, ['firstName']), getProfileLine(profile, ['lastName'])].filter(Boolean).join(' ').trim();
+  const address1 = getProfileLine(profile, ['address1', 'address', 'fullAddress']);
+  const address2 = getProfileLine(profile, ['address2']);
+  const cityStateZip = getProfileCityStateZipLine(profile);
+  const ssn = getProfileLine(profile, ['lastFourSSN']) || getProfileLine(profile, ['ssn']).slice(-4);
+
+  return [
+    name,
+    address1,
+    address2,
+    cityStateZip,
+    ssn ? `SS: XXX-XX-${ssn}` : '',
+  ].filter(Boolean);
+};
+
+const maskAccountNumber = (accountNumber?: string | null): string => {
+  const trimmed = accountNumber?.trim();
+  if (!trimmed) return '[Account Number]';
+  if (/[*xX]/.test(trimmed)) return trimmed;
+  return trimmed.length > 4 ? `****${trimmed.slice(-4)}` : trimmed;
+};
+
+const buildTradelineSummaryLines = (tradeline: ParsedTradeline): string[] => {
+  const lines = [`- ${tradeline.creditor_name || '[Creditor]'}`];
+  const accountNumber = maskAccountNumber(tradeline.account_number);
+  const balance = tradeline.account_balance?.trim();
+  const dateOpened = tradeline.date_opened?.trim();
+  const status = tradeline.account_status?.trim();
+
+  if (accountNumber && accountNumber !== '[Account Number]') {
+    lines.push(`  # ${accountNumber}`);
+  }
+  if (balance) {
+    lines.push(`  ${balance}`);
+  }
+  if (dateOpened) {
+    lines.push(`  ${dateOpened}`);
+  }
+  if (status) {
+    lines.push(`  ${status}`);
+  }
+
+  return lines;
+};
+
+const buildDisputeBody = (tradelines: ParsedTradeline[]): string[] => {
+  const intro =
+    tradelines.length === 1
+      ? 'I found incorrect information being reported on my credit report. I need this account verified for accuracy. Please send all proof of the investigation results to me within 30 days. If no proof is sent to me, please delete this item from my credit report.'
+      : 'I found incorrect information being reported on my credit report. I need these accounts verified for accuracy. Please send all proof of the investigation results to me within 30 days. If no proof is sent to me, please delete these items from my credit report.';
+
+  const primaryTradeline = tradelines[0];
+  const specificFollowUp =
+    tradelines.length === 1 && primaryTradeline?.creditor_name
+      ? `The ${primaryTradeline.account_status?.trim() || 'negative information'} being reported for the ${primaryTradeline.creditor_name} account shown below is not correct and should be removed.`
+      : 'The items listed below should be corrected or removed if they cannot be fully verified.';
+
+  return [intro, '', specificFollowUp];
+};
+
+const renderLetterContent = (pdf: jsPDF, letterContent: string): void => {
+  const margin = 24;
+  const lineHeight = 6.5;
+  const pageHeight = pdf.internal.pageSize.height;
+  const pageWidth = pdf.internal.pageSize.width;
+  const maxLineWidth = pageWidth - (margin * 2);
+  let currentY = margin;
+
+  const resetTypography = () => {
+    pdf.setFont('times', 'normal');
+    pdf.setFontSize(12);
+    pdf.setTextColor(0, 0, 0);
+  };
+
+  const ensurePageSpace = () => {
+    if (currentY <= pageHeight - margin) return;
+    pdf.addPage();
+    currentY = margin;
+    resetTypography();
+  };
+
+  resetTypography();
+
+  letterContent.split('\n').forEach((rawLine) => {
+    if (rawLine.trim().length === 0) {
+      currentY += lineHeight;
+      ensurePageSpace();
+      return;
+    }
+
+    const indent = rawLine.startsWith('  ') ? 8 : 0;
+    const wrappedLines = pdf.splitTextToSize(rawLine.trimStart(), maxLineWidth - indent);
+
+    wrappedLines.forEach((wrappedLine: string) => {
+      ensurePageSpace();
+      pdf.text(wrappedLine, margin + indent, currentY);
+      currentY += lineHeight;
+    });
+  });
+};
+
 // Generate dispute reasons based on tradeline status
 export const getDisputeReasons = (tradeline: ParsedTradeline): string[] => {
   const reasons: string[] = [];
@@ -81,66 +214,26 @@ export const generateDisputeLetterContent = (
   creditBureau: string, 
   profile: any
 ): string => {
-  const currentDate = new Date().toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
-  
+  const currentDate = formatLetterDate();
   const bureauInfo = CREDIT_BUREAU_ADDRESSES[creditBureau as keyof typeof CREDIT_BUREAU_ADDRESSES];
-  
-  // Create account table
-  const accountRows = tradelines.map(tradeline => {
-    const formattedAccountNumber = tradeline.account_number && tradeline.account_number.length > 4 
-      ? `****${tradeline.account_number.slice(-4)}` 
-      : tradeline.account_number || '[Account Number]';
-    
-    const formattedDateOpened = tradeline.date_opened || '[Date]';
-    
-    return `${tradeline.creditor_name || '[Creditor]'} | ${formattedAccountNumber} | ${formattedDateOpened} | Inaccurate Information`;
-  });
-  
-  const accountTable = `Creditor Name | Account Number | Date Opened | Dispute Reason
-${'='.repeat(70)}
-${accountRows.join('\n')}`;
+  const letterSections = [
+    bureauInfo.name,
+    bureauInfo.address,
+    `${bureauInfo.city}, ${bureauInfo.state} ${bureauInfo.zip}`,
+    '',
+    currentDate,
+    '',
+    'Dear Sir or Madam,',
+    '',
+    ...buildDisputeBody(tradelines),
+    '',
+    ...tradelines.flatMap((tradeline) => [...buildTradelineSummaryLines(tradeline), '']),
+    'Sincerely,',
+    '',
+    ...getSignatureBlock(profile),
+  ];
 
-  return `${currentDate}
-
-${profile.firstName} ${profile.lastName}
-${profile.fullAddress}
-
-${bureauInfo.name}
-${bureauInfo.address}
-${bureauInfo.city}, ${bureauInfo.state} ${bureauInfo.zip}
-
-Re: Request for Investigation of Credit Report Inaccuracies
-Consumer Name: ${profile.firstName} ${profile.lastName}
-Date of Birth: ${profile.dateOfBirth || '[Date of Birth]'}
-Social Security Number: ${profile.lastFourSSN ? `***-**-${profile.lastFourSSN}` : '[SSN]'}
-
-Dear Sir or Madam,
-
-I am writing to dispute inaccurate information on my credit report. Under the Fair Credit Reporting Act (FCRA), I have the right to request that you investigate and correct any inaccuracies.
-
-The following accounts contain inaccurate information that must be investigated and corrected or removed:
-
-${accountTable}
-
-I am requesting that these items be investigated under Section 611 of the FCRA. Please conduct a reasonable investigation of these disputed items and provide me with the results of your investigation.
-
-If you cannot verify the accuracy of these items, they must be deleted from my credit file immediately as required by law.
-
-Please send me an updated copy of my credit report showing the corrections made, along with a list of everyone who has received my credit report in the past year (or two years for employment purposes).
-
-I expect to receive a response within 30 days as required by the FCRA. Please contact me at the address above if you need additional information.
-
-Thank you for your prompt attention to this matter.
-
-Sincerely,
-
-${profile.firstName} ${profile.lastName}
-
-Enclosures: Copy of Driver's License, Copy of Social Security Card, Copy of Utility Bill`;
+  return letterSections.join('\n').trim();
 };
 
 // Generate dispute letters grouped by credit bureau
@@ -342,8 +435,6 @@ export const generatePDFPacket = async (
   });
 
   const pdf = new jsPDF();
-  const margin = 20;
-  const lineHeight = 6;
 
   letters.forEach((letter, letterIndex) => {
     // Cover page for this bureau
@@ -351,24 +442,7 @@ export const generatePDFPacket = async (
 
     // Dispute letter starts on a new page
     pdf.addPage();
-    let currentY = margin;
-    const pageHeight = pdf.internal.pageSize.height;
-    const pageW = pdf.internal.pageSize.width;
-
-    // Letter content
-    pdf.setFontSize(11);
-    pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(0, 0, 0);
-
-    const lines = pdf.splitTextToSize(letter.letterContent, pageW - 2 * margin);
-    lines.forEach((line: string) => {
-      if (currentY > pageHeight - margin) {
-        pdf.addPage();
-        currentY = margin;
-      }
-      pdf.text(line, margin, currentY);
-      currentY += lineHeight;
-    });
+    renderLetterContent(pdf, letter.letterContent);
   });
 
   updateProgress({
@@ -417,24 +491,7 @@ export const generateCompletePacket = async (
 
       // --- Dispute letter ---
       const tempPdf = new jsPDF();
-      const pageHeight = tempPdf.internal.pageSize.height;
-      const margin = 20;
-      const lineHeight = 6;
-      let currentY = margin;
-
-      tempPdf.setFontSize(11);
-      tempPdf.setFont('helvetica', 'normal');
-      tempPdf.setTextColor(0, 0, 0);
-
-      const lines = tempPdf.splitTextToSize(letter.letterContent, tempPdf.internal.pageSize.width - 2 * margin);
-      lines.forEach((line: string) => {
-        if (currentY > pageHeight - margin) {
-          tempPdf.addPage();
-          currentY = margin;
-        }
-        tempPdf.text(line, margin, currentY);
-        currentY += lineHeight;
-      });
+      renderLetterContent(tempPdf, letter.letterContent);
 
       const letterBlob = new Blob([tempPdf.output('arraybuffer')], { type: 'application/pdf' });
       await addPdfPages(letterBlob, mainPdf, `Dispute Letter - ${letter.creditBureau}`);
@@ -552,35 +609,25 @@ const buildFallbackSingleLetter = (
   payload: DisputePayload,
   bureauAddress: string
 ): string => {
-  const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  return `${pi.firstName} ${pi.lastName}
-${pi.address}${pi.address2 ? '\n' + pi.address2 : ''}
-${pi.city}, ${pi.state} ${pi.zip}
+  return `${bureauAddress}
 
-${date}
+${formatLetterDate()}
 
-${bureauAddress}
+Dear Sir or Madam,
 
-Re: Dispute of Credit Report Information — FCRA Section 611
+I found incorrect information being reported on my credit report. I need this account verified for accuracy. Please send all proof of the investigation results to me within 30 days. If no proof is sent to me, please delete this item from my credit report.
 
-Dear Sir or Madam:
+The ${payload.disputeReason || 'negative information'} being reported for the ${payload.creditorName} account shown below is not correct and should be removed.
 
-I am writing pursuant to the Fair Credit Reporting Act (FCRA), 15 U.S.C. § 1681i, to dispute the following item appearing on my credit report:
-
-  Creditor Name:   ${payload.creditorName}
-  Account Number:  ${payload.accountNumberMasked}
-  Dispute Reason:  ${payload.disputeReason}
-
-This information is inaccurate. I respectfully request that you investigate this matter within 30 days as required by law. If you cannot verify the accuracy of this information, it must be deleted from my credit file immediately.
-
-Please send me written notification of the results of your investigation and a corrected copy of my credit report.
+- ${payload.creditorName}
+  # ${payload.accountNumberMasked}
 
 Sincerely,
 
 ${pi.firstName} ${pi.lastName}
-SSN: XXX-XX-${pi.lastFourSSN}
-
-Enclosures: Copy of identification, Copy of Social Security card`;
+${pi.address}${pi.address2 ? `\n${pi.address2}` : ''}
+${pi.city} ${pi.state} ${pi.zip}
+SS: XXX-XX-${pi.lastFourSSN}`;
 };
 
 /**
