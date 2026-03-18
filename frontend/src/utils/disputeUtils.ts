@@ -80,21 +80,29 @@ const getProfileCityStateZipLine = (profile: any): string => {
   return [city, state, zip].filter(Boolean).join(' ');
 };
 
-const getSignatureBlock = (profile: any): string[] => {
+const getSenderBlock = (profile: any): string[] => {
   const name = [getProfileLine(profile, ['firstName']), getProfileLine(profile, ['lastName'])].filter(Boolean).join(' ').trim();
-  const address1 = getProfileLine(profile, ['address1', 'address', 'fullAddress']);
+  const address1 = getProfileLine(profile, ['address1', 'address']);
   const address2 = getProfileLine(profile, ['address2']);
-  const cityStateZip = getProfileCityStateZipLine(profile);
-  const ssn = getProfileLine(profile, ['lastFourSSN']) || getProfileLine(profile, ['ssn']).slice(-4);
+  const city = getProfileLine(profile, ['city']);
+  const state = getProfileLine(profile, ['state']);
+  const zip = getProfileLine(profile, ['zipCode', 'zip']);
 
   return [
     name,
     address1,
     address2,
-    cityStateZip,
-    ssn ? `SS: XXX-XX-${ssn}` : '',
+    [city, [state, zip].filter(Boolean).join(' ')].filter(Boolean).join(', '),
   ].filter(Boolean);
 };
+
+const getMaskedSSN = (profile: any): string => {
+  const lastFour = getProfileLine(profile, ['lastFourSSN']) || getProfileLine(profile, ['ssn']).slice(-4);
+  return lastFour ? `XXX-XX-${lastFour}` : '[Insert SSN Here]';
+};
+
+const getReportNumber = (profile: any): string =>
+  getProfileLine(profile, ['reportNumber', 'fileNumber', 'creditReportNumber', 'creditReportId']) || '[Insert Report Number Here]';
 
 const maskAccountNumber = (accountNumber?: string | null): string => {
   const trimmed = accountNumber?.trim();
@@ -103,42 +111,35 @@ const maskAccountNumber = (accountNumber?: string | null): string => {
   return trimmed.length > 4 ? `****${trimmed.slice(-4)}` : trimmed;
 };
 
+const getReasonForDispute = (tradeline: ParsedTradeline): string => {
+  const status = tradeline.account_status?.trim();
+  if (status) {
+    return `The current status of this account (listed as "${status}") is inaccurate. Alternatively, if this account is being reported past the allowable reporting timeframe, it is obsolete and must be removed.`;
+  }
+
+  return 'This account is inaccurate, incomplete, and/or obsolete. If it cannot be fully verified, it must be removed.';
+};
+
 const buildTradelineSummaryLines = (tradeline: ParsedTradeline): string[] => {
-  const lines = [`- ${tradeline.creditor_name || '[Creditor]'}`];
+  const lines = [`Creditor Name: ${tradeline.creditor_name || '[Creditor]'}`];
   const accountNumber = maskAccountNumber(tradeline.account_number);
   const balance = tradeline.account_balance?.trim();
   const dateOpened = tradeline.date_opened?.trim();
   const status = tradeline.account_status?.trim();
 
-  if (accountNumber && accountNumber !== '[Account Number]') {
-    lines.push(`  # ${accountNumber}`);
+  lines.push(`Account #: ${accountNumber}`);
+  if (status) {
+    lines.push(`Reported Status: ${status}`);
   }
   if (balance) {
-    lines.push(`  ${balance}`);
+    lines.push(`Balance: ${balance}`);
   }
   if (dateOpened) {
-    lines.push(`  ${dateOpened}`);
+    lines.push(`Date Opened: ${dateOpened}`);
   }
-  if (status) {
-    lines.push(`  ${status}`);
-  }
+  lines.push(`Reason for Dispute: ${getReasonForDispute(tradeline)}`);
 
   return lines;
-};
-
-const buildDisputeBody = (tradelines: ParsedTradeline[]): string[] => {
-  const intro =
-    tradelines.length === 1
-      ? 'I found incorrect information being reported on my credit report. I need this account verified for accuracy. Please send all proof of the investigation results to me within 30 days. If no proof is sent to me, please delete this item from my credit report.'
-      : 'I found incorrect information being reported on my credit report. I need these accounts verified for accuracy. Please send all proof of the investigation results to me within 30 days. If no proof is sent to me, please delete these items from my credit report.';
-
-  const primaryTradeline = tradelines[0];
-  const specificFollowUp =
-    tradelines.length === 1 && primaryTradeline?.creditor_name
-      ? `The ${primaryTradeline.account_status?.trim() || 'negative information'} being reported for the ${primaryTradeline.creditor_name} account shown below is not correct and should be removed.`
-      : 'The items listed below should be corrected or removed if they cannot be fully verified.';
-
-  return [intro, '', specificFollowUp];
 };
 
 const renderLetterContent = (pdf: jsPDF, letterContent: string): void => {
@@ -217,20 +218,37 @@ export const generateDisputeLetterContent = (
   const currentDate = formatLetterDate();
   const bureauInfo = CREDIT_BUREAU_ADDRESSES[creditBureau as keyof typeof CREDIT_BUREAU_ADDRESSES];
   const letterSections = [
+    ...getSenderBlock(profile),
+    '',
+    currentDate,
+    '',
     bureauInfo.name,
     bureauInfo.address,
     `${bureauInfo.city}, ${bureauInfo.state} ${bureauInfo.zip}`,
     '',
-    currentDate,
+    'RE: Dispute of Inaccurate Information',
+    `File/Report Number: ${getReportNumber(profile)}`,
+    `Social Security Number: ${getMaskedSSN(profile)}`,
     '',
-    'Dear Sir or Madam,',
+    'To Whom It May Concern:',
     '',
-    ...buildDisputeBody(tradelines),
+    `I am writing to dispute the following ${tradelines.length === 1 ? 'account' : 'accounts'} that ${tradelines.length === 1 ? 'is' : 'are'} reporting inaccurately on my ${creditBureau} credit report. This information is a serious error and I request that it be investigated and removed immediately pursuant to my rights under the Fair Credit Reporting Act (15 U.S.C. § 1681i).`,
+    '',
+    `The following ${tradelines.length === 1 ? 'account contains' : 'accounts contain'} incorrect information and/or ${tradelines.length === 1 ? 'is' : 'are'} obsolete:`,
     '',
     ...tradelines.flatMap((tradeline) => [...buildTradelineSummaryLines(tradeline), '']),
+    'Please investigate this matter thoroughly. I request that you verify the accuracy of each item with the furnisher of the information and send me the results of your investigation, including the method of verification, to the address above.',
+    '',
+    'If any item cannot be verified within the 30-day timeframe required by law, I expect it to be permanently deleted from my credit file.',
+    '',
     'Sincerely,',
     '',
-    ...getSignatureBlock(profile),
+    [getProfileLine(profile, ['firstName']), getProfileLine(profile, ['lastName'])].filter(Boolean).join(' ').trim(),
+    '',
+    'Enclosures:',
+    '- Copy of credit report (highlighted)',
+    '- Copy of government ID',
+    '- Copy of proof of address',
   ];
 
   return letterSections.join('\n').trim();
@@ -609,25 +627,40 @@ const buildFallbackSingleLetter = (
   payload: DisputePayload,
   bureauAddress: string
 ): string => {
-  return `${bureauAddress}
+  return `${pi.firstName} ${pi.lastName}
+${pi.address}${pi.address2 ? `\n${pi.address2}` : ''}
+${pi.city}, ${pi.state} ${pi.zip}
 
 ${formatLetterDate()}
 
-Dear Sir or Madam,
+${bureauAddress}
 
-I found incorrect information being reported on my credit report. I need this account verified for accuracy. Please send all proof of the investigation results to me within 30 days. If no proof is sent to me, please delete this item from my credit report.
+RE: Dispute of Inaccurate Information
+File/Report Number: [Insert Report Number Here]
+Social Security Number: XXX-XX-${pi.lastFourSSN}
 
-The ${payload.disputeReason || 'negative information'} being reported for the ${payload.creditorName} account shown below is not correct and should be removed.
+To Whom It May Concern:
 
-- ${payload.creditorName}
-  # ${payload.accountNumberMasked}
+I am writing to dispute the following account that is reporting inaccurately on my credit report. This information is a serious error and I request that it be investigated and removed immediately pursuant to my rights under the Fair Credit Reporting Act (15 U.S.C. § 1681i).
+
+The following account contains incorrect information and/or is obsolete:
+
+Creditor Name: ${payload.creditorName}
+Account #: ${payload.accountNumberMasked}
+Reason for Dispute: ${payload.disputeReason || 'This account is inaccurate, incomplete, and/or obsolete. If it cannot be fully verified, it must be removed.'}
+
+Please investigate this matter thoroughly. I request that you verify the accuracy of this item with the furnisher of the information and send me the results of your investigation, including the method of verification, to the address above.
+
+If this item cannot be verified within the 30-day timeframe required by law, I expect it to be permanently deleted from my credit file.
 
 Sincerely,
 
 ${pi.firstName} ${pi.lastName}
-${pi.address}${pi.address2 ? `\n${pi.address2}` : ''}
-${pi.city} ${pi.state} ${pi.zip}
-SS: XXX-XX-${pi.lastFourSSN}`;
+
+Enclosures:
+- Copy of credit report (highlighted)
+- Copy of government ID
+- Copy of proof of address`;
 };
 
 /**

@@ -178,25 +178,27 @@ describe('Dispute Utils', () => {
       const content = generateDisputeLetterContent(mockTradelines, 'Experian', mockProfile);
       
       expect(content).toContain('John Doe');
+      expect(content).toContain('123 Main St');
+      expect(content).toContain('Anytown, CA 12345');
       expect(content).toContain('Experian');
-      expect(content).toContain('Dear Sir or Madam,');
+      expect(content).toContain('RE: Dispute of Inaccurate Information');
+      expect(content).toContain('To Whom It May Concern:');
       expect(content).toContain('Test Bank');
-      expect(content).toContain('I found incorrect information being reported on my credit report.');
+      expect(content).toContain('Fair Credit Reporting Act (15 U.S.C. § 1681i)');
       expect(content).toContain('Sincerely,');
     });
 
     it('should mask SSN in letter content', () => {
       const content = generateDisputeLetterContent(mockTradelines, 'Experian', mockProfile);
       
-      expect(content).toContain('SS: XXX-XX-6789');
-      expect(content).not.toContain('[SSN]');
+      expect(content).toContain('Social Security Number: XXX-XX-6789');
+      expect(content).not.toContain('[Insert SSN Here]');
     });
 
-    it('should mask account number in letter content', () => {
+    it('should include a report number placeholder until one is provided', () => {
       const content = generateDisputeLetterContent(mockTradelines, 'Experian', mockProfile);
       
-      expect(content).toContain('# ****7890');
-      expect(content).not.toContain('1234567890');
+      expect(content).toContain('File/Report Number: [Insert Report Number Here]');
     });
 
     it('should include bureau address information', () => {
@@ -206,14 +208,16 @@ describe('Dispute Utils', () => {
       expect(content).toContain('Allen, TX 75013');
     });
 
-    it('should include stacked tradeline details instead of a table', () => {
+    it('should include labeled tradeline details and a specific dispute reason', () => {
       const content = generateDisputeLetterContent(mockTradelines, 'Experian', mockProfile);
       
-      expect(content).toContain('- Test Bank');
+      expect(content).toContain('Creditor Name: Test Bank');
+      expect(content).toContain('Account #: ****7890');
+      expect(content).toContain('Reported Status: Open');
       expect(content).toContain('$1,000');
       expect(content).toContain('01/01/2020');
-      expect(content).toContain('Open');
-      expect(content).not.toContain('Creditor Name | Account Number | Date Opened | Dispute Reason');
+      expect(content).toContain('Reason for Dispute: The current status of this account (listed as "Open") is inaccurate.');
+      expect(content).toContain('method of verification');
     });
   });
 
