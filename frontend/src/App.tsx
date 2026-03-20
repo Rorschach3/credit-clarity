@@ -41,6 +41,7 @@ const TradelinesPage = React.lazy(() => import('@/pages/TradelinesPage'));
 const CreditReportUploadPage = React.lazy(() => import('./pages/CreditReportUploadPage'));
 const DisputeWizardPage = React.lazy(() => import('./pages/DisputeWizardPage'));
 const DisputeHistoryPage = React.lazy(() => import('./pages/DisputeHistoryPage'));
+const DisputePlannerPage = React.lazy(() => import('./pages/DisputePlannerPage'));
 
 import { Footer } from './components/layout/Footer';
 
@@ -132,6 +133,11 @@ function AppContent() {
             <Route path="/dispute-history" element={
               <Suspense fallback={<DisputeWizardLoading />}>
                 <DisputeHistoryPage />
+              </Suspense>
+            } />
+            <Route path="/dispute-planner" element={
+              <Suspense fallback={<DisputeWizardLoading />}>
+                <DisputePlannerPage />
               </Suspense>
             } />
             <Route path="/privacy-policy" element={<PrivacyPage />} />

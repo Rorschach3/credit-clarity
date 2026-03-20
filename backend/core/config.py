@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     document_ai_processor_id: Optional[str] = Field(default=None, env="DOCUMENT_AI_PROCESSOR_ID")
     gemini_api_key: Optional[str] = Field(default=None, env="GEMINI_API_KEY")
 
+    # Mem0
+    mem0_api_key: Optional[str] = Field(default=None, env="MEM0_API_KEY")
+
     # DeepSeek
     deepseek_api_key: Optional[str] = Field(default=None, env="DEEPSEEK_API_KEY")
     deepseek_api_base: str = Field(default="https://api.deepseek.com/v1", env="DEEPSEEK_API_BASE")
@@ -182,11 +185,13 @@ class DevelopmentSettings(Settings):
         "http://localhost:5173",
         "http://localhost:8080",
         "http://localhost:8081",
+        "http://localhost:8083",
         "http://localhost:4173",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:8080",
         "http://127.0.0.1:8081",
+        "http://127.0.0.1:8083",
         "http://127.0.0.1:4173"
     ]
 

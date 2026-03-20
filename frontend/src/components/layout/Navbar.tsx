@@ -115,14 +115,13 @@ export function Navbar() {
 
         {/* Mobile hamburger */}
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
-          <SheetTrigger asChild className="md:hidden">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground hover:text-foreground hover:bg-white/5"
+          <SheetTrigger asChild>
+            <button
+              className="md:hidden rounded-md p-2 text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+              aria-label="Open menu"
             >
               <Menu className="h-5 w-5" />
-            </Button>
+            </button>
           </SheetTrigger>
           <SheetContent
             side="left"

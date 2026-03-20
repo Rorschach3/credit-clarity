@@ -602,7 +602,9 @@ class BackgroundJobProcessor:
             # Create progress callback
             async def update_progress(progress: int, message: str = ""):
                 await self._queue.update_job_progress(job.job_id, progress, message)
-                # Update cache
+                # Update the in-memory object BEFORE caching so cache is accurate
+                job.progress = progress
+                job.progress_message = message
                 job_dict = job.to_dict()
                 await cache.set(f"job_status_{job.job_id}", job_dict, ttl=7200)
             
@@ -618,18 +620,30 @@ class BackgroundJobProcessor:
             
             # Mark job as completed
             await self._queue.complete_job(job.job_id, result or {})
-            
+
+            # Update in-memory job object so cache reflects the correct final state
+            job.status = JobStatus.COMPLETED
+            job.completed_at = datetime.now()
+            job.result = result or {}
+            job.progress = 100
+
             # Update cache
             job_dict = job.to_dict()
             await cache.set(f"job_status_{job.job_id}", job_dict, ttl=7200)
-            
+
         except asyncio.TimeoutError:
             error_msg = f"Job timed out after {job.timeout} seconds"
+            job.status = JobStatus.FAILED
+            job.error = error_msg
             await self._queue.fail_job(job.job_id, error_msg)
+            await cache.set(f"job_status_{job.job_id}", job.to_dict(), ttl=7200)
         except Exception as e:
             error_msg = f"Job failed: {str(e)}"
             logger.error(f"Job {job.job_id} failed: {error_msg}\n{traceback.format_exc()}")
+            job.status = JobStatus.FAILED
+            job.error = error_msg
             await self._queue.fail_job(job.job_id, error_msg)
+            await cache.set(f"job_status_{job.job_id}", job.to_dict(), ttl=7200)
     
     # Built-in task handlers
     async def _process_large_pdf_task(self, pdf_path: str, user_id: str, progress_callback, **kwargs) -> Dict[str, Any]:
@@ -641,7 +655,30 @@ class BackgroundJobProcessor:
             processor = OptimizedCreditReportProcessor()
             
             await progress_callback(30, "Extracting text and tables...")
-            
+
+            # Heartbeat: tick from 31→74% while OCR runs so the bar isn't frozen
+            heartbeat_cancelled = False
+            async def _progress_heartbeat():
+                current = 31
+                steps = [
+                    (35, "Reading PDF pages..."),
+                    (42, "Scanning for account data..."),
+                    (50, "Identifying tradelines..."),
+                    (58, "Parsing account history..."),
+                    (65, "Analyzing payment records..."),
+                    (72, "Extracting bureau metadata..."),
+                    (74, "Finalizing extraction..."),
+                ]
+                for pct, msg in steps:
+                    if heartbeat_cancelled:
+                        return
+                    await asyncio.sleep(4)
+                    if heartbeat_cancelled:
+                        return
+                    await progress_callback(pct, msg)
+
+            heartbeat_task = asyncio.create_task(_progress_heartbeat())
+
             # Add a hard timeout around the heavy processing to avoid "stuck at 30%"
             try:
                 result = await asyncio.wait_for(
@@ -649,8 +686,13 @@ class BackgroundJobProcessor:
                     timeout=15 * 60  # 15 minutes
                 )
             except asyncio.TimeoutError:
+                heartbeat_cancelled = True
+                heartbeat_task.cancel()
                 await progress_callback(99, "Timed out while extracting text. Please try a smaller PDF or retry later.")
                 raise Exception("Processing timed out after 15 minutes")
+            finally:
+                heartbeat_cancelled = True
+                heartbeat_task.cancel()
             
             if result.get('success'):
                 await progress_callback(80, "Saving tradelines to database...")
