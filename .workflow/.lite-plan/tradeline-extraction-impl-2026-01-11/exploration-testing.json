@@ -1,0 +1,93 @@
+{
+  "project_structure": "Testing infrastructure organized into three layers: (1) Unit tests in backend/tests/ with comprehensive fixtures in conftest.py and test_fixtures/tradeline_test_data.py, (2) Integration tests in backend/tests/integration/ covering API flows and error handling, (3) Advanced validation suite in backend/tests/advanced_parsing/ implementing Sprint 0 real-world PDF validation. Key components: conftest.py provides centralized fixtures (mock_db, mock_cache, mock_processor, sample_pdf_content), tradeline_test_data.py contains 20 ground truth records with validation utilities, test_runner.py orchestrates comprehensive test execution.",
+  "relevant_files": [
+    {
+      "path": "backend/tests/conftest.py",
+      "relevance": 0.95,
+      "rationale": "Central test configuration with fixtures for database, cache, auth, PDF mocks, and validation utilities. Contains sample_tradeline, sample_pdf_content, mock_processor fixtures essential for testing extraction pipeline."
+    },
+    {
+      "path": "backend/tests/test_fixtures/tradeline_test_data.py",
+      "relevance": 0.98,
+      "rationale": "Ground truth dataset with 20 EXPECTED_TRADELINE_RECORDS for validation. Provides validate_tradeline_format(), compare_tradeline_to_expected(), and get_expected_tradeline_by_account_number() utilities for data-driven testing."
+    },
+    {
+      "path": "backend/tests/advanced_parsing/test_sprint0_validation.py",
+      "relevance": 0.92,
+      "rationale": "Production-grade validation framework comparing real PDF extraction against SQL ground truth. Implements Sprint0Validator with field-level comparison (critical vs optional fields), normalization logic, and comprehensive reporting."
+    },
+    {
+      "path": "backend/tests/advanced_parsing/test_runner.py",
+      "relevance": 0.85,
+      "rationale": "Orchestrates comprehensive test execution including Sprint 0 validation, accuracy tests, performance benchmarks, and edge cases. Phase4TestRunner provides test suite integration patterns."
+    },
+    {
+      "path": "backend/tests/test_tradeline_extraction_pipeline.py",
+      "relevance": 0.88,
+      "rationale": "Existing pipeline test structure with placeholder tests for PDF extraction, parsing logic, data storage. Defines test patterns for end-to-end validation and error handling."
+    },
+    {
+      "path": "backend/tests/advanced_parsing/test_parsing_accuracy.py",
+      "relevance": 0.80,
+      "rationale": "Accuracy testing framework with TestResult dataclass, TestDataGenerator for synthetic data, and ParsingAccuracyTester for validation. Shows patterns for field-level accuracy measurement."
+    },
+    {
+      "path": "backend/tests/advanced_parsing/test_real_world_validation.py",
+      "relevance": 0.78,
+      "rationale": "Real-world validation patterns with RealWorldTestCase dataclass and EdgeCaseTester for boundary conditions. Demonstrates testing for empty documents, corrupted text, duplicate accounts."
+    },
+    {
+      "path": "backend/services/tradeline_extraction/pipeline.py",
+      "relevance": 0.90,
+      "rationale": "Core extraction pipeline to be tested. Integration point for validation tests, PDF processing, and tradeline parsing verification."
+    }
+  ],
+  "patterns": "1. **Dual-Strategy Testing**: Production validation (Sprint 0) using real PDF against ground truth SQL + standard pytest unit/integration tests with mocks. 2. **Fixture Architecture**: Centralized fixtures in conftest.py (session-scoped event_loop, settings; function-scoped client, mock_db, mock_cache, mock_processor). 3. **Ground Truth Validation**: EXPECTED_TRADELINE_RECORDS (20 records) with validation utilities (validate_tradeline_format checks schema, dates, currency; compare_tradeline_to_expected performs field-level diffs). 4. **Field-Level Comparison**: Critical fields (creditor_name, account_number, account_status, account_type) require 100% accuracy; optional fields (monthly_payment, credit_limit, date_opened, account_balance) require ≥95% accuracy. 5. **Normalization Patterns**: _normalize_account_number (remove non-alphanumeric), _normalize_for_comparison (currency removes $,; dates to MM/DD/YYYY; uppercase strings). 6. **Report Generation**: JSON + Markdown reports with field-level comparison tables, accuracy metrics, errors/warnings. 7. **Async Testing**: pytest_asyncio fixtures (async_client, mock_cache, mock_db) with asyncio.run for main test execution. 8. **Mock Patterns**: AsyncMock for async services (cache.get/set, db.create_tradeline, processor.process_credit_report_optimized). 9. **Test Organization**: TestClass organization with @pytest.fixture methods, @pytest.mark.asyncio decorators for async tests. 10. **Assertion Utilities**: assert_response_structure, assert_error_response_structure, assert_pagination_structure in conftest.py.",
+  "dependencies": "Testing: pytest (core test framework), pytest-asyncio (async test support), pytest_asyncio.fixture decorators. HTTP Testing: FastAPI TestClient (sync tests), httpx.AsyncClient (async API tests). Mocking: unittest.mock.Mock, unittest.mock.AsyncMock. Standard Library: asyncio (event loop management), tempfile (temp PDF file creation), pathlib.Path (file path handling), json (report serialization), dataclasses (@dataclass for test result structures), datetime, uuid. Validation: re (regex for normalization), typing (type hints). Project Services: services.tradeline_extraction.pipeline.TradelineExtractionPipeline, utils.enhanced_tradeline_normalizer.EnhancedTradelineNormalizer, services.cache_service.cache, services.database_optimizer.db_optimizer, core.config.get_settings, core.logging.logger.get_logger. Ground Truth Data: tests.test_fixtures.tradeline_test_data (EXPECTED_TRADELINE_RECORDS, validation utilities).",
+  "integration_points": "1. **Fixture Integration (conftest.py)**: New tests should use existing fixtures - sample_tradeline (line 88-102), sample_pdf_content (line 135-171), mock_processor (line 229-240), mock_db (line 203-227), mock_cache (line 188-201). Integration via @pytest.fixture parameters in test methods. 2. **Ground Truth Validation (test_fixtures/tradeline_test_data.py)**: Use EXPECTED_TRADELINE_RECORDS for validation, call validate_tradeline_format() before assertions, use compare_tradeline_to_expected() for field-level diffs. Integration via import and function calls. 3. **Pipeline Testing (test_tradeline_extraction_pipeline.py)**: Extend TestTradelineExtractionPipeline (line 21-101), TestPDFTextExtraction (line 104-128), TestTradelineParsingLogic (line 130-166), TestDataStorageIntegration (line 169-213), TestEndToEndPipeline (line 215-256). Add methods with test_ prefix. 4. **Sprint 0 Validation (test_sprint0_validation.py)**: Use Sprint0Validator (line 165-611) for production validation, implement _match_and_compare pattern (line 249-310), extend ValidationReport dataclass (line 73-87). Integration via class inheritance or composition. 5. **Test Runner (test_runner.py)**: Register new test suites in Phase4TestRunner.run_all_tests (line 32-92), add dedicated run_* methods following pattern (line 94-100+). Integration via method addition. 6. **Async Testing**: Use @pytest.mark.asyncio decorator, async def test methods, await for async operations, use async_client fixture (conftest.py line 45-49) for API tests. 7. **Normalization**: Import EnhancedTradelineNormalizer, use _normalize_for_comparison patterns from Sprint0Validator (line 366-402). 8. **Error Handling**: Use assert_error_response_structure from conftest.py (line 321-326), test with mock_external_service_error (line 303-305) and mock_database_error (line 308-310).",
+  "constraints": "1. **Critical Field Accuracy Requirement**: 100% accuracy required for creditor_name, account_number, account_status, account_type (Sprint0Validator.CRITICAL_FIELDS line 169). Failure to meet 100% fails validation. 2. **Optional Field Accuracy Threshold**: ≥95% accuracy required for monthly_payment, credit_limit, date_opened, account_balance (Sprint0Validator.OPTIONAL_FIELDS line 172). Below 95% generates warnings. 3. **Exact Record Count**: Sprint 0 validation expects exactly 20 tradelines from TransUnion-06-10-2025.pdf. Different count fails validation (test_sprint0_validation.py line 431-435). 4. **Test Environment Isolation**: Tests run with ENVIRONMENT=testing (conftest.py line 17), must not affect production data. Database operations use mocks by default. 5. **Async Test Requirements**: All async code must use pytest_asyncio fixtures, event_loop fixture scoped to session (conftest.py line 27-32), async tests must have @pytest.mark.asyncio decorator. 6. **Fixture Scope Constraints**: event_loop and settings are session-scoped (shared across tests), client/mocks are function-scoped (fresh instance per test). Violating scopes causes fixture resolution errors. 7. **Date Format Validation**: Dates must be MM/DD/YYYY format (validate_tradeline_format in tradeline_test_data.py). Other formats fail schema validation. 8. **Currency Format**: Currency fields must include $ prefix (validate_tradeline_format). Missing $ or incorrect format fails validation. 9. **Normalization Requirements**: Account numbers normalized by removing non-alphanumeric (Sprint0Validator._normalize_account_number line 325-332), matching by last 4 digits for masked accounts (line 334-351). Tests must follow same normalization. 10. **File Path Dependencies**: Sprint 0 tests require TransUnion-06-10-2025.pdf and tradeline_test_rows.sql in backend/ directory (test_sprint0_validation.py line 618-627). Missing files raise FileNotFoundError. 11. **Report Output Location**: Test reports must write to backend/tests/reports/ or /tmp/phase4_test_results/ (test_runner.py line 22). Other locations not monitored by CI. 12. **Mock Return Value Constraints**: mock_processor must return dict with keys: success, tradelines, method_used, cost_estimate, cache_hit (conftest.py line 232-239). Incorrect structure breaks pipeline tests.",
+  "clarification_needs": [
+    {
+      "question": "Which testing strategy should be prioritized for tradeline extraction validation?",
+      "context": "Project uses dual testing strategies: (1) Sprint 0 real-world validation with actual PDF against ground truth SQL requiring 100% critical field accuracy, (2) Standard pytest unit/integration tests with synthetic data and mocks. Sprint 0 is comprehensive but slow, standard tests are fast but use synthetic data.",
+      "options": [
+        "Focus on Sprint 0 validation - Prioritize real-world PDF validation with 20 ground truth tradelines, comprehensive field-level comparison, and production-grade accuracy requirements",
+        "Focus on standard pytest tests - Prioritize unit/integration tests with mocks, synthetic data generation, and fast feedback loops for rapid development",
+        "Hybrid approach - Use standard tests for development/debugging, Sprint 0 validation for pre-deployment quality gates",
+        "Extend both in parallel - Develop comprehensive pytest test suite while maintaining Sprint 0 validation framework"
+      ],
+      "recommended": 2
+    },
+    {
+      "question": "How should test data be managed for tradeline extraction testing?",
+      "context": "Current setup uses hardcoded EXPECTED_TRADELINE_RECORDS (20 records) in tradeline_test_data.py for ground truth validation. This is Python-specific and not shareable with frontend. Alternative approaches include JSON fixtures, database seeding, or dynamic generation.",
+      "options": [
+        "Keep hardcoded Python records - Maintain current EXPECTED_TRADELINE_RECORDS in test_fixtures/tradeline_test_data.py",
+        "Move to JSON fixtures - Convert EXPECTED_TRADELINE_RECORDS to JSON files for cross-platform sharing (Python tests + frontend mocks)",
+        "Database seeding - Load ground truth from tradeline_test_rows.sql directly, parse SQL in tests",
+        "Dynamic test data generation - Use TestDataGenerator patterns from test_parsing_accuracy.py to create synthetic tradelines"
+      ],
+      "recommended": 1
+    },
+    {
+      "question": "What validation granularity should be used for tradeline field comparison?",
+      "context": "Sprint0Validator implements field-level validation with critical fields (100% accuracy) vs optional fields (≥95% accuracy). Alternative approaches include exact match validation, fuzzy matching with thresholds, or weighted scoring systems.",
+      "options": [
+        "Critical/Optional split - Maintain 100% accuracy for critical fields (creditor_name, account_number, account_status, account_type), ≥95% for optional fields (dates, currency)",
+        "Exact match only - Require 100% accuracy across all fields, no tolerance for optional field mismatches",
+        "Fuzzy matching with thresholds - Implement similarity scores (Levenshtein distance, etc.) with configurable thresholds per field type",
+        "Weighted accuracy scoring - Assign weights to fields based on business importance, calculate weighted average accuracy"
+      ],
+      "recommended": 0
+    }
+  ],
+  "_metadata": {
+    "timestamp": "2026-01-10T20:30:00Z",
+    "task_description": "Implement and Validate Tradeline Extraction Pipeline with Real-World Test Data",
+    "source": "cli-explore-agent",
+    "exploration_angle": "testing",
+    "exploration_index": 3,
+    "total_explorations": 3,
+    "duration_seconds": 180
+  }
+}

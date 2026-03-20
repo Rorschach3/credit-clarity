@@ -4,9 +4,8 @@ Tests CRUD operations and business logic
 """
 import pytest
 from unittest.mock import patch, AsyncMock
-from fastapi.testclient import TestClient
 
-def test_get_user_tradelines_success(client: TestClient, auth_headers, sample_tradelines):
+async def test_get_user_tradelines_success(client, auth_headers, sample_tradelines):
     """Test successful retrieval of user tradelines."""
     with patch('services.database_optimizer.db_optimizer') as mock_db:
         # Mock database response
@@ -22,7 +21,7 @@ def test_get_user_tradelines_success(client: TestClient, auth_headers, sample_tr
             }
         }
         
-        response = client.get("/api/v1/tradelines/", headers=auth_headers)
+        response = await client.get("/api/v1/tradelines/", headers=auth_headers)
         
         assert response.status_code == 200
         data = response.json()
@@ -32,7 +31,7 @@ def test_get_user_tradelines_success(client: TestClient, auth_headers, sample_tr
         assert "meta" in data
         assert data["meta"]["total"] == len(sample_tradelines)
 
-def test_get_user_tradelines_with_pagination(client: TestClient, auth_headers):
+async def test_get_user_tradelines_with_pagination(client, auth_headers):
     """Test tradelines retrieval with pagination parameters."""
     with patch('services.database_optimizer.db_optimizer') as mock_db:
         mock_db.get_user_tradelines_paginated.return_value = {
@@ -47,7 +46,7 @@ def test_get_user_tradelines_with_pagination(client: TestClient, auth_headers):
             }
         }
         
-        response = client.get(
+        response = await client.get(
             "/api/v1/tradelines/?page=2&limit=10&sort_by=created_at&sort_order=desc",
             headers=auth_headers
         )
@@ -59,7 +58,7 @@ def test_get_user_tradelines_with_pagination(client: TestClient, auth_headers):
         assert data["meta"]["page"] == 2
         assert data["meta"]["limit"] == 10
 
-def test_get_user_tradelines_with_filters(client: TestClient, auth_headers):
+async def test_get_user_tradelines_with_filters(client, auth_headers):
     """Test tradelines retrieval with filters."""
     with patch('services.database_optimizer.db_optimizer') as mock_db:
         mock_db.get_user_tradelines_paginated.return_value = {
@@ -74,7 +73,7 @@ def test_get_user_tradelines_with_filters(client: TestClient, auth_headers):
             }
         }
         
-        response = client.get(
+        response = await client.get(
             "/api/v1/tradelines/?credit_bureau=Experian&is_negative=true&disputed=false",
             headers=auth_headers
         )
@@ -89,7 +88,7 @@ def test_get_user_tradelines_with_filters(client: TestClient, auth_headers):
         assert filters['credit_bureau'] == 'Experian'
         assert filters['is_negative'] is True
 
-def test_get_single_tradeline_success(client: TestClient, auth_headers, sample_tradeline):
+async def test_get_single_tradeline_success(client, auth_headers, sample_tradeline):
     """Test successful retrieval of a single tradeline."""
     with patch('services.database_optimizer.db_optimizer') as mock_db:
         mock_db.get_tradeline_by_id.return_value = {
@@ -100,7 +99,7 @@ def test_get_single_tradeline_success(client: TestClient, auth_headers, sample_t
             "updated_at": None
         }
         
-        response = client.get("/api/v1/tradelines/1", headers=auth_headers)
+        response = await client.get("/api/v1/tradelines/1", headers=auth_headers)
         
         assert response.status_code == 200
         data = response.json()
@@ -109,12 +108,12 @@ def test_get_single_tradeline_success(client: TestClient, auth_headers, sample_t
         assert data["data"]["id"] == 1
         assert data["data"]["creditor_name"] == sample_tradeline["creditor_name"]
 
-def test_get_single_tradeline_not_found(client: TestClient, auth_headers):
+async def test_get_single_tradeline_not_found(client, auth_headers):
     """Test retrieval of non-existent tradeline."""
     with patch('services.database_optimizer.db_optimizer') as mock_db:
         mock_db.get_tradeline_by_id.return_value = None
         
-        response = client.get("/api/v1/tradelines/999", headers=auth_headers)
+        response = await client.get("/api/v1/tradelines/999", headers=auth_headers)
         
         assert response.status_code == 404
         data = response.json()
@@ -122,7 +121,7 @@ def test_get_single_tradeline_not_found(client: TestClient, auth_headers):
         assert data["success"] is False
         assert "error" in data
 
-def test_create_tradeline_success(client: TestClient, auth_headers, sample_tradeline):
+async def test_create_tradeline_success(client, auth_headers, sample_tradeline):
     """Test successful tradeline creation."""
     with patch('services.database_optimizer.db_optimizer') as mock_db:
         created_tradeline = {
@@ -134,7 +133,7 @@ def test_create_tradeline_success(client: TestClient, auth_headers, sample_trade
         }
         mock_db.create_tradeline.return_value = created_tradeline
         
-        response = client.post(
+        response = await client.post(
             "/api/v1/tradelines/",
             json=sample_tradeline,
             headers=auth_headers
@@ -148,14 +147,14 @@ def test_create_tradeline_success(client: TestClient, auth_headers, sample_trade
         assert data["data"]["creditor_name"] == sample_tradeline["creditor_name"]
         assert "created_at" in data["data"]
 
-def test_create_tradeline_validation_error(client: TestClient, auth_headers):
+async def test_create_tradeline_validation_error(client, auth_headers):
     """Test tradeline creation with invalid data."""
     invalid_data = {
         "creditor_name": "",  # Required field empty
         "account_type": "Invalid Type"
     }
     
-    response = client.post(
+    response = await client.post(
         "/api/v1/tradelines/",
         json=invalid_data,
         headers=auth_headers
@@ -168,7 +167,7 @@ def test_create_tradeline_validation_error(client: TestClient, auth_headers):
     assert "error" in data
     assert data["error"]["code"] == "VALIDATION_ERROR"
 
-def test_update_tradeline_success(client: TestClient, auth_headers, sample_tradeline):
+async def test_update_tradeline_success(client, auth_headers, sample_tradeline):
     """Test successful tradeline update."""
     with patch('services.database_optimizer.db_optimizer') as mock_db:
         # Mock existing tradeline
@@ -189,7 +188,7 @@ def test_update_tradeline_success(client: TestClient, auth_headers, sample_trade
         
         update_data = {"creditor_name": "Updated Credit Card"}
         
-        response = client.put(
+        response = await client.put(
             "/api/v1/tradelines/1",
             json=update_data,
             headers=auth_headers
@@ -202,14 +201,14 @@ def test_update_tradeline_success(client: TestClient, auth_headers, sample_trade
         assert data["data"]["creditor_name"] == "Updated Credit Card"
         assert "updated_at" in data["data"]
 
-def test_update_tradeline_not_found(client: TestClient, auth_headers):
+async def test_update_tradeline_not_found(client, auth_headers):
     """Test updating non-existent tradeline."""
     with patch('services.database_optimizer.db_optimizer') as mock_db:
         mock_db.get_tradeline_by_id.return_value = None
         
         update_data = {"creditor_name": "Updated Name"}
         
-        response = client.put(
+        response = await client.put(
             "/api/v1/tradelines/999",
             json=update_data,
             headers=auth_headers
@@ -220,7 +219,7 @@ def test_update_tradeline_not_found(client: TestClient, auth_headers):
         
         assert data["success"] is False
 
-def test_update_tradeline_no_data(client: TestClient, auth_headers, sample_tradeline):
+async def test_update_tradeline_no_data(client, auth_headers, sample_tradeline):
     """Test update with no data provided."""
     with patch('services.database_optimizer.db_optimizer') as mock_db:
         mock_db.get_tradeline_by_id.return_value = {
@@ -229,7 +228,7 @@ def test_update_tradeline_no_data(client: TestClient, auth_headers, sample_trade
             "user_id": "test_user_123"
         }
         
-        response = client.put(
+        response = await client.put(
             "/api/v1/tradelines/1",
             json={},
             headers=auth_headers
@@ -241,7 +240,7 @@ def test_update_tradeline_no_data(client: TestClient, auth_headers, sample_trade
         assert data["success"] is False
         assert "No update data provided" in data["error"]["message"]
 
-def test_delete_tradeline_success(client: TestClient, auth_headers, sample_tradeline):
+async def test_delete_tradeline_success(client, auth_headers, sample_tradeline):
     """Test successful tradeline deletion."""
     with patch('services.database_optimizer.db_optimizer') as mock_db:
         mock_db.get_tradeline_by_id.return_value = {
@@ -251,7 +250,7 @@ def test_delete_tradeline_success(client: TestClient, auth_headers, sample_trade
         }
         mock_db.delete_tradeline.return_value = True
         
-        response = client.delete("/api/v1/tradelines/1", headers=auth_headers)
+        response = await client.delete("/api/v1/tradelines/1", headers=auth_headers)
         
         assert response.status_code == 200
         data = response.json()
@@ -260,16 +259,16 @@ def test_delete_tradeline_success(client: TestClient, auth_headers, sample_trade
         assert data["data"]["id"] == "1"
         assert data["data"]["status"] == "deleted"
 
-def test_delete_tradeline_not_found(client: TestClient, auth_headers):
+async def test_delete_tradeline_not_found(client, auth_headers):
     """Test deleting non-existent tradeline."""
     with patch('services.database_optimizer.db_optimizer') as mock_db:
         mock_db.get_tradeline_by_id.return_value = None
         
-        response = client.delete("/api/v1/tradelines/999", headers=auth_headers)
+        response = await client.delete("/api/v1/tradelines/999", headers=auth_headers)
         
         assert response.status_code == 404
 
-def test_get_tradelines_stats(client: TestClient, auth_headers):
+async def test_get_tradelines_stats(client, auth_headers):
     """Test tradelines statistics endpoint."""
     with patch('services.database_optimizer.db_optimizer') as mock_db:
         mock_stats = {
@@ -286,11 +285,15 @@ def test_get_tradelines_stats(client: TestClient, auth_headers):
                 "Credit Card": 6,
                 "Auto Loan": 2,
                 "Mortgage": 2
-            }
+            },
+            "by_account_status": {
+                "Current": 8,
+                "Closed": 2
+            },
         }
         mock_db.get_tradelines_statistics.return_value = mock_stats
         
-        response = client.get("/api/v1/tradelines/stats/summary", headers=auth_headers)
+        response = await client.get("/api/v1/tradelines/stats/summary", headers=auth_headers)
         
         assert response.status_code == 200
         data = response.json()
@@ -300,7 +303,7 @@ def test_get_tradelines_stats(client: TestClient, auth_headers):
         assert data["data"]["positive_tradelines"] == 7
         assert "by_credit_bureau" in data["data"]
 
-def test_bulk_tradeline_update(client: TestClient, auth_headers, sample_tradelines):
+async def test_bulk_tradeline_update(client, auth_headers, sample_tradelines):
     """Test bulk update operation."""
     with patch('services.database_optimizer.db_optimizer') as mock_db:
         # Mock existing tradelines
@@ -317,7 +320,7 @@ def test_bulk_tradeline_update(client: TestClient, auth_headers, sample_tradelin
             "batch_size": 50
         }
         
-        response = client.post(
+        response = await client.post(
             "/api/v1/tradelines/bulk",
             json=bulk_operation,
             headers=auth_headers
@@ -330,7 +333,7 @@ def test_bulk_tradeline_update(client: TestClient, auth_headers, sample_tradelin
         assert data["data"]["operation"] == "update"
         assert data["data"]["affected_count"] == 2
 
-def test_bulk_tradeline_delete(client: TestClient, auth_headers, sample_tradelines):
+async def test_bulk_tradeline_delete(client, auth_headers, sample_tradelines):
     """Test bulk delete operation."""
     with patch('services.database_optimizer.db_optimizer') as mock_db:
         # Mock existing tradelines
@@ -346,7 +349,7 @@ def test_bulk_tradeline_delete(client: TestClient, auth_headers, sample_tradelin
             "batch_size": 50
         }
         
-        response = client.post(
+        response = await client.post(
             "/api/v1/tradelines/bulk",
             json=bulk_operation,
             headers=auth_headers
@@ -358,7 +361,7 @@ def test_bulk_tradeline_delete(client: TestClient, auth_headers, sample_tradelin
         assert data["success"] is True
         assert data["data"]["operation"] == "delete"
 
-def test_bulk_tradeline_dispute(client: TestClient, auth_headers, sample_tradelines):
+async def test_bulk_tradeline_dispute(client, auth_headers, sample_tradelines):
     """Test bulk dispute operation."""
     with patch('services.database_optimizer.db_optimizer') as mock_db:
         # Mock existing tradelines
@@ -374,7 +377,7 @@ def test_bulk_tradeline_dispute(client: TestClient, auth_headers, sample_tradeli
             "batch_size": 50
         }
         
-        response = client.post(
+        response = await client.post(
             "/api/v1/tradelines/bulk",
             json=bulk_operation,
             headers=auth_headers
@@ -387,7 +390,7 @@ def test_bulk_tradeline_dispute(client: TestClient, auth_headers, sample_tradeli
         assert data["data"]["operation"] == "dispute"
         assert data["data"]["affected_count"] == 3
 
-def test_unauthorized_access(client: TestClient):
+async def test_unauthorized_access(client):
     """Test endpoints without authentication."""
     endpoints = [
         "/api/v1/tradelines/",
@@ -396,10 +399,10 @@ def test_unauthorized_access(client: TestClient):
     ]
     
     for endpoint in endpoints:
-        response = client.get(endpoint)
+        response = await client.get(endpoint)
         assert response.status_code == 403  # Unauthorized
 
-def test_user_isolation(client: TestClient, auth_headers):
+async def test_user_isolation(client, auth_headers):
     """Test that users can only access their own tradelines."""
     with patch('services.database_optimizer.db_optimizer') as mock_db:
         # Mock tradeline belonging to different user
@@ -409,7 +412,7 @@ def test_user_isolation(client: TestClient, auth_headers):
             "creditor_name": "Test"
         }
         
-        response = client.get("/api/v1/tradelines/1", headers=auth_headers)
+        response = await client.get("/api/v1/tradelines/1", headers=auth_headers)
         
         # Should verify user ownership in the database call
         mock_db.get_tradeline_by_id.assert_called_with(1, "test_user_123")

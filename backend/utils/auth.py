@@ -1,8 +1,14 @@
-from typing import Optional, Dict
+from typing import Optional, Dict, List
+import os
 import uuid
 from fastapi import HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import datetime, timedelta
+from supabase import create_client, Client
+
+_supabase_url = os.getenv("SUPABASE_URL", "")
+_supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_ANON_KEY", "")
+supabase: Client = create_client(_supabase_url, _supabase_key) if _supabase_url and _supabase_key else None
 
 security = HTTPBearer()
 
@@ -28,23 +34,27 @@ class RateLimiter:
             return True
         return False
 
-async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Optional[uuid.UUID]:
+async def get_current_user_id(credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))) -> Optional[uuid.UUID]:
     """
-    Extract user ID from JWT token
-    Replace this with your actual authentication logic
+    Extract user ID from JWT token via Supabase server-side validation.
+    Returns None if no credentials are provided (optional auth).
+    Raises HTTPException(401) if credentials are invalid.
     """
-    try:
-        # TODO: Implement actual JWT token validation
-        # For now, returning None to allow anonymous uploads
+    if credentials is None:
         return None
-        
-        # Example implementation:
-        # token = credentials.credentials
-        # payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        # user_id = payload.get("sub")
-        # return uuid.UUID(user_id) if user_id else None
-        
-    except Exception as e:
+
+    if supabase is None:
+        raise HTTPException(status_code=503, detail="Authentication service unavailable")
+
+    try:
+        response = supabase.auth.get_user(credentials.credentials)
+        user = response.user
+        if user is None:
+            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+        return uuid.UUID(user.id)
+    except HTTPException:
+        raise
+    except Exception:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
 async def get_current_user(user_id: Optional[uuid.UUID] = Depends(get_current_user_id)) -> Dict:
@@ -55,9 +65,5 @@ async def get_current_user(user_id: Optional[uuid.UUID] = Depends(get_current_us
     if user_id is None:
         # For now, allow anonymous access for simplicity in development
         return {"user_id": "anonymous", "role": "guest"}
-    
-    # Mock user data for demonstration
-    if str(user_id) == "some-admin-uuid": # Replace with actual admin UUID
-        return {"user_id": str(user_id), "role": "admin"}
     
     return {"user_id": str(user_id), "role": "user"}

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Design Prototypes — Credit Clarity</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --base:#0A0F1E; --card:#0F1729; --elevated:#1A2340; --border:#1E2D47;
+      --gold:#D4A853; --gold-muted:rgba(212,168,83,0.12); --gold-border:rgba(212,168,83,0.25);
+      --text:#F0F4FF; --text-muted:#8892A4;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--base);color:var(--text);font-family:'Inter',system-ui,sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh}
+
+    /* HEADER */
+    header{padding:2rem 1.5rem 1rem;border-bottom:1px solid var(--border);max-width:1400px;margin:0 auto}
+    header h1{font-size:1.375rem;font-weight:700;margin-bottom:0.25rem}
+    .gold{color:var(--gold)}
+    header p{font-size:0.875rem;color:var(--text-muted)}
+    .run-id{font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem;font-family:monospace}
+
+    /* FILTER BAR */
+    .filter-bar{padding:1.25rem 1.5rem;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:0.75rem;align-items:center;max-width:1400px;margin:0 auto}
+    .filter-group{display:flex;gap:0.375rem;flex-wrap:wrap}
+    .filter-sep{width:1px;height:28px;background:var(--border);flex-shrink:0;align-self:center}
+    .filter-label{font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);align-self:center;white-space:nowrap}
+    .filter-btn{padding:0.375rem 0.875rem;border-radius:9999px;font-size:0.8125rem;font-weight:500;background:var(--elevated);border:1px solid var(--border);color:var(--text-muted);cursor:pointer;transition:all 150ms;font-family:'Inter',system-ui,sans-serif}
+    .filter-btn:hover{border-color:var(--gold-border);color:var(--text)}
+    .filter-btn.active{background:var(--gold-muted);border-color:var(--gold-border);color:var(--gold)}
+    .count-badge{margin-left:auto;font-size:0.8125rem;color:var(--text-muted)}
+
+    /* GRID */
+    .grid{display:grid;grid-template-columns:1fr;gap:1.5rem;padding:1.5rem;max-width:1400px;margin:0 auto}
+    @media(min-width:640px){.grid{grid-template-columns:repeat(2,1fr)}}
+    @media(min-width:1100px){.grid{grid-template-columns:repeat(3,1fr)}}
+
+    /* PROTO CARD */
+    .proto-card{background:var(--card);border:1px solid var(--border);border-radius:0.75rem;overflow:hidden;transition:transform 200ms,box-shadow 200ms,border-color 200ms;display:flex;flex-direction:column}
+    .proto-card:hover{transform:translateY(-3px);box-shadow:0 12px 32px rgba(0,0,0,0.6);border-color:var(--gold-border)}
+    .proto-preview{position:relative;height:220px;overflow:hidden;background:var(--elevated);border-bottom:1px solid var(--border)}
+    .proto-preview iframe{width:1280px;height:800px;border:none;transform:scale(0.265);transform-origin:top left;pointer-events:none}
+    .proto-info{padding:0.875rem 1rem 1rem;display:flex;flex-direction:column;gap:0.5rem;flex:1}
+    .proto-tags{display:flex;gap:0.375rem;flex-wrap:wrap}
+    .proto-tag{padding:0.2rem 0.575rem;border-radius:9999px;font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+    .tag-home{background:rgba(59,130,246,0.12);color:#60A5FA}
+    .tag-dashboard{background:rgba(168,85,247,0.12);color:#C084FC}
+    .tag-profile{background:rgba(34,197,94,0.1);color:#4ADE80}
+    .tag-s1{background:var(--gold-muted);color:var(--gold);border:1px solid var(--gold-border)}
+    .tag-s2{background:rgba(232,184,75,0.08);color:#E8B84B;border:1px solid rgba(232,184,75,0.2)}
+    .tag-s3{background:rgba(79,172,222,0.08);color:#4FACDE;border:1px solid rgba(79,172,222,0.2)}
+    .proto-name{font-size:0.9375rem;font-weight:600}
+    .proto-sub{font-size:0.75rem;color:var(--text-muted)}
+    .proto-open{display:inline-flex;align-items:center;gap:0.375rem;margin-top:0.5rem;font-size:0.8125rem;font-weight:600;color:var(--gold);text-decoration:none;transition:gap 150ms}
+    .proto-open:hover{gap:0.625rem}
+
+    /* EMPTY STATE */
+    .empty{display:none;grid-column:1/-1;text-align:center;padding:4rem 1rem;color:var(--text-muted)}
+    .empty.visible{display:block}
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Credit Clarity — <span class="gold">Design Prototypes</span></h1>
+  <p>18 prototypes · 3 styles × 2 layouts × 3 targets · Mobile-first responsive</p>
+  <div class="run-id">Run ID: design-run-20260307-74294</div>
+</header>
+
+<div class="filter-bar">
+  <span class="filter-label">Target:</span>
+  <div class="filter-group" id="target-group">
+    <button class="filter-btn active" data-target="all">All</button>
+    <button class="filter-btn" data-target="home">Home</button>
+    <button class="filter-btn" data-target="dashboard">Dashboard</button>
+    <button class="filter-btn" data-target="profile">Profile</button>
+  </div>
+  <div class="filter-sep"></div>
+  <span class="filter-label">Style:</span>
+  <div class="filter-group" id="style-group">
+    <button class="filter-btn active" data-style="all">All</button>
+    <button class="filter-btn" data-style="1">Midnight Trust</button>
+    <button class="filter-btn" data-style="2">Gold Standard</button>
+    <button class="filter-btn" data-style="3">Deep Navy Pro</button>
+  </div>
+  <span class="count-badge" id="count-badge">Showing 18 of 18</span>
+</div>
+
+<div class="grid" id="grid">
+
+  <!-- HOME -->
+  <div class="proto-card" data-target="home" data-style="1">
+    <div class="proto-preview"><iframe src="home-style-1-layout-1.html" title="Home – Midnight Trust – Split Hero" loading="lazy"></iframe></div>
+    <div class="proto-info">
+      <div class="proto-tags"><span class="proto-tag tag-home">Home</span><span class="proto-tag tag-s1">Midnight Trust</span><span class="proto-tag" style="background:var(--elevated);color:var(--text-muted)">Layout 1</span></div>
+      <div class="proto-name">Split Hero</div>
+      <div class="proto-sub">Two-column hero with score mockup, feature cards, steps</div>
+      <a href="home-style-1-layout-1.html" class="proto-open" target="_blank">Open prototype →</a>
+    </div>
+  </div>
+
+  <div class="proto-card" data-target="home" data-style="2">
+    <div class="proto-preview"><iframe src="home-style-2-layout-1.html" title="Home – Gold Standard – Split Hero" loading="lazy"></iframe></div>
+    <div class="proto-info">
+      <div class="proto-tags"><span class="proto-tag tag-home">Home</span><span class="proto-tag tag-s2">Gold Standard</span><span class="proto-tag" style="background:var(--elevated);color:var(--text-muted)">Layout 1</span></div>
+      <div class="proto-name">Split Hero</div>
+      <div class="proto-sub">Warm purple-navy surfaces, softer gold palette</div>
+      <a href="home-style-2-layout-1.html" class="proto-open" target="_blank">Open prototype →</a>
+    </div>
+  </div>
+
+  <div class="proto-card" data-target="home" data-style="3">
+    <div class="proto-preview"><iframe src="home-style-3-layout-1.html" title="Home – Deep Navy Pro – Split Hero" loading="lazy"></iframe></div>
+    <div class="proto-info">
+      <div class="proto-tags"><span class="proto-tag tag-home">Home</span><span class="proto-tag tag-s3">Deep Navy Pro</span><span class="proto-tag" style="background:var(--elevated);color:var(--text-muted)">Layout 1</span></div>
+      <div class="proto-name">Split Hero</div>
+      <div class="proto-sub">Deep navy + teal accent, dual-color system</div>
+      <a href="home-style-3-layout-1.html" class="proto-open" target="_blank">Open prototype →</a>
+    </div>
+  </div>
+
+  <div class="proto-card" data-target="home" data-style="1">
+    <div class="proto-preview"><iframe src="home-style-1-layout-2.html" title="Home – Midnight Trust – Fullwidth" loading="lazy"></iframe></div>
+    <div class="proto-info">
+      <div class="proto-tags"><span class="proto-tag tag-home">Home</span><span class="proto-tag tag-s1">Midnight Trust</span><span class="proto-tag" style="background:var(--elevated);color:var(--text-muted)">Layout 2</span></div>
+      <div class="proto-name">Fullwidth Centered Hero</div>
+      <div class="proto-sub">Centered hero, pricing, FAQ accordion, alternating features</div>
+      <a href="home-style-1-layout-2.html" class="proto-open" target="_blank">Open prototype →</a>
+    </div>
+  </div>
+
+  <div class="proto-card" data-target="home" data-style="2">
+    <div class="proto-preview"><iframe src="home-style-2-layout-2.html" title="Home – Gold Standard – Fullwidth" loading="lazy"></iframe></div>
+    <div class="proto-info">
+      <div class="proto-tags"><span class="proto-tag tag-home">Home</span><span class="proto-tag tag-s2">Gold Standard</span><span class="proto-tag" style="background:var(--elevated);color:var(--text-muted)">Layout 2</span></div>
+      <div class="proto-name">Fullwidth Centered Hero</div>
+      <div class="proto-sub">Warmer tones with fullwidth marketing layout</div>
+      <a href="home-style-2-layout-2.html" class="proto-open" target="_blank">Open prototype →</a>
+    </div>
+  </div>
+
+  <div class="proto-card" data-target="home" data-style="3">
+    <div class="proto-preview"><iframe src="home-style-3-layout-2.html" title="Home – Deep Navy Pro – Fullwidth" loading="lazy"></iframe></div>
+    <div class="proto-info">
+      <div class="proto-tags"><span class="proto-tag tag-home">Home</span><span class="proto-tag tag-s3">Deep Navy Pro</span><span class="proto-tag" style="background:var(--elevated);color:var(--text-muted)">Layout 2</span></div>
+      <div class="proto-name">Fullwidth Centered Hero</div>
+      <div class="proto-sub">Teal accents on Pro pricing card and feature icons</div>
+      <a href="home-style-3-layout-2.html" class="proto-open" target="_blank">Open prototype →</a>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="proto-card" data-target="dashboard" data-style="1">
+    <div class="proto-preview"><iframe src="dashboard-style-1-layout-1.html" title="Dashboard – Midnight Trust – Sidebar" loading="lazy"></iframe></div>
+    <div class="proto-info">
+      <div class="proto-tags"><span class="proto-tag tag-dashboard">Dashboard</span><span class="proto-tag tag-s1">Midnight Trust</span><span class="proto-tag" style="background:var(--elevated);color:var(--text-muted)">Layout 1</span></div>
+      <div class="proto-name">Sidebar App Shell</div>
+      <div class="proto-sub">Collapsible sidebar nav, tradelines table, dispute widgets</div>
+      <a href="dashboard-style-1-layout-1.html" class="proto-open" target="_blank">Open prototype →</a>
+    </div>
+  </div>
+
+  <div class="proto-card" data-target="dashboard" data-style="2">
+    <div class="proto-preview"><iframe src="dashboard-style-2-layout-1.html" title="Dashboard – Gold Standard – Sidebar" loading="lazy"></iframe></div>
+    <div class="proto-info">
+      <div class="proto-tags"><span class="proto-tag tag-dashboard">Dashboard</span><span class="proto-tag tag-s2">Gold Standard</span><span class="proto-tag" style="background:var(--elevated);color:var(--text-muted)">Layout 1</span></div>
+      <div class="proto-name">Sidebar App Shell</div>
+      <div class="proto-sub">Warmer purple-navy, gold standard palette</div>
+      <a href="dashboard-style-2-layout-1.html" class="proto-open" target="_blank">Open prototype →</a>
+    </div>
+  </div>
+
+  <div class="proto-card" data-target="dashboard" data-style="3">
+    <div class="proto-preview"><iframe src="dashboard-style-3-layout-1.html" title="Dashboard – Deep Navy Pro – Sidebar" loading="lazy"></iframe></div>
+    <div class="proto-info">
+      <div class="proto-tags"><span class="proto-tag tag-dashboard">Dashboard</span><span class="proto-tag tag-s3">Deep Navy Pro</span><span class="proto-tag" style="background:var(--elevated);color:var(--text-muted)">Layout 1</span></div>
+      <div class="proto-name">Sidebar App Shell</div>
+      <div class="proto-sub">Teal active nav item, deep navy base</div>
+      <a href="dashboard-style-3-layout-1.html" class="proto-open" target="_blank">Open prototype →</a>
+    </div>
+  </div>
+
+  <div class="proto-card" data-target="dashboard" data-style="1">
+    <div class="proto-preview"><iframe src="dashboard-style-1-layout-2.html" title="Dashboard – Midnight Trust – Top Nav" loading="lazy"></iframe></div>
+    <div class="proto-info">
+      <div class="proto-tags"><span class="proto-tag tag-dashboard">Dashboard</span><span class="proto-tag tag-s1">Midnight Trust</span><span class="proto-tag" style="background:var(--elevated);color:var(--text-muted)">Layout 2</span></div>
+      <div class="proto-name">Top Nav + Score Ring</div>
+      <div class="proto-sub">Sticky topnav, hero band with SVG credit score gauge</div>
+      <a href="dashboard-style-1-layout-2.html" class="proto-open" target="_blank">Open prototype →</a>
+    </div>
+  </div>
+
+  <div class="proto-card" data-target="dashboard" data-style="2">
+    <div class="proto-preview"><iframe src="dashboard-style-2-layout-2.html" title="Dashboard – Gold Standard – Top Nav" loading="lazy"></iframe></div>
+    <div class="proto-info">
+      <div class="proto-tags"><span class="proto-tag tag-dashboard">Dashboard</span><span class="proto-tag tag-s2">Gold Standard</span><span class="proto-tag" style="background:var(--elevated);color:var(--text-muted)">Layout 2</span></div>
+      <div class="proto-name">Top Nav + Score Ring</div>
+      <div class="proto-sub">Gold Standard palette with hero band layout</div>
+      <a href="dashboard-style-2-layout-2.html" class="proto-open" target="_blank">Open prototype →</a>
+    </div>
+  </div>
+
+  <div class="proto-card" data-target="dashboard" data-style="3">
+    <div class="proto-preview"><iframe src="dashboard-style-3-layout-2.html" title="Dashboard – Deep Navy Pro – Top Nav" loading="lazy"></iframe></div>
+    <div class="proto-info">
+      <div class="proto-tags"><span class="proto-tag tag-dashboard">Dashboard</span><span class="proto-tag tag-s3">Deep Navy Pro</span><span class="proto-tag" style="background:var(--elevated);color:var(--text-muted)">Layout 2</span></div>
+      <div class="proto-name">Top Nav + Score Ring</div>
+      <div class="proto-sub">Teal score ring stroke, dual-accent design</div>
+      <a href="dashboard-style-3-layout-2.html" class="proto-open" target="_blank">Open prototype →</a>
+    </div>
+  </div>
+
+  <!-- PROFILE -->
+  <div class="proto-card" data-target="profile" data-style="1">
+    <div class="proto-preview"><iframe src="profile-style-1-layout-1.html" title="Profile – Midnight Trust – Card Form" loading="lazy"></iframe></div>
+    <div class="proto-info">
+      <div class="proto-tags"><span class="proto-tag tag-profile">Profile</span><span class="proto-tag tag-s1">Midnight Trust</span><span class="proto-tag" style="background:var(--elevated);color:var(--text-muted)">Layout 1</span></div>
+      <div class="proto-name">Card Form</div>
+      <div class="proto-sub">Centered card form, clickable avatar, validated save</div>
+      <a href="profile-style-1-layout-1.html" class="proto-open" target="_blank">Open prototype →</a>
+    </div>
+  </div>
+
+  <div class="proto-card" data-target="profile" data-style="2">
+    <div class="proto-preview"><iframe src="profile-style-2-layout-1.html" title="Profile – Gold Standard – Card Form" loading="lazy"></iframe></div>
+    <div class="proto-info">
+      <div class="proto-tags"><span class="proto-tag tag-profile">Profile</span><span class="proto-tag tag-s2">Gold Standard</span><span class="proto-tag" style="background:var(--elevated);color:var(--text-muted)">Layout 1</span></div>
+      <div class="proto-name">Card Form</div>
+      <div class="proto-sub">Warmer purple-navy card styling</div>
+      <a href="profile-style-2-layout-1.html" class="proto-open" target="_blank">Open prototype →</a>
+    </div>
+  </div>
+
+  <div class="proto-card" data-target="profile" data-style="3">
+    <div class="proto-preview"><iframe src="profile-style-3-layout-1.html" title="Profile – Deep Navy Pro – Card Form" loading="lazy"></iframe></div>
+    <div class="proto-info">
+      <div class="proto-tags"><span class="proto-tag tag-profile">Profile</span><span class="proto-tag tag-s3">Deep Navy Pro</span><span class="proto-tag" style="background:var(--elevated);color:var(--text-muted)">Layout 1</span></div>
+      <div class="proto-name">Card Form</div>
+      <div class="proto-sub">Deepest navy base, subtle gold form focus</div>
+      <a href="profile-style-3-layout-1.html" class="proto-open" target="_blank">Open prototype →</a>
+    </div>
+  </div>
+
+  <div class="proto-card" data-target="profile" data-style="1">
+    <div class="proto-preview"><iframe src="profile-style-1-layout-2.html" title="Profile – Midnight Trust – Tab Panel" loading="lazy"></iframe></div>
+    <div class="proto-info">
+      <div class="proto-tags"><span class="proto-tag tag-profile">Profile</span><span class="proto-tag tag-s1">Midnight Trust</span><span class="proto-tag" style="background:var(--elevated);color:var(--text-muted)">Layout 2</span></div>
+      <div class="proto-name">Tab Panel</div>
+      <div class="proto-sub">Hero banner, horizontal tabs: Personal · Security · Notifications · Billing</div>
+      <a href="profile-style-1-layout-2.html" class="proto-open" target="_blank">Open prototype →</a>
+    </div>
+  </div>
+
+  <div class="proto-card" data-target="profile" data-style="2">
+    <div class="proto-preview"><iframe src="profile-style-2-layout-2.html" title="Profile – Gold Standard – Tab Panel" loading="lazy"></iframe></div>
+    <div class="proto-info">
+      <div class="proto-tags"><span class="proto-tag tag-profile">Profile</span><span class="proto-tag tag-s2">Gold Standard</span><span class="proto-tag" style="background:var(--elevated);color:var(--text-muted)">Layout 2</span></div>
+      <div class="proto-name">Tab Panel</div>
+      <div class="proto-sub">Gold Standard palette with tab navigation</div>
+      <a href="profile-style-2-layout-2.html" class="proto-open" target="_blank">Open prototype →</a>
+    </div>
+  </div>
+
+  <div class="proto-card" data-target="profile" data-style="3">
+    <div class="proto-preview"><iframe src="profile-style-3-layout-2.html" title="Profile – Deep Navy Pro – Tab Panel" loading="lazy"></iframe></div>
+    <div class="proto-info">
+      <div class="proto-tags"><span class="proto-tag tag-profile">Profile</span><span class="proto-tag tag-s3">Deep Navy Pro</span><span class="proto-tag" style="background:var(--elevated);color:var(--text-muted)">Layout 2</span></div>
+      <div class="proto-name">Tab Panel</div>
+      <div class="proto-sub">Teal active tab indicator, deep navy hero banner</div>
+      <a href="profile-style-3-layout-2.html" class="proto-open" target="_blank">Open prototype →</a>
+    </div>
+  </div>
+
+  <div class="empty" id="empty-state">No prototypes match the current filters.</div>
+</div>
+
+<script>
+const cards = document.querySelectorAll('.proto-card');
+let activeTarget = 'all', activeStyle = 'all';
+
+function filterCards() {
+  let visible = 0;
+  cards.forEach(card => {
+    const t = card.dataset.target;
+    const s = card.dataset.style;
+    const show = (activeTarget === 'all' || t === activeTarget) &&
+                 (activeStyle === 'all' || s === activeStyle);
+    card.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  document.getElementById('count-badge').textContent = `Showing ${visible} of 18`;
+  document.getElementById('empty-state').classList.toggle('visible', visible === 0);
+}
+
+document.getElementById('target-group').addEventListener('click', e => {
+  const btn = e.target.closest('.filter-btn');
+  if (!btn) return;
+  document.querySelectorAll('#target-group .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeTarget = btn.dataset.target;
+  filterCards();
+});
+
+document.getElementById('style-group').addEventListener('click', e => {
+  const btn = e.target.closest('.filter-btn');
+  if (!btn) return;
+  document.querySelectorAll('#style-group .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeStyle = btn.dataset.style;
+  filterCards();
+});
+</script>
+</body>
+</html>

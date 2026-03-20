@@ -2,10 +2,10 @@ import React, { useEffect, useCallback, useState, Suspense, useRef } from "react
 import { Card, CardContent } from "@/components/ui/card";
 import { toast as sonnerToast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
+import { supabase } from '@/integrations/supabase/client';
 import { saveTradelinesToDatabase, ParsedTradeline, loadAllTradelinesFromDatabase } from "@/utils/tradelineParser";
 import { updateTradelineFields } from "@/utils/fuzzyTradelineMatching";
 import { usePersistentTradelines } from "@/hooks/usePersistentTradelines";
-import { CreditNavbar } from "@/components/navbar/CreditNavbar";
 import { TradelinesStatus } from "@/components/ui/tradelines-status";
 import { ComponentLoading } from "@/components/ui/loading";
 
@@ -60,6 +60,9 @@ const CreditReportUploadPage = () => {
   
   // Debounce timer for auto-save
   const debounceTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+  // Ref to scroll to tradelines section after job completes
+  const tradelinesRef = useRef<HTMLDivElement>(null);
   
   // Use persistent tradelines hook
   const {
@@ -162,7 +165,9 @@ const CreditReportUploadPage = () => {
             if (status.result && status.result.tradelines_found > 0) {
               // Refresh tradelines from database since job saved them
               await refreshTradelines();
-              
+              await loadExistingTradelines();
+              tradelinesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
               sonnerToast.success("🎉 Credit Report Processing Complete!", {
                 description: `Successfully extracted ${status.result.tradelines_found} tradeline(s) and saved to your account`,
                 duration: 5000,
@@ -307,10 +312,20 @@ const CreditReportUploadPage = () => {
     }
   }, [user?.id, refreshTradelines]);
 
-  // Handle tradeline deletion
-  const handleTradelineDelete = useCallback((tradelineId: string) => {
-    setExtractedTradelines(prev => prev.filter(t => t.id !== tradelineId));
-    sonnerToast.success("Tradeline removed");
+  // Handle tradeline deletion — removes from DB then local state
+  const handleTradelineDelete = useCallback(async (tradelineId: string) => {
+    try {
+      const { error } = await supabase
+        .from('tradelines')
+        .delete()
+        .eq('id', tradelineId);
+      if (error) throw error;
+      setExtractedTradelines(prev => prev.filter(t => t.id !== tradelineId));
+      sonnerToast.success("Tradeline deleted");
+    } catch (err) {
+      console.error('[CreditReportUpload] Delete tradeline failed:', err);
+      sonnerToast.error("Failed to delete tradeline");
+    }
   }, []);
 
   // Handle tradeline updates with debounced auto-save
@@ -378,12 +393,11 @@ const CreditReportUploadPage = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground py-10 px-4 md:px-10">
-      <CreditNavbar />
       
       <div className="max-w-6xl mx-auto space-y-6">
         
         {/* Header */}
-        <Card>
+        <Card className="bg-white/5 border-white/10 backdrop-blur-sm">
           <CreditUploadHeader />
         </Card>
 
@@ -461,6 +475,7 @@ const CreditReportUploadPage = () => {
         </Suspense>
 
         {/* Tradelines Display */}
+        <div ref={tradelinesRef}>
         <Suspense fallback={<ComponentLoading message="Loading tradelines..." />}>
           {usePagination ? (
             <PaginatedTradelinesList
@@ -480,6 +495,7 @@ const CreditReportUploadPage = () => {
             )
           )}
         </Suspense>
+        </div>
 
         {/* Manual Tradeline Modal */}
         {showManualModal && (

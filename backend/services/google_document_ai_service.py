@@ -7,7 +7,7 @@ from datetime import datetime
 from google.cloud import documentai_v1beta3 as documentai
 from google.api_core.exceptions import GoogleAPIError
 
-from ..models.tradeline_models import DocumentType, ExtractedTable, ExtractedText, DocumentAIResult
+from models.tradeline_models import DocumentType, ExtractedTable, ExtractedText, DocumentAIResult
 from .pdf_chunker import PDFChunker
 
 logger = logging.getLogger(__name__)

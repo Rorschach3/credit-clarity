@@ -1,0 +1,143 @@
+{
+  "project_name": "credit-clarity",
+  "initialized_at": "2026-01-03T16:09:00.000Z",
+  "overview": {
+    "description": "AI-powered credit report analysis platform with OCR-based tradeline extraction, dispute letter generation, and comprehensive credit score tracking. Created by a former credit repair specialist to automate FCRA-compliant credit dispute workflows.",
+    "technology_stack": {
+      "languages": [
+        {
+          "name": "Python",
+          "file_count": 13633,
+          "primary": true
+        },
+        {
+          "name": "TypeScript",
+          "file_count": 355,
+          "primary": true
+        },
+        {
+          "name": "JavaScript",
+          "file_count": 59,
+          "primary": false
+        }
+      ],
+      "frameworks": [
+        "React 18",
+        "FastAPI",
+        "Tailwind CSS",
+        "Radix UI",
+        "TanStack Query",
+        "React Router",
+        "Supabase"
+      ],
+      "build_tools": [
+        "Vite",
+        "npm",
+        "pip",
+        "concurrently",
+        "uvicorn"
+      ],
+      "test_frameworks": [
+        "Jest",
+        "React Testing Library",
+        "pytest (inferred)"
+      ]
+    },
+    "architecture": {
+      "style": "Client-Server Monolithic Repository",
+      "layers": [
+        "presentation",
+        "business-logic",
+        "data-access"
+      ],
+      "patterns": [
+        "Decorator",
+        "Singleton",
+        "Provider",
+        "Lazy Loading",
+        "Multi-Level Cache",
+        "Repository"
+      ]
+    },
+    "key_components": [
+      {
+        "name": "App.tsx",
+        "path": "frontend/src/App.tsx",
+        "description": "Frontend entry point handling client-side routing, global providers (Auth, Query), and layout structure",
+        "importance": "high"
+      },
+      {
+        "name": "FastAPI Backend",
+        "path": "backend/main.py",
+        "description": "Backend entry point configuring middleware, CORS, routers, and server settings for credit report processing",
+        "importance": "high"
+      },
+      {
+        "name": "Multi-Level Cache",
+        "path": "backend/services/cache_service.py",
+        "description": "Hybrid caching mechanism combining Redis (distributed) and In-Memory (local) storage with fallback logic for tradeline data",
+        "importance": "high"
+      },
+      {
+        "name": "Tradeline Extraction Pipeline",
+        "path": "backend/services/tradeline_extraction/pipeline.py",
+        "description": "Core OCR and AI-powered tradeline parsing pipeline using Google Document AI and LLM-based extraction",
+        "importance": "high"
+      },
+      {
+        "name": "Auth Provider",
+        "path": "frontend/src/hooks/use-auth.tsx",
+        "description": "Context provider managing user authentication state and session persistence with Supabase",
+        "importance": "high"
+      },
+      {
+        "name": "Credit Dashboard",
+        "path": "frontend/src/components/dashboard/CreditDashboard.tsx",
+        "description": "Main dashboard component displaying credit score, tradelines, and dispute tracking interface",
+        "importance": "high"
+      },
+      {
+        "name": "PDF Processor",
+        "path": "backend/services/enhanced_pdf_processor.py",
+        "description": "Enhanced PDF processing service integrating OCR, text extraction, and AI-based tradeline parsing",
+        "importance": "high"
+      },
+      {
+        "name": "Dispute Generator",
+        "path": "frontend/src/pages/DisputeWizardPage.tsx",
+        "description": "Wizard-based UI for generating FCRA-compliant dispute letters with AI-powered content generation",
+        "importance": "medium"
+      },
+      {
+        "name": "Supabase Integration",
+        "path": "frontend/src/integrations/supabase",
+        "description": "Supabase client configuration and database access layer for PostgreSQL and authentication",
+        "importance": "high"
+      },
+      {
+        "name": "Tradeline Normalizer",
+        "path": "backend/utils/tradeline_normalizer.py",
+        "description": "Data normalization and validation utilities for extracted tradeline information",
+        "importance": "medium"
+      }
+    ]
+  },
+  "features": [],
+  "development_index": {
+    "feature": [],
+    "enhancement": [],
+    "bugfix": [],
+    "refactor": [],
+    "docs": []
+  },
+  "statistics": {
+    "total_features": 0,
+    "total_sessions": 0,
+    "last_updated": "2026-01-03T16:09:00.000Z"
+  },
+  "_metadata": {
+    "initialized_by": "cli-explore-agent",
+    "analysis_timestamp": "2026-01-03T16:09:00.000Z",
+    "analysis_mode": "deep-scan"
+  }
+}

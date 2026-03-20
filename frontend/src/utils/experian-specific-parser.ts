@@ -18,16 +18,16 @@ export const EXPERIAN_PATTERNS = {
   },
   
   // Account delimiter - company name followed by address block
-  accountDelimiter: /^([A-Z][A-Z\s&'-]+(?:BANK|CARD|CREDIT|UNION|FINANCIAL|CORP|INC|LLC|CO|CAPITAL|CHASE|WELLS|CITI|DISCOVER|AMEX|AMERICAN\s+EXPRESS))\s*\n.*Address:/gim,
+  accountDelimiter: /^([A-Z][A-Z\s&'-]+(?:BANK|CARD|CREDIT|UNION|FINANCIAL|CORP|INC|LLC|CO|CAPITAL|CHASE|WELLS|CITI|DISCOVER|AMEX|AMERICAN\s+EXPRESS))\s*[\r\n]+.*Address:/gim,
   
   // Alternative account patterns
   creditorPatterns: [
     // Standard format: COMPANY NAME on its own line
     /^([A-Z\s&'-]{4,}(?:BANK|CARD|CREDIT|UNION|FINANCIAL|CORP|INC|LLC|CO|CAPITAL|CHASE|WELLS|CITI|DISCOVER|AMEX|AMERICAN\s+EXPRESS))\s*$/gim,
     // Company name followed by Address:
-    /^([A-Z\s&'-]+(?:BANK|CARD|CREDIT|UNION|FINANCIAL|CORP|INC|LLC|CO|CAPITAL|CHASE|WELLS|CITI|DISCOVER|AMEX|AMERICAN\s+EXPRESS))\s*\nAddress:/gim,
+    /^([A-Z\s&'-]+(?:BANK|CARD|CREDIT|UNION|FINANCIAL|CORP|INC|LLC|CO|CAPITAL|CHASE|WELLS|CITI|DISCOVER|AMEX|AMERICAN\s+EXPRESS))\s*[\r\n]+Address:/gim,
     // Generic all caps company name
-    /^([A-Z\s&'-]{8,})\s*\nAddress:/gim
+    /^([A-Z\s&'-]{8,})\s*[\r\n]+Address:/gim
   ],
   
   // Account number - Experian specific format
@@ -190,7 +190,7 @@ export class ExperianSpecificParser {
    */
   private splitIntoAccountBlocks(sectionText: string): string[] {
     const blocks: string[] = [];
-    const lines = sectionText.split('\\n');
+    const lines = sectionText.split('\n');
     
     let currentBlock = '';
     let inAccountBlock = false;
@@ -209,10 +209,10 @@ export class ExperianSpecificParser {
         }
         
         // Start new block
-        currentBlock = line + '\\n';
+        currentBlock = line + '\n';
         inAccountBlock = true;
       } else if (inAccountBlock) {
-        currentBlock += line + '\\n';
+        currentBlock += line + '\n';
       }
     }
     
@@ -292,7 +292,7 @@ export class ExperianSpecificParser {
    * Extract creditor name from account block
    */
   private extractCreditorName(blockText: string): string {
-    const lines = blockText.split('\\n');
+    const lines = blockText.split('\n');
     
     // Try each creditor pattern
     for (const pattern of EXPERIAN_PATTERNS.creditorPatterns) {
@@ -320,7 +320,8 @@ export class ExperianSpecificParser {
     for (const pattern of patterns) {
       const match = text.match(pattern);
       if (match && match[1]) {
-        return match[1].replace(/[^\\d.,]/g, '').replace(/,/g, '');
+        // Remove non-numeric characters except digits and decimal points, then remove commas
+        return match[1].replace(/[^\d.]/g, '');
       }
     }
     return '';
@@ -331,8 +332,8 @@ export class ExperianSpecificParser {
    */
   private cleanCreditorName(name: string): string {
     return name
-      .replace(/[^A-Za-z0-9\\s&'-]/g, ' ')
-      .replace(/\\s+/g, ' ')
+      .replace(/[^A-Za-z0-9\s&'-]/g, ' ')
+      .replace(/\s+/g, ' ')
       .trim()
       .toUpperCase();
   }
@@ -412,29 +413,29 @@ export class ExperianSpecificParser {
    */
   private normalizeDateFormat(dateStr: string): string {
     if (!dateStr) return '';
-    
+
     // Handle MM/YYYY format from Experian
-    const mmYYYYMatch = dateStr.match(/^(\\d{1,2})\\/(\\d{4})$/);
+    const mmYYYYMatch = dateStr.match(/^(\d{1,2})\/(\d{4})$/);
     if (mmYYYYMatch) {
       const month = mmYYYYMatch[1].padStart(2, '0');
       const year = mmYYYYMatch[2];
       return `${year}-${month}-01`; // Use first of month as default
     }
-    
+
     // Handle standard MM/DD/YYYY format
-    const mmDDYYYYMatch = dateStr.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{2,4})$/);
+    const mmDDYYYYMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
     if (mmDDYYYYMatch) {
       const month = mmDDYYYYMatch[1].padStart(2, '0');
       const day = mmDDYYYYMatch[2].padStart(2, '0');
       let year = mmDDYYYYMatch[3];
-      
+
       if (year.length === 2) {
         year = parseInt(year) > 50 ? `19${year}` : `20${year}`;
       }
-      
+
       return `${year}-${month}-${day}`;
     }
-    
+
     return dateStr;
   }
   
@@ -447,7 +448,7 @@ export class ExperianSpecificParser {
       tradeline.creditor_name.length > 3 &&
       tradeline.account_number &&
       tradeline.account_number.trim() !== '' &&
-      !tradeline.creditor_name.includes('\\n') &&
+      !tradeline.creditor_name.includes('\n') &&
       !tradeline.creditor_name.includes('Address:')
     );
   }

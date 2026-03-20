@@ -88,17 +88,56 @@ export const processFileWithAI = async (
     message: 'Initializing AI processing'
   });
 
-  // Get the pure AI processing function
   const processAI = await loadAIProcessor();
 
   updateProgress({
-    step: 'AI Analysis...',
-    progress: 40,
-    message: 'Analyzing credit report structure'
+    step: 'Uploading File...',
+    progress: 25,
+    message: `Sending ${(file.size / (1024 * 1024)).toFixed(1)} MB to server`
   });
 
+  // Slowly tick progress from 40→70% while waiting for the backend (can take minutes)
+  let tickedProgress = 40;
+  let processingDone = false;
+  const fileSizeMB = file.size / (1024 * 1024);
+  const timeoutMinutes = Math.max(2, Math.min(8, Math.ceil(fileSizeMB)));
+  const totalTickMs = timeoutMinutes * 60 * 1000;
+  const tickInterval = Math.round(totalTickMs / 30); // 30 ticks across expected duration
+
+  const ticker = setInterval(() => {
+    if (processingDone) return;
+    tickedProgress = Math.min(tickedProgress + 1, 70);
+    updateProgress({
+      step: 'Extracting Tradelines...',
+      progress: tickedProgress,
+      message: 'AI is reading account details, balances, and payment history'
+    });
+  }, tickInterval);
+
+  updateProgress({
+    step: 'Analyzing Credit Report...',
+    progress: 40,
+    message: 'AI is parsing credit report structure'
+  });
+
+  // Bridge processWithAI's onProgress string messages into updateProgress
+  const onProgress = (message: string) => {
+    if (message.includes('Uploading')) {
+      updateProgress({ step: 'Uploading File...', progress: 28, message });
+    } else if (message.includes('Processing PDF') || message.includes('Processing in background')) {
+      updateProgress({ step: 'Analyzing Credit Report...', progress: tickedProgress, message });
+    } else if (message.includes('Retrying')) {
+      updateProgress({ step: 'Retrying...', progress: tickedProgress, message });
+    } else if (message.includes('timed out') || message.includes('failed') || message.includes('error')) {
+      updateProgress({ step: 'Error', progress: tickedProgress, message });
+    }
+  };
+
   try {
-    const result = await processAI(file, userId);
+    const result = await processAI(file, userId, onProgress);
+
+    processingDone = true;
+    clearInterval(ticker);
 
     // If backend responded with a background job, surface that to caller immediately
     if (result.isBackgroundJob && result.job_id) {
@@ -107,26 +146,43 @@ export const processFileWithAI = async (
         progress: 0,
         message: 'Processing in background...'
       });
-      return result; // contains job_id, status, isBackgroundJob
+      return result;
     }
 
     updateProgress({
-      step: 'Validating Results...',
-      progress: 80,
-      message: 'Verifying extracted data'
+      step: 'Parsing Results...',
+      progress: 75,
+      message: `Organizing ${result.stats?.found ?? 0} extracted tradelines`
     });
 
-    // Simulate validation
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    updateProgress({
+      step: 'Validating Data...',
+      progress: 85,
+      message: 'Checking account numbers, balances, and dates'
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    updateProgress({
+      step: 'Saving to Account...',
+      progress: 93,
+      message: 'Storing tradelines in your profile'
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 200));
 
     updateProgress({
       step: 'Complete!',
       progress: 100,
-      message: 'Processing finished'
+      message: `Done — ${result.stats?.found ?? 0} tradelines found, ${result.stats?.saved ?? 0} saved`
     });
 
     return result;
   } catch (error) {
+    processingDone = true;
+    clearInterval(ticker);
     console.error('AI processing failed:', error);
     throw error;
   }

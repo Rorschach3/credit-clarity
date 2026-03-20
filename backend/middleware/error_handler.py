@@ -3,14 +3,15 @@ Global exception handler middleware.
 Converts exceptions to error envelope format and adds request_id to all responses.
 """
 import logging
+import time
 import uuid
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Callable, Dict, Optional
+from typing import Any, AsyncGenerator, Dict, Optional, Tuple, List
 
-from fastapi import Request, Response
+from fastapi import HTTPException, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import ASGIApp
+from starlette.types import ASGIApp, Scope, Receive, Send
 
 from core.exceptions import CreditClarityException
 from core.response import ResponseFormatter
@@ -37,7 +38,12 @@ import contextvars
 request_id_context = contextvars.ContextVar("request_id", default="")
 
 
-class ErrorHandlerMiddleware(BaseHTTPMiddleware):
+def _has_header(headers: List[Tuple[bytes, bytes]], name: bytes) -> bool:
+    name_l = name.lower()
+    return any(k.lower() == name_l for (k, _v) in headers)
+
+
+class ErrorHandlerMiddleware:
     """
     Middleware for consistent error handling across all API responses.
 
@@ -49,136 +55,93 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
     """
 
     def __init__(self, app: ASGIApp):
-        super().__init__(app)
+        self.app = app
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        """Process request with error handling."""
-        # Generate request_id
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
         request_id = ResponseFormatter.generate_request_id()
-        request_id_context.set(request_id)
+        token = request_id_context.set(request_id)
+        scope.setdefault("state", {})["request_id"] = request_id
 
-        # Add request_id to request state for access in route handlers
-        request.state.request_id = request_id
+        method = scope.get("method", "UNKNOWN")
+        path = scope.get("path", "")
+        logger.info(f"[{request_id}] {method} {path}")
 
-        # Log request
-        logger.info(f"[{request_id}] {request.method} {request.url.path}")
+        start_time = time.perf_counter()
+
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                if not _has_header(headers, b"x-request-id"):
+                    headers.append((b"x-request-id", request_id.encode("ascii")))
+                if not _has_header(headers, b"x-process-time"):
+                    headers.append((b"x-process-time", f"{(time.perf_counter() - start_time):.6f}".encode("ascii")))
+                path = scope.get("path", "")
+                if isinstance(path, str) and path.startswith("/api/v1/"):
+                    if not _has_header(headers, b"x-api-version"):
+                        headers.append((b"x-api-version", b"1.0"))
+                    if not _has_header(headers, b"x-api-revision"):
+                        headers.append((b"x-api-revision", b"2025.01"))
+                    if not _has_header(headers, b"x-api-architecture"):
+                        headers.append((b"x-api-architecture", b"modular"))
+                message["headers"] = headers
+            await send(message)
 
         try:
-            # Process request
-            response = await call_next(request)
-
-            # Add request_id to response headers
-            if isinstance(response, JSONResponse):
-                # For JSON responses, we can modify the body
-                # This is handled by the response formatter in route handlers
-                pass
-
-            # Add request_id to response headers
-            response.headers["X-Request-ID"] = request_id
-
-            return response
-
+            await self.app(scope, receive, send_wrapper)
         except CreditClarityException as exc:
-            # Handle known application exceptions
             logger.error(f"[{request_id}] App exception: {exc.error_code} - {exc.message}")
-
-            error_response = ResponseFormatter.from_exception(exc, request_id)
-            return JSONResponse(
+            response = JSONResponse(
                 status_code=exc.status_code,
-                content=error_response,
-                headers={"X-Request-ID": request_id}
+                content=ResponseFormatter.from_exception(exc, request_id),
             )
-
-        except ValueError as exc:
-            # Handle validation errors
-            logger.warning(f"[{request_id}] Value error: {str(exc)}")
-
-            error_response = ResponseFormatter.error_response(
-                code="VALIDATION_ERROR",
-                message=str(exc) or "Invalid value provided",
-                request_id=request_id
+            await response(scope, receive, send_wrapper)
+        except HTTPException as exc:
+            status = exc.status_code
+            if status == 404:
+                code = "RESOURCE_NOT_FOUND"
+            elif status == 401:
+                code = "UNAUTHORIZED"
+            elif status == 403:
+                code = "FORBIDDEN"
+            else:
+                code = "HTTP_ERROR"
+            response = JSONResponse(
+                status_code=status,
+                content=ResponseFormatter.error_response(
+                    code=code,
+                    message=str(exc.detail) if exc.detail else "Request failed",
+                    request_id=request_id,
+                ),
             )
-            return JSONResponse(
-                status_code=400,
-                content=error_response,
-                headers={"X-Request-ID": request_id}
+            await response(scope, receive, send_wrapper)
+        except RequestValidationError as exc:
+            response = JSONResponse(
+                status_code=422,
+                content=ResponseFormatter.error_response(
+                    code="VALIDATION_ERROR",
+                    message="Request validation failed",
+                    details={"errors": exc.errors()},
+                    request_id=request_id,
+                ),
             )
-
-        except PermissionError as exc:
-            # Handle permission errors
-            logger.warning(f"[{request_id}] Permission denied: {str(exc)}")
-
-            error_response = ResponseFormatter.error_response(
-                code="PERMISSION_DENIED",
-                message=str(exc) or "You don't have permission to perform this action",
-                request_id=request_id
-            )
-            return JSONResponse(
-                status_code=403,
-                content=error_response,
-                headers={"X-Request-ID": request_id}
-            )
-
-        except FileNotFoundError as exc:
-            # Handle file not found errors
-            logger.warning(f"[{request_id}] File not found: {str(exc)}")
-
-            error_response = ResponseFormatter.error_response(
-                code="RESOURCE_NOT_FOUND",
-                message=str(exc) or "Requested resource not found",
-                request_id=request_id
-            )
-            return JSONResponse(
-                status_code=404,
-                content=error_response,
-                headers={"X-Request-ID": request_id}
-            )
-
-        except ConnectionError as exc:
-            # Handle connection errors (database, redis, etc.)
-            logger.error(f"[{request_id}] Connection error: {str(exc)}")
-
-            error_response = ResponseFormatter.error_response(
-                code="CONNECTION_ERROR",
-                message="Unable to connect to required service. Please try again later.",
-                details={"original_error": str(exc)} if str(exc) else None,
-                request_id=request_id
-            )
-            return JSONResponse(
-                status_code=503,
-                content=error_response,
-                headers={"X-Request-ID": request_id}
-            )
-
-        except TimeoutError as exc:
-            # Handle timeout errors
-            logger.warning(f"[{request_id}] Timeout error: {str(exc)}")
-
-            error_response = ResponseFormatter.error_response(
-                code="REQUEST_TIMEOUT",
-                message="The request timed out. Please try again.",
-                request_id=request_id
-            )
-            return JSONResponse(
-                status_code=408,
-                content=error_response,
-                headers={"X-Request-ID": request_id}
-            )
-
+            await response(scope, receive, send_wrapper)
         except Exception as exc:
-            # Handle unexpected exceptions
             logger.exception(f"[{request_id}] Unexpected error: {str(exc)}")
-
-            error_response = ResponseFormatter.error_response(
-                code="INTERNAL_ERROR",
-                message="An unexpected error occurred. Please try again later.",
-                request_id=request_id
-            )
-            return JSONResponse(
+            response = JSONResponse(
                 status_code=500,
-                content=error_response,
-                headers={"X-Request-ID": request_id}
+                content=ResponseFormatter.error_response(
+                    code="INTERNAL_ERROR",
+                    message="An unexpected error occurred. Please try again later.",
+                    request_id=request_id,
+                ),
             )
+            await response(scope, receive, send_wrapper)
+        finally:
+            request_id_context.reset(token)
 
 
 def get_current_request_id() -> str:
@@ -251,6 +214,46 @@ class ExceptionHandlers:
             headers={"X-Request-ID": request_id}
         )
 
+    @staticmethod
+    async def handle_http_exception(
+        request: Request,
+        exc: HTTPException,
+    ) -> JSONResponse:
+        """Handle FastAPI HTTPException with the standard error envelope."""
+        request_id = getattr(request.state, "request_id", None) or ResponseFormatter.generate_request_id()
+
+        status = exc.status_code
+        if status == 404:
+            code = "RESOURCE_NOT_FOUND"
+        elif status == 401:
+            code = "UNAUTHORIZED"
+        elif status == 403:
+            code = "FORBIDDEN"
+        else:
+            code = "HTTP_ERROR"
+
+        error_response = ResponseFormatter.error_response(
+            code=code,
+            message=str(exc.detail) if exc.detail else "Request failed",
+            request_id=request_id,
+        )
+        return JSONResponse(status_code=status, content=error_response, headers={"X-Request-ID": request_id})
+
+    @staticmethod
+    async def handle_validation_exception(
+        request: Request,
+        exc: RequestValidationError,
+    ) -> JSONResponse:
+        """Handle request body/query validation errors with the standard error envelope."""
+        request_id = getattr(request.state, "request_id", None) or ResponseFormatter.generate_request_id()
+        error_response = ResponseFormatter.error_response(
+            code="VALIDATION_ERROR",
+            message="Request validation failed",
+            details={"errors": exc.errors()},
+            request_id=request_id,
+        )
+        return JSONResponse(status_code=422, content=error_response, headers={"X-Request-ID": request_id})
+
 
 def setup_exception_handlers(app) -> None:
     """
@@ -260,5 +263,7 @@ def setup_exception_handlers(app) -> None:
         app: FastAPI application instance
     """
     # Register custom exception handlers
+    app.add_exception_handler(HTTPException, ExceptionHandlers.handle_http_exception)
+    app.add_exception_handler(RequestValidationError, ExceptionHandlers.handle_validation_exception)
     app.add_exception_handler(CreditClarityException, ExceptionHandlers.handle_credit_clarity_exception)
     app.add_exception_handler(Exception, ExceptionHandlers.handle_generic_exception)

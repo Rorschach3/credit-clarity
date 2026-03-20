@@ -3,13 +3,17 @@ Integration tests for error handling.
 Tests the full error handling pipeline including middleware.
 """
 import pytest
+import pytest_asyncio
 from unittest.mock import AsyncMock, patch, MagicMock
-from fastapi.testclient import TestClient
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+import httpx
+from httpx import AsyncClient
 
 from core.exceptions import CreditClarityException, ValidationError, AuthenticationError
 from core.response import ResponseFormatter
 from middleware.error_handler import ErrorHandlerMiddleware, setup_exception_handlers
+
+pytestmark = pytest.mark.asyncio
 
 
 def create_test_app():
@@ -59,13 +63,15 @@ class TestErrorHandlingIntegration:
     def app(self):
         return create_test_app()
 
-    @pytest.fixture
-    def client(self, app):
-        return TestClient(app, raise_server_exceptions=False)
+    @pytest_asyncio.fixture
+    async def client(self, app):
+        transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            yield client
 
-    def test_success_endpoint(self, client):
+    async def test_success_endpoint(self, client):
         """Test successful endpoint returns correct format."""
-        response = client.get("/success")
+        response = await client.get("/success")
 
         assert response.status_code == 200
         data = response.json()
@@ -75,9 +81,9 @@ class TestErrorHandlingIntegration:
         assert "request_id" in data
         assert data["request_id"].startswith("req-")
 
-    def test_validation_error(self, client):
+    async def test_validation_error(self, client):
         """Test validation error returns correct format."""
-        response = client.get("/error/validation")
+        response = await client.get("/error/validation")
 
         assert response.status_code == 400
         data = response.json()
@@ -86,9 +92,9 @@ class TestErrorHandlingIntegration:
         assert data["error"]["field"] == "email"
         assert "request_id" in data
 
-    def test_auth_error(self, client):
+    async def test_auth_error(self, client):
         """Test authentication error returns correct format."""
-        response = client.get("/error/auth")
+        response = await client.get("/error/auth")
 
         assert response.status_code == 401
         data = response.json()
@@ -96,9 +102,9 @@ class TestErrorHandlingIntegration:
         assert data["error"]["code"] == "AUTHENTICATION_ERROR"
         assert "request_id" in data
 
-    def test_custom_exception(self, client):
+    async def test_custom_exception(self, client):
         """Test custom exception returns correct format."""
-        response = client.get("/error/custom")
+        response = await client.get("/error/custom")
 
         assert response.status_code == 422
         data = response.json()
@@ -107,9 +113,9 @@ class TestErrorHandlingIntegration:
         assert data["error"]["message"] == "Custom error message"
         assert "request_id" in data
 
-    def test_generic_error(self, client):
+    async def test_generic_error(self, client):
         """Test generic exception returns correct format."""
-        response = client.get("/error/generic")
+        response = await client.get("/error/generic")
 
         assert response.status_code == 500
         data = response.json()
@@ -117,9 +123,9 @@ class TestErrorHandlingIntegration:
         assert data["error"]["code"] == "INTERNAL_ERROR"
         assert "request_id" in data
 
-    def test_not_found_error(self, client):
+    async def test_not_found_error(self, client):
         """Test not found error returns correct format."""
-        response = client.get("/error/not-found")
+        response = await client.get("/error/not-found")
 
         assert response.status_code == 404
         data = response.json()
@@ -135,20 +141,22 @@ class TestErrorHandlingWithHeaders:
     def app(self):
         return create_test_app()
 
-    @pytest.fixture
-    def client(self, app):
-        return TestClient(app, raise_server_exceptions=False)
+    @pytest_asyncio.fixture
+    async def client(self, app):
+        transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            yield client
 
-    def test_request_id_in_response_headers(self, client):
+    async def test_request_id_in_response_headers(self, client):
         """Test request ID is included in response headers."""
-        response = client.get("/success")
+        response = await client.get("/success")
 
         assert "x-request-id" in response.headers
         assert response.headers["x-request-id"].startswith("req-")
 
-    def test_error_request_id_in_headers(self, client):
+    async def test_error_request_id_in_headers(self, client):
         """Test request ID is included in error response headers."""
-        response = client.get("/error/validation")
+        response = await client.get("/error/validation")
 
         assert "x-request-id" in response.headers
         assert response.headers["x-request-id"].startswith("req-")
@@ -173,21 +181,23 @@ class TestErrorHandlingEdgeCases:
 
         return app
 
-    @pytest.fixture
-    def client(self, app):
-        return TestClient(app, raise_server_exceptions=False)
+    @pytest_asyncio.fixture
+    async def client(self, app):
+        transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            yield client
 
-    def test_exception_with_empty_message(self, client):
+    async def test_exception_with_empty_message(self, client):
         """Test handling exception with empty message."""
-        response = client.get("/exception/no-message")
+        response = await client.get("/exception/no-message")
 
         assert response.status_code == 500
         data = response.json()
         assert data["success"] is False
 
-    def test_exception_with_empty_code(self, client):
+    async def test_exception_with_empty_code(self, client):
         """Test handling exception with empty code."""
-        response = client.get("/exception/no-code")
+        response = await client.get("/exception/no-code")
 
         assert response.status_code == 500
         data = response.json()
@@ -204,7 +214,7 @@ class TestErrorHandlingWithRouteContext:
         setup_exception_handlers(app)
 
         @app.get("/context")
-        async def with_context(request):
+        async def with_context(request: Request):
             # Access request state
             request_id = getattr(request.state, "request_id", None)
             return ResponseFormatter.success_response(
@@ -212,26 +222,28 @@ class TestErrorHandlingWithRouteContext:
             )
 
         @app.get("/context-error")
-        async def context_error(request):
+        async def context_error(request: Request):
             raise ValidationError("Error in context", field="test")
 
         return app
 
-    @pytest.fixture
-    def client(self, app):
-        return TestClient(app, raise_server_exceptions=False)
+    @pytest_asyncio.fixture
+    async def client(self, app):
+        transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            yield client
 
-    def test_request_id_in_route_context(self, client):
+    async def test_request_id_in_route_context(self, client):
         """Test request ID is available in route context."""
-        response = client.get("/context")
+        response = await client.get("/context")
 
         assert response.status_code == 200
         data = response.json()
         assert data["data"]["request_id"].startswith("req-")
 
-    def test_context_preserved_on_error(self, client):
+    async def test_context_preserved_on_error(self, client):
         """Test request context is preserved on error."""
-        response = client.get("/context-error")
+        response = await client.get("/context-error")
 
         assert response.status_code == 400
         data = response.json()

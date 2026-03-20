@@ -10,19 +10,19 @@ export const CreditUploadHeader: React.FC = () => {
         Credit Report Upload
       </CardTitle>
       <div className="space-y-2">
-        <p className="text-muted-foreground">
+        <p className="text-slate-300">
           Upload your credit report PDF to automatically extract tradeline information
         </p>
         <div className="flex items-center justify-center gap-4 text-sm">
-          <div className="flex items-center gap-1 text-green-600">
+          <div className="flex items-center gap-1 text-green-400">
             <FileText className="h-4 w-4" />
             <span>PDF Format</span>
           </div>
-          <div className="flex items-center gap-1 text-blue-600">
+          <div className="flex items-center gap-1 text-blue-400">
             <span>•</span>
             <span>AI-Powered</span>
           </div>
-          <div className="flex items-center gap-1 text-purple-600">
+          <div className="flex items-center gap-1 text-purple-400">
             <span>•</span>
             <span>Secure Processing</span>
           </div>

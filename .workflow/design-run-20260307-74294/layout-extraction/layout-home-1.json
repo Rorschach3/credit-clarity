@@ -1,0 +1,42 @@
+{
+  "template": {
+    "id": "home-layout-1",
+    "target": "home",
+    "variant": 1,
+    "name": "Hero-Centered Split",
+    "device": "responsive",
+    "dom_structure": {
+      "sections": [
+        { "id": "nav", "tag": "header", "role": "banner", "sticky": true, "children": ["logo", "nav-links", "cta-btn", "mobile-menu"] },
+        { "id": "hero", "tag": "section", "aria-label": "Hero", "layout": "two-column-split", "children": ["hero-text-group", "hero-visual"], "full_height": true },
+        { "id": "trust-bar", "tag": "section", "aria-label": "Trust indicators", "layout": "horizontal-scroll-sm", "children": ["stat-1", "stat-2", "stat-3", "stat-4"] },
+        { "id": "features", "tag": "section", "aria-label": "Features", "layout": "3-col-grid", "children": ["feature-card-1", "feature-card-2", "feature-card-3"] },
+        { "id": "how-it-works", "tag": "section", "aria-label": "How it works", "layout": "numbered-steps", "children": ["step-1", "step-2", "step-3"] },
+        { "id": "social-proof", "tag": "section", "aria-label": "Testimonials", "layout": "card-carousel", "children": ["testimonial-1", "testimonial-2", "testimonial-3"] },
+        { "id": "cta-band", "tag": "section", "aria-label": "Call to action", "layout": "centered-band", "children": ["cta-headline", "cta-subtext", "cta-button"] },
+        { "id": "footer", "tag": "footer", "role": "contentinfo", "layout": "4-col-grid", "children": ["footer-brand", "footer-links-1", "footer-links-2", "footer-legal"] }
+      ]
+    },
+    "css_layout_rules": {
+      "container": "max-width: 1280px; margin: 0 auto; padding: 0 1rem;",
+      "nav": "position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; backdrop-filter: blur(12px);",
+      "hero": "display: grid; grid-template-columns: 1fr; gap: 2rem; min-height: 100svh; align-items: center; padding: 6rem 1.5rem 4rem;",
+      "hero_md": "@media(min-width:768px){ .hero { grid-template-columns: 1fr 1fr; padding: 8rem 2rem 6rem; } }",
+      "trust_bar": "display: flex; gap: 2rem; overflow-x: auto; padding: 2rem 1.5rem; -webkit-overflow-scrolling: touch;",
+      "features": "display: grid; grid-template-columns: 1fr; gap: 1.5rem; padding: 5rem 1.5rem;",
+      "features_md": "@media(min-width:768px){ .features-grid { grid-template-columns: repeat(3, 1fr); } }",
+      "steps": "display: flex; flex-direction: column; gap: 2rem; padding: 5rem 1.5rem;",
+      "steps_md": "@media(min-width:768px){ .steps { flex-direction: row; } }",
+      "cta_band": "text-align: center; padding: 6rem 1.5rem;",
+      "footer": "display: grid; grid-template-columns: 1fr; gap: 2rem; padding: 4rem 1.5rem; border-top: 1px solid var(--border);",
+      "footer_lg": "@media(min-width:1024px){ .footer { grid-template-columns: 2fr 1fr 1fr 1fr; } }"
+    },
+    "seo": {
+      "h1": "Fix Your Credit Report — Dispute Errors in Minutes",
+      "meta_description": "Credit Clarity helps you identify and dispute inaccurate items on your credit report using AI-powered analysis and FCRA-compliant dispute letters.",
+      "schema_type": "WebPage",
+      "canonical": "/",
+      "og_image_ratio": "1200x630"
+    }
+  }
+}

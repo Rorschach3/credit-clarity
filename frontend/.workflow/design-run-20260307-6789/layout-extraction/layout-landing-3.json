@@ -1,0 +1,42 @@
+{
+  "target": "landing",
+  "variant": 3,
+  "variant_name": "Minimal Scroll Story",
+  "description": "Centered, minimal layout with large typography. Content unfolds as a scrollable narrative — headline, problem, solution, proof, CTA.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-landing-v3",
+      "children": [
+        { "tag": "nav", "class": "navbar navbar-minimal" },
+        {
+          "tag": "section",
+          "class": "hero hero-centered",
+          "children": [
+            { "tag": "div", "class": "hero-label" },
+            { "tag": "h1", "class": "hero-headline-xl" },
+            { "tag": "div", "class": "hero-cta-solo" },
+            { "tag": "div", "class": "hero-scroll-hint" }
+          ]
+        },
+        { "tag": "section", "class": "problem-statement" },
+        { "tag": "section", "class": "solution-reveal" },
+        { "tag": "section", "class": "feature-showcase" },
+        { "tag": "section", "class": "results-numbers" },
+        { "tag": "section", "class": "testimonials-single" },
+        { "tag": "section", "class": "pricing-simple" },
+        { "tag": "section", "class": "cta-bottom" },
+        { "tag": "footer", "class": "footer-minimal" }
+      ]
+    },
+    "css_layout_rules": {
+      ".layout-landing-v3": "max-width: 900px; margin: 0 auto; padding: 0 2rem;",
+      ".hero-centered": "min-height: 85vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 6rem 0 4rem;",
+      ".hero-headline-xl": "font-size: clamp(3rem, 7vw, 6rem); font-weight: 800; line-height: 1.05; letter-spacing: -0.04em; max-width: 800px;",
+      ".problem-statement": "padding: 6rem 0; text-align: center; max-width: 680px; margin: 0 auto;",
+      ".solution-reveal": "padding: 6rem 0;",
+      ".results-numbers": "display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; padding: 4rem 0; text-align: center;",
+      ".pricing-simple": "display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; padding: 4rem 0;"
+    }
+  }
+}

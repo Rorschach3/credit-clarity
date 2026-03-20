@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Credit Clarity — Credit Lift — Landing</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0D0D1A;
+    --card: #12112A;
+    --card-elevated: #1A1837;
+    --text: #F5F3FF;
+    --text-secondary: #A78BFA;
+    --text-muted: #6B6B9A;
+    --border: #1E1B40;
+    --primary: #7C3AED;
+    --secondary: #06B6D4;
+    --accent: #F472B6;
+    --success: #10B981;
+    --error: #EF4444;
+    --radius: 1.25rem;
+    --shadow-purple: 0 0 32px rgba(124,58,237,0.25);
+    --shadow-card: 0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(124,58,237,0.08);
+  }
+
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* NAVBAR */
+  .navbar {
+    position: fixed; top: 1rem; left: 50%; transform: translateX(-50%); z-index: 100;
+    width: calc(100% - 3rem); max-width: 1200px;
+    height: 60px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 1.5rem;
+    background: rgba(13,13,26,0.8);
+    backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(124,58,237,0.2);
+    border-radius: 1rem;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+  .nav-logo {
+    font-size: 1.125rem; font-weight: 800; letter-spacing: -0.02em;
+    background: linear-gradient(90deg, #A78BFA, #67E8F9);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .nav-links { display: flex; gap: 1.5rem; font-size: 0.875rem; font-weight: 500; color: var(--text-muted); }
+  .nav-links a { color: inherit; text-decoration: none; transition: color 150ms; }
+  .nav-links a:hover { color: var(--text-secondary); }
+  .btn-primary {
+    padding: 0.5rem 1.25rem; border-radius: 0.625rem; font-size: 0.875rem; font-weight: 700;
+    background: linear-gradient(135deg, #7C3AED, #06B6D4);
+    color: #fff; border: none; cursor: pointer; transition: all 200ms;
+  }
+  .btn-primary:hover { box-shadow: var(--shadow-purple); transform: translateY(-1px); }
+  .btn-ghost { padding: 0.5rem 1rem; border-radius: 0.625rem; font-size: 0.875rem; font-weight: 500; color: var(--text-muted); background: transparent; border: none; cursor: pointer; }
+
+  /* HERO */
+  .hero {
+    min-height: 100vh;
+    display: grid; grid-template-columns: 1fr 1fr;
+    align-items: center; gap: 4rem;
+    padding: 9rem 5rem 5rem;
+    position: relative; overflow: hidden;
+  }
+  .hero-bg {
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, #1E0B3A 0%, #0D1B4A 50%, #061530 100%);
+    z-index: 0;
+  }
+  .hero-glow-1 {
+    position: absolute; top: -200px; right: -100px;
+    width: 700px; height: 700px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(124,58,237,0.15) 0%, transparent 60%);
+    pointer-events: none; z-index: 0;
+  }
+  .hero-glow-2 {
+    position: absolute; bottom: -100px; left: 10%;
+    width: 400px; height: 400px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(6,182,212,0.1) 0%, transparent 60%);
+    pointer-events: none; z-index: 0;
+  }
+  .hero-left { position: relative; z-index: 1; }
+  .hero-right { position: relative; z-index: 1; }
+
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    padding: 0.375rem 1rem; border-radius: 999px;
+    background: rgba(124,58,237,0.15); border: 1px solid rgba(124,58,237,0.35);
+    font-size: 0.75rem; font-weight: 600; color: #A78BFA;
+    letter-spacing: 0.04em; margin-bottom: 1.5rem;
+  }
+  .hero-headline {
+    font-size: clamp(2.5rem, 4.5vw, 4rem);
+    font-weight: 800; line-height: 1.1; letter-spacing: -0.03em; margin-bottom: 1.25rem;
+  }
+  .hero-headline .highlight {
+    background: linear-gradient(135deg, #A78BFA, #67E8F9);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .hero-subheadline { font-size: 1.0625rem; color: var(--text-muted); line-height: 1.65; max-width: 460px; margin-bottom: 2rem; }
+  .hero-cta-group { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 2rem; }
+  .hero-cta-group .btn-primary { padding: 0.875rem 2rem; font-size: 0.9375rem; }
+  .btn-outline-purple { padding: 0.875rem 2rem; border-radius: 0.625rem; font-size: 0.9375rem; font-weight: 600; background: transparent; color: #A78BFA; border: 1px solid rgba(124,58,237,0.4); cursor: pointer; transition: all 150ms; }
+  .btn-outline-purple:hover { background: rgba(124,58,237,0.08); border-color: rgba(124,58,237,0.7); }
+  .hero-note { font-size: 0.8125rem; color: var(--text-muted); }
+
+  /* HERO VISUAL */
+  .dashboard-mock {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 1.5rem;
+    overflow: hidden;
+    box-shadow: var(--shadow-card);
+  }
+  .mock-topbar { background: var(--card-elevated); padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.5rem; border-bottom: 1px solid var(--border); }
+  .mock-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .mock-dot-r { background: #EF4444; } .mock-dot-y { background: #F59E0B; } .mock-dot-g { background: #10B981; }
+  .mock-body { padding: 1.25rem; }
+  .score-hero-block { padding: 1.25rem; border-radius: 1rem; background: linear-gradient(135deg, rgba(124,58,237,0.12), rgba(6,182,212,0.06)); border: 1px solid rgba(124,58,237,0.15); margin-bottom: 1rem; }
+  .score-row { display: flex; align-items: center; gap: 1rem; }
+  .score-ring {
+    width: 72px; height: 72px; border-radius: 50%;
+    background: conic-gradient(#7C3AED 0deg, #06B6D4 270deg, var(--border) 270deg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.125rem; font-weight: 800; color: var(--text);
+    flex-shrink: 0; position: relative;
+  }
+  .score-ring::before { content: ''; position: absolute; inset: 6px; border-radius: 50%; background: var(--card); }
+  .score-ring span { position: relative; z-index: 1; }
+  .score-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 0.25rem; }
+  .score-value { font-size: 1.5rem; font-weight: 800; color: var(--text); }
+  .score-delta { font-size: 0.75rem; color: #6EE7B7; font-weight: 600; }
+  .mock-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  .metric { padding: 0.875rem; background: var(--card-elevated); border: 1px solid var(--border); border-radius: 0.875rem; }
+  .metric-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.25rem; }
+  .metric-val { font-size: 1.125rem; font-weight: 700; color: var(--text); }
+  .pill-good { display: inline-block; padding: 0.15rem 0.5rem; background: rgba(16,185,129,0.15); color: #6EE7B7; border-radius: 999px; font-size: 0.65rem; font-weight: 600; }
+  .pill-warn { display: inline-block; padding: 0.15rem 0.5rem; background: rgba(239,68,68,0.15); color: #FCA5A5; border-radius: 999px; font-size: 0.65rem; font-weight: 600; }
+  .pill-accent { display: inline-block; padding: 0.15rem 0.5rem; background: rgba(124,58,237,0.15); color: #A78BFA; border-radius: 999px; font-size: 0.65rem; font-weight: 600; }
+
+  /* TRUST */
+  .trust-bar { padding: 1.5rem 5rem; display: flex; align-items: center; gap: 2rem; flex-wrap: wrap; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .trust-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+  .trust-logos { display: flex; gap: 3rem; flex-wrap: wrap; opacity: 0.3; }
+  .trust-logo { font-size: 0.8rem; font-weight: 800; color: var(--text); text-transform: uppercase; letter-spacing: 0.06em; }
+
+  /* FEATURES */
+  .section { padding: 5rem; }
+  .section-header { text-align: center; margin-bottom: 3rem; }
+  .section-eyebrow { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #A78BFA; margin-bottom: 0.75rem; }
+  .section-title { font-size: 2.25rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.75rem; }
+  .section-title .grad { background: linear-gradient(135deg, #A78BFA, #67E8F9); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .section-desc { font-size: 1rem; color: var(--text-muted); max-width: 520px; margin: 0 auto; }
+  .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+  .feature-card {
+    background: linear-gradient(135deg, rgba(124,58,237,0.06), rgba(6,182,212,0.03));
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 1.75rem;
+    transition: border-color 200ms, box-shadow 200ms;
+  }
+  .feature-card:hover { border-color: rgba(124,58,237,0.35); box-shadow: var(--shadow-purple); }
+  .feature-icon { width: 48px; height: 48px; border-radius: 0.875rem; background: rgba(124,58,237,0.15); display: flex; align-items: center; justify-content: center; font-size: 1.25rem; margin-bottom: 1.25rem; }
+  .feature-title { font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text); }
+  .feature-desc { font-size: 0.875rem; color: var(--text-muted); line-height: 1.6; }
+
+  /* HOW IT WORKS */
+  .section-alt { padding: 5rem; background: rgba(124,58,237,0.04); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .steps { display: flex; gap: 2rem; }
+  .step { flex: 1; text-align: center; }
+  .step-num { width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, #7C3AED, #06B6D4); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.25rem; font-size: 1.125rem; box-shadow: var(--shadow-purple); }
+  .step-title { font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text); }
+  .step-desc { font-size: 0.875rem; color: var(--text-muted); max-width: 200px; margin: 0 auto; }
+
+  /* STATS */
+  .stats-section { padding: 4rem 5rem; }
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2rem; }
+  .stat-item { text-align: center; }
+  .stat-num { font-size: 3rem; font-weight: 800; letter-spacing: -0.03em; background: linear-gradient(135deg, #A78BFA, #67E8F9); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .stat-label { font-size: 0.875rem; color: var(--text-muted); margin-top: 0.25rem; }
+
+  /* CTA */
+  .final-cta { padding: 5rem; text-align: center; }
+  .cta-card { padding: 5rem; border-radius: 2rem; background: linear-gradient(135deg, rgba(124,58,237,0.15), rgba(6,182,212,0.08)); border: 1px solid rgba(124,58,237,0.25); }
+  .cta-title { font-size: 2.75rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 1rem; }
+  .cta-desc { font-size: 1rem; color: var(--text-muted); max-width: 480px; margin: 0 auto 2rem; }
+  .cta-buttons { display: flex; gap: 1rem; justify-content: center; }
+  .cta-buttons .btn-primary { padding: 1rem 2.5rem; font-size: 1rem; }
+
+  /* FOOTER */
+  footer { padding: 2.5rem 5rem; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+  .footer-logo { font-size: 1rem; font-weight: 800; background: linear-gradient(90deg, #A78BFA, #67E8F9); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .footer-links { display: flex; gap: 1.5rem; font-size: 0.8125rem; color: var(--text-muted); }
+  .footer-links a { color: inherit; text-decoration: none; }
+
+  @media (max-width: 900px) {
+    .navbar { top: 0.5rem; width: calc(100% - 1rem); }
+    .hero { grid-template-columns: 1fr; padding: 7rem 1.5rem 3rem; }
+    .hero-right { display: none; }
+    .features-grid { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .steps { flex-direction: column; gap: 2rem; }
+    .section, .section-alt { padding: 3rem 1.5rem; }
+    .final-cta { padding: 3rem 1.5rem; }
+    .cta-card { padding: 2.5rem 1.5rem; }
+    footer { padding: 2rem 1.5rem; flex-direction: column; text-align: center; }
+  }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .hero-left > * { animation: fadeInUp 0.5s ease forwards; opacity: 0; }
+  .hero-badge { animation-delay: 0.1s; }
+  .hero-headline { animation-delay: 0.2s; }
+  .hero-subheadline { animation-delay: 0.3s; }
+  .hero-cta-group { animation-delay: 0.4s; }
+  .hero-note { animation-delay: 0.45s; }
+  .hero-right { animation: fadeInUp 0.6s 0.3s ease forwards; opacity: 0; }
+</style>
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="nav-logo">CreditClarity</div>
+  <div class="nav-links">
+    <a href="#">Features</a>
+    <a href="#">Pricing</a>
+    <a href="#">How It Works</a>
+  </div>
+  <div style="display:flex; gap:0.75rem;">
+    <button class="btn-ghost">Sign In</button>
+    <button class="btn-primary">Get Started</button>
+  </div>
+</nav>
+
+<div class="hero-bg"></div>
+<div class="hero-glow-1"></div>
+<div class="hero-glow-2"></div>
+
+<section class="hero">
+  <div class="hero-left">
+    <div class="hero-badge">⚡ AI-Powered Credit Repair</div>
+    <h1 class="hero-headline">
+      <span class="highlight">Lift Your Score.</span><br>
+      Reclaim Control.
+    </h1>
+    <p class="hero-subheadline">
+      Upload your credit report. Our AI identifies every error, generates professional dispute letters, and tracks your progress — all automatically.
+    </p>
+    <div class="hero-cta-group">
+      <button class="btn-primary">Start Free Today</button>
+      <button class="btn-outline-purple">Watch Demo</button>
+    </div>
+    <div class="hero-note">No credit card · Free 7-day trial · Cancel anytime</div>
+  </div>
+  <div class="hero-right">
+    <div class="dashboard-mock">
+      <div class="mock-topbar">
+        <div class="mock-dot mock-dot-r"></div>
+        <div class="mock-dot mock-dot-y"></div>
+        <div class="mock-dot mock-dot-g"></div>
+        <span style="font-size:0.7rem; color:var(--text-muted); margin-left:0.5rem;">Dashboard</span>
+      </div>
+      <div class="mock-body">
+        <div class="score-hero-block">
+          <div class="score-row">
+            <div class="score-ring"><span>742</span></div>
+            <div>
+              <div class="score-label">CREDIT SCORE</div>
+              <div class="score-value">742</div>
+              <div class="score-delta">↑ +89 pts this month</div>
+            </div>
+          </div>
+        </div>
+        <div class="mock-metrics">
+          <div class="metric">
+            <div class="metric-label">Disputes</div>
+            <div class="metric-val">3 <span class="pill-accent">Active</span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Removed</div>
+            <div class="metric-val" style="color:#6EE7B7;">7</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Negative</div>
+            <div class="metric-val" style="color:#FCA5A5;">2 <span class="pill-warn">!</span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Score Target</div>
+            <div class="metric-val" style="color:#A78BFA;">800</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="trust-bar">
+  <div class="trust-label">Works with</div>
+  <div class="trust-logos">
+    <div class="trust-logo">Equifax</div>
+    <div class="trust-logo">Experian</div>
+    <div class="trust-logo">TransUnion</div>
+    <div class="trust-logo">CFPB</div>
+  </div>
+</div>
+
+<section class="section">
+  <div class="section-header">
+    <div class="section-eyebrow">The Platform</div>
+    <h2 class="section-title">Built to <span class="grad">Lift Your Credit</span></h2>
+    <p class="section-desc">Every feature designed to get you the fastest, most effective credit repair results.</p>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">🔍</div>
+      <div class="feature-title">AI Credit Analysis</div>
+      <div class="feature-desc">Upload any credit report PDF. Our AI extracts every tradeline and spots every disputable item — instantly.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">✉️</div>
+      <div class="feature-title">Auto Dispute Letters</div>
+      <div class="feature-desc">FCRA-compliant dispute letters generated automatically, tailored to each bureau.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📊</div>
+      <div class="feature-title">Live Score Tracking</div>
+      <div class="feature-desc">Watch your credit score climb. Visual progress tracking across all dispute timelines.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🏛️</div>
+      <div class="feature-title">3-Bureau Dashboard</div>
+      <div class="feature-desc">Equifax, Experian, and TransUnion side-by-side in one organized, actionable view.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">⚡</div>
+      <div class="feature-title">60-Second Processing</div>
+      <div class="feature-desc">No manual entry. Most credit reports are fully analyzed in under 60 seconds.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔐</div>
+      <div class="feature-title">Zero-Trust Security</div>
+      <div class="feature-desc">256-bit encryption, SOC 2 compliant. Your financial data stays private, always.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section-alt">
+  <div class="section-header">
+    <div class="section-eyebrow">How It Works</div>
+    <h2 class="section-title">Three Steps to a <span class="grad">Better Score</span></h2>
+  </div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-title">Upload Your Report</div>
+      <div class="step-desc">Drag and drop any PDF credit report from any bureau.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-title">AI Finds the Issues</div>
+      <div class="step-desc">Errors, inaccuracies, and disputable items identified automatically.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-title">Send & Watch It Work</div>
+      <div class="step-desc">Letters are ready. Send and track as your score climbs.</div>
+    </div>
+  </div>
+</section>
+
+<section class="stats-section">
+  <div class="stats-grid">
+    <div class="stat-item"><div class="stat-num">89pts</div><div class="stat-label">Avg. score increase</div></div>
+    <div class="stat-item"><div class="stat-num">12K+</div><div class="stat-label">Active users</div></div>
+    <div class="stat-item"><div class="stat-num">94%</div><div class="stat-label">Dispute success rate</div></div>
+    <div class="stat-item"><div class="stat-num">&lt;60s</div><div class="stat-label">Processing time</div></div>
+  </div>
+</section>
+
+<section class="final-cta">
+  <div class="cta-card">
+    <div class="cta-title">Ready to <span style="background:linear-gradient(135deg,#A78BFA,#67E8F9);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">Lift Your Credit?</span></div>
+    <p class="cta-desc">Join thousands already on the path to better credit with CreditClarity.</p>
+    <div class="cta-buttons">
+      <button class="btn-primary">Start Free — 7 Days</button>
+      <button class="btn-outline-purple">See Pricing</button>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-logo">CreditClarity</div>
+  <div class="footer-links">
+    <a href="#">Privacy</a><a href="#">Terms</a><a href="#">Security</a><a href="#">Contact</a>
+  </div>
+  <div style="font-size:0.8125rem; color:var(--text-muted);">© 2026 CreditClarity</div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,56 @@
+{
+  "id": "IMPL-006",
+  "title": "Stripe Frontend Integration",
+  "status": "pending",
+  "context_package_path": ".workflow/active/WFS-implement-credit-clarity-platform/.process/context-package.json",
+  "meta": {
+    "priority": "high",
+    "effort_estimate": "3 days",
+    "phase": "Phase 1 - Monetization",
+    "type": "frontend",
+    "depends_on": ["IMPL-005"],
+    "tags": ["stripe", "frontend", "checkout", "subscription", "pricing"]
+  },
+  "context": {
+    "description": "Implement Stripe frontend integration: update PricingPage.tsx with real Stripe checkout, create SubscriptionPage.tsx for subscription management, add subscription_tier to auth context for conditional feature gating.",
+    "focus_paths": [
+      "frontend/src/pages/PricingPage.tsx",
+      "frontend/src/hooks/use-auth.tsx",
+      "frontend/src/hooks/auth-context.tsx",
+      "frontend/src/services/api.ts",
+      "frontend/src/App.tsx",
+      "frontend/package.json",
+      "docs/PRD-Feature-Specifications.md"
+    ],
+    "acceptance_criteria": [
+      "frontend/package.json includes @stripe/stripe-js>=4.0.0 and @stripe/react-stripe-js>=2.4.0",
+      "frontend/src/pages/PricingPage.tsx has working Stripe checkout button that calls POST /api/v1/payments/checkout and redirects to Stripe-hosted checkout page",
+      "frontend/src/pages/SubscriptionPage.tsx shows: current subscription tier, billing date (if premium), cancel subscription button (calls DELETE /api/v1/subscriptions/cancel)",
+      "frontend/src/hooks/use-auth.tsx user state includes subscription_tier field (fetched from GET /api/v1/subscriptions/status on login)",
+      "frontend/src/hooks/auth-context.tsx AuthContext type includes subscription_tier: 'free' | 'premium'",
+      "PricingPage shows 3 purchase options: (1) Free tier features list, (2) Single letter $8 checkout button (calls /payments/checkout), (3) Bundle 3-letter $24 checkout button (calls /payments/bundle-checkout, highlighted as 'Best Value')",
+      "Success/cancel redirect pages handle Stripe checkout completion",
+      "Verify: Click pricing button → Stripe checkout page loads with correct price; bundle button shows $24 for 3 letters"
+    ],
+    "implementation_approach": [
+      "Step 1: Read frontend/src/hooks/use-auth.tsx and auth-context.tsx to understand user state shape",
+      "Step 2: Read frontend/src/services/api.ts for API call patterns",
+      "Step 3: Add Stripe packages to package.json",
+      "Step 4: Update use-auth.tsx to fetch subscription_tier on session change",
+      "Step 5: Update PricingPage.tsx - add handleCheckout async function calling /api/v1/payments/checkout then window.location.href = session.url",
+      "Step 6: Create SubscriptionPage.tsx as a new page",
+      "Step 7: Add /subscription route to App.tsx protected routes"
+    ],
+    "pre_analysis": [
+      "Read frontend/src/hooks/use-auth.tsx - current user state shape and Supabase session pattern",
+      "Read frontend/src/pages/PricingPage.tsx - current pricing page structure",
+      "Read frontend/src/services/api.ts - existing API call patterns"
+    ]
+  },
+  "flow_control": {
+    "execution_mode": "sequential",
+    "parallel_with": ["IMPL-007", "IMPL-010"],
+    "requires": ["IMPL-005"],
+    "blocks": ["IMPL-012"]
+  }
+}

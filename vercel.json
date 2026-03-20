@@ -1,0 +1,6 @@
+{
+  "buildCommand": "NODE_ENV=production npm run build",
+  "installCommand": "npm ci",
+  "outputDirectory": "frontend/dist",
+  "framework": "vite"
+}

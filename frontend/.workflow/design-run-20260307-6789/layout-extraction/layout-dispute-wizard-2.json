@@ -1,0 +1,50 @@
+{
+  "target": "dispute-wizard",
+  "variant": 2,
+  "variant_name": "Split Select + Preview",
+  "description": "Left: tradeline selection and dispute options. Right: live letter preview updating as user makes choices. Side-by-side for efficiency.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-wizard-v2",
+      "children": [
+        { "tag": "nav", "class": "navbar" },
+        {
+          "tag": "main",
+          "class": "wizard-split",
+          "children": [
+            {
+              "tag": "div",
+              "class": "wizard-left",
+              "children": [
+                { "tag": "div", "class": "wizard-progress" },
+                { "tag": "div", "class": "wizard-step-content" },
+                { "tag": "div", "class": "wizard-controls" }
+              ]
+            },
+            {
+              "tag": "div",
+              "class": "wizard-right",
+              "children": [
+                { "tag": "div", "class": "letter-preview-header" },
+                { "tag": "div", "class": "letter-preview-body" },
+                { "tag": "div", "class": "letter-actions" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "css_layout_rules": {
+      ".wizard-split": "display: grid; grid-template-columns: 1fr 1fr; height: calc(100vh - 64px);",
+      ".wizard-left": "display: flex; flex-direction: column; padding: 2rem; overflow-y: auto; border-right: 1px solid var(--border);",
+      ".wizard-right": "display: flex; flex-direction: column; padding: 2rem; overflow-y: auto; background: var(--surface-alt);",
+      ".wizard-step-content": "flex: 1;",
+      ".letter-preview-body": "flex: 1; font-family: var(--font-mono); font-size: 0.875rem; line-height: 1.7; white-space: pre-wrap; border-radius: 0.75rem; padding: 2rem;",
+      "@media (max-width: 900px)": {
+        ".wizard-split": "grid-template-columns: 1fr; height: auto;",
+        ".wizard-right": "display: none;"
+      }
+    }
+  }
+}

@@ -9,7 +9,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "dev": "concurrently \"npm:dev -w frontend\" \"cd backend && python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000\"",
+    "dev": "concurrently \"npm:dev -w frontend\" \"cd backend && fuser -k 8000/tcp 2>/dev/null; python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000\"",
     "dev:frontend": "npm -w frontend run dev",
     "dev:backend": "python -m uvicorn --app-dir backend main:app --reload --host 0.0.0.0 --port 8000",
     "lint": "npm -w frontend run lint",
@@ -17,9 +17,10 @@
     "test": "npm -w frontend run test"
   },
   "devDependencies": {
-    "concurrently": "^9.2.0"
+    "concurrently": "^9.2.0",
+    "vercel": "^50.28.0"
   },
   "dependencies": {
-    "@sentry/react": "^10.32.1"
+    "mem0ai": "^2.4.0"
   }
 }

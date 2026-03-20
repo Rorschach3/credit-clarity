@@ -1,8 +1,6 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Badge } from '@/components/ui/badge';
-import { Loader2, FileText, Brain, Eye, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Loader2, Eye, Brain, CheckCircle2, XCircle } from 'lucide-react';
 import { ProcessingProgress as ProcessingProgressType } from '@/utils/asyncProcessing';
 
 interface ProcessingProgressProps {
@@ -11,146 +9,122 @@ interface ProcessingProgressProps {
   processingMethod: 'ocr' | 'ai';
 }
 
+const STAGES = [
+  { label: 'Initialize', threshold: 15 },
+  { label: 'Extract',    threshold: 45 },
+  { label: 'Parse',      threshold: 75 },
+  { label: 'Save',       threshold: 100 },
+];
+
 export const ProcessingProgress: React.FC<ProcessingProgressProps> = ({
   isProcessing,
   progress,
-  processingMethod
+  processingMethod,
 }) => {
-  // Show component if processing OR if there's a step/message to display
   const shouldShow = isProcessing || progress.step || progress.message;
-  
-  if (!shouldShow) {
-    return null;
-  }
-  
-  // Determine completion status
-  const isCompleted = progress.step === 'Complete!' || progress.progress === 100;
-  const isFailed = progress.step === 'Failed' || progress.step.includes('❌');
-  const isInProgress = isProcessing && !isCompleted && !isFailed;
+  if (!shouldShow) return null;
 
-  const getIcon = () => {
-    // Show completion status icons first
-    if (isCompleted) {
-      return <CheckCircle className="h-5 w-5 text-green-600" />;
-    }
-    if (isFailed) {
-      return <XCircle className="h-5 w-5 text-red-600" />;
-    }
-    
-    // Show processing method icons
-    switch (processingMethod) {
-      case 'ocr':
-        return <Eye className="h-5 w-5" />;
-      case 'ai':
-        return <Brain className="h-5 w-5" />;
-      default:
-        return <FileText className="h-5 w-5" />;
-    }
-  };
+  const pct = progress.progress ?? 0;
+  const isCompleted = progress.step === 'Complete!' || pct >= 100;
+  const isFailed = progress.step === 'Failed' || progress.step?.includes('❌');
 
-  const getMethodLabel = () => {
-    // Show completion status labels first
-    if (isCompleted) {
-      return '🎉 Processing Complete!';
-    }
-    if (isFailed) {
-      return '❌ Processing Failed';
-    }
-    
-    // Show processing method labels
-    switch (processingMethod) {
-      case 'ocr':
-        return 'OCR Processing';
-      case 'ai':
-        return 'AI Analysis';
-      default:
-        return 'Processing';
-    }
-  };
+  const borderColor = isCompleted
+    ? 'border-[rgba(34,197,94,0.3)]'
+    : isFailed
+    ? 'border-[rgba(239,68,68,0.3)]'
+    : 'border-[rgba(212,168,83,0.25)]';
 
-  // Dynamic styling based on status
-  const getCardStyle = () => {
-    if (isCompleted) {
-      return "border-green-200 bg-green-50 dark:bg-green-900/20";
-    }
-    if (isFailed) {
-      return "border-red-200 bg-red-50 dark:bg-red-900/20";
-    }
-    return "border-blue-200 bg-blue-50 dark:bg-blue-900/20";
-  };
-  
-  const getBadgeStyle = () => {
-    if (isCompleted) {
-      return "bg-green-100 text-green-800";
-    }
-    if (isFailed) {
-      return "bg-red-100 text-red-800";
-    }
-    return "";
-  };
+  const glowBg = isCompleted
+    ? 'bg-[rgba(34,197,94,0.06)]'
+    : isFailed
+    ? 'bg-[rgba(239,68,68,0.06)]'
+    : 'bg-[rgba(212,168,83,0.04)]';
+
+  const Icon = isCompleted
+    ? CheckCircle2
+    : isFailed
+    ? XCircle
+    : processingMethod === 'ai'
+    ? Brain
+    : Eye;
+
+  const iconColor = isCompleted
+    ? 'text-green-400'
+    : isFailed
+    ? 'text-red-400'
+    : 'text-[#D4A853]';
+
+  const label = isCompleted
+    ? 'Processing Complete'
+    : isFailed
+    ? 'Processing Failed'
+    : processingMethod === 'ai'
+    ? 'AI Analysis'
+    : 'OCR Extraction';
 
   return (
-    <Card className={getCardStyle()}>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2">
-          {getIcon()}
-          {getMethodLabel()}
-          <Badge variant="secondary" className={`ml-auto ${getBadgeStyle()}`}>
-            {isCompleted ? '✓' : isFailed ? '✗' : `${progress.progress}%`}
-          </Badge>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">{progress.step}</span>
-            {isInProgress && <Loader2 className="h-4 w-4 animate-spin" />}
-            {isCompleted && <Clock className="h-4 w-4 text-green-600" />}
-            {isFailed && <XCircle className="h-4 w-4 text-red-600" />}
-          </div>
-          <Progress 
-            value={progress.progress} 
-            className={`w-full ${isCompleted ? 'bg-green-200' : isFailed ? 'bg-red-200' : ''}`} 
-          />
-          <p className="text-sm text-muted-foreground">{progress.message}</p>
+    <div
+      className={`rounded-xl border ${borderColor} ${glowBg} p-5 space-y-4`}
+      style={{ backdropFilter: 'blur(4px)' }}
+    >
+      {/* Header row */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          {!isCompleted && !isFailed && isProcessing ? (
+            <Loader2 className="h-4 w-4 animate-spin text-[#D4A853]" />
+          ) : (
+            <Icon className={`h-4 w-4 ${iconColor}`} />
+          )}
+          <span className="font-semibold text-sm">{label}</span>
         </div>
-        
-        {/* Processing stages indicator */}
-        <div className="grid grid-cols-4 gap-2 mt-4">
-          <div className={`text-center p-2 rounded text-xs ${
-            progress.progress >= 25 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
-          }`}>
-            {progress.progress >= 25 ? '✓' : ''} Initialize
-          </div>
-          <div className={`text-center p-2 rounded text-xs ${
-            progress.progress >= 50 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
-          }`}>
-            {progress.progress >= 50 ? '✓' : ''} Extract
-          </div>
-          <div className={`text-center p-2 rounded text-xs ${
-            progress.progress >= 75 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
-          }`}>
-            {progress.progress >= 75 ? '✓' : ''} Parse
-          </div>
-          <div className={`text-center p-2 rounded text-xs ${
-            isCompleted ? 'bg-green-100 text-green-800 animate-pulse' : 
-            isFailed ? 'bg-red-100 text-red-800' :
-            progress.progress >= 100 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
-          }`}>
-            {isCompleted ? '🎉' : isFailed ? '❌' : progress.progress >= 100 ? '✓' : ''} Complete
-          </div>
-        </div>
-        
-        {/* Show completion celebration */}
-        {isCompleted && (
-          <div className="text-center p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
-            <div className="text-2xl mb-1">🎉</div>
-            <div className="text-sm font-medium text-green-800 dark:text-green-200">
-              Processing Complete!
+        <span className={`text-sm font-mono font-bold ${iconColor}`}>
+          {isCompleted ? '100%' : isFailed ? 'Error' : `${pct}%`}
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <Progress
+        value={isCompleted ? 100 : pct}
+        className={`h-2 ${
+          isCompleted
+            ? 'bg-green-900/30 [&>[data-slot=progress-indicator]]:bg-green-400'
+            : isFailed
+            ? 'bg-red-900/30 [&>[data-slot=progress-indicator]]:bg-red-400'
+            : 'bg-white/5 [&>[data-slot=progress-indicator]]:bg-[#D4A853]'
+        }`}
+      />
+
+      {/* Current step message */}
+      {progress.step && (
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          {progress.step}
+          {progress.message && progress.message !== progress.step && (
+            <> &mdash; {progress.message}</>
+          )}
+        </p>
+      )}
+
+      {/* Stage pills */}
+      <div className="flex gap-2">
+        {STAGES.map(({ label: stageLabel, threshold }) => {
+          const done = pct >= threshold || isCompleted;
+          const active = !done && pct >= threshold - 30 && !isFailed;
+          return (
+            <div
+              key={stageLabel}
+              className={`flex-1 text-center py-1 rounded text-[10px] font-medium transition-colors ${
+                done
+                  ? 'bg-[rgba(34,197,94,0.15)] text-green-400'
+                  : active
+                  ? 'bg-[rgba(212,168,83,0.15)] text-[#D4A853]'
+                  : 'bg-white/5 text-muted-foreground'
+              }`}
+            >
+              {done ? '✓ ' : ''}{stageLabel}
             </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          );
+        })}
+      </div>
+    </div>
   );
 };

@@ -1,0 +1,39 @@
+[
+  {
+    "dimension": "security",
+    "review_id": "review-20260304-053643",
+    "analysis_timestamp": "2026-03-04T05:39:00.683256+00:00",
+    "cli_tool_used": "codex",
+    "model": "gpt-5",
+    "analysis_duration_ms": 60000,
+    "summary": {
+      "total_findings": 1,
+      "critical": 0,
+      "high": 0,
+      "medium": 1,
+      "low": 0,
+      "files_analyzed": 25,
+      "lines_reviewed": 12368
+    },
+    "findings": [
+      {
+        "id": "sec-001-7eaea5ad",
+        "title": "Validation debug logging may expose sensitive tradeline details",
+        "severity": "medium",
+        "category": "data-exposure",
+        "description": "Validation debug logs include creditor_name and full error/warning messages; these messages can contain account numbers or other PII from the tradeline payload.",
+        "file": "backend/services/tradeline_extraction/validation_pipeline.py",
+        "line": 107,
+        "snippet": "logger.debug(\n    f\"Validation result for {tradeline.get('creditor_name', 'unknown')} | \"\n    f\"confidence={confidence:.2f}, severity={severity}, errors={errors}, warnings={warnings}\"\n)",
+        "recommendation": "Redact or hash PII in log output, or downgrade to structured metrics without raw field values.",
+        "references": [],
+        "impact": "Potential degradation of reliability or security posture if left unaddressed.",
+        "metadata": {},
+        "iteration": 0,
+        "status": "pending_remediation",
+        "cross_references": []
+      }
+    ],
+    "cross_references": []
+  }
+]

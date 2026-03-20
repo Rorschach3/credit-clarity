@@ -3,6 +3,7 @@ import { Button } from './ui/button';
 import { Card, CardHeader, CardContent, CardFooter, CardTitle } from './ui/card';
 import { Textarea } from './ui/textarea';
 import { useAuth } from '@/hooks/use-auth';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { MessageCircle, X, Loader2 } from 'lucide-react';
 
@@ -10,14 +11,6 @@ interface ChatMessage {
   text: string;
   sender: 'user' | 'bot';
   timestamp?: string;
-}
-
-interface CreditSuggestion {
-  type: string;
-  priority: 'high' | 'medium' | 'low';
-  title: string;
-  description: string;
-  action: string;
 }
 
 const ChatbotWidget: React.FC = () => {
@@ -28,8 +21,6 @@ const ChatbotWidget: React.FC = () => {
   ]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [suggestions, setSuggestions] = useState<CreditSuggestion[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
   const chatContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -37,50 +28,6 @@ const ChatbotWidget: React.FC = () => {
       chatContentRef.current.scrollTop = chatContentRef.current.scrollHeight;
     }
   }, [messages, isOpen]);
-
-  // Load conversation history when opened
-  useEffect(() => {
-    if (isOpen && user?.id && messages.length <= 1) {
-      loadConversationHistory();
-      loadCreditSuggestions();
-    }
-  }, [isOpen, user?.id]);
-
-  const loadConversationHistory = async () => {
-    if (!user?.id) return;
-    
-    try {
-      const response = await fetch(`/api/chat/history/${user.id}?limit=10`);
-      const data = await response.json();
-      
-      if (data.success && data.history.length > 0) {
-        const formattedHistory = data.history.map((msg: any) => ({
-          text: msg.content,
-          sender: msg.role === 'user' ? 'user' : 'bot',
-          timestamp: msg.timestamp
-        }));
-        setMessages(prev => [prev[0], ...formattedHistory]); // Keep welcome message first
-      }
-    } catch (error) {
-      console.error('Failed to load conversation history:', error);
-    }
-  };
-
-  const loadCreditSuggestions = async () => {
-    if (!user?.id) return;
-    
-    try {
-      const response = await fetch(`/api/chat/suggestions/${user.id}`);
-      const data = await response.json();
-      
-      if (data.success && data.suggestions.length > 0) {
-        setSuggestions(data.suggestions);
-        setShowSuggestions(true);
-      }
-    } catch (error) {
-      console.error('Failed to load credit suggestions:', error);
-    }
-  };
 
   const sendMessage = async () => {
     if (!newMessage.trim() || loading || !user?.id) return;
@@ -90,53 +37,38 @@ const ChatbotWidget: React.FC = () => {
     const currentMessage = newMessage;
     setNewMessage("");
     setLoading(true);
-    setShowSuggestions(false); // Hide suggestions when user starts chatting
 
     try {
-      // Prepare conversation history for context
       const conversationHistory = messages.map((msg) => ({
         role: msg.sender === "user" ? "user" : "assistant",
         content: msg.text
       }));
 
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: user.id,
-          message: currentMessage,
-          conversationHistory: conversationHistory
-        })
+      const { data, error } = await supabase.functions.invoke('chat', {
+        body: { message: currentMessage, conversationHistory }
       });
 
-      const data = await response.json();
-      
-      if (data.success) {
-        setMessages((prev) => [...prev, { 
-          text: data.response, 
+      if (error) throw error;
+
+      if (data?.success) {
+        setMessages((prev) => [...prev, {
+          text: data.response,
           sender: "bot",
           timestamp: data.timestamp
         }]);
       } else {
-        throw new Error(data.error || 'Failed to get response');
+        throw new Error(data?.error || 'Failed to get response');
       }
     } catch (error) {
       console.error('Chat error:', error);
       setMessages((prev) => [
         ...prev,
-        { text: "I apologize, but I'm experiencing technical difficulties. Please try again in a moment.", sender: "bot" }
+        { text: "I'm experiencing technical difficulties. Please try again in a moment.", sender: "bot" }
       ]);
       toast.error('Failed to send message. Please try again.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSuggestionClick = (suggestion: CreditSuggestion) => {
-    setNewMessage(`Tell me more about: ${suggestion.title}`);
-    setShowSuggestions(false);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -171,27 +103,6 @@ const ChatbotWidget: React.FC = () => {
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto p-4 border-t border-b" ref={chatContentRef}>
             <div className="space-y-3">
-              {/* Show credit suggestions if available */}
-              {showSuggestions && suggestions.length > 0 && (
-                <div className="space-y-2">
-                  <div className="text-sm font-medium text-gray-600">💡 Quick Actions for You:</div>
-                  {suggestions.slice(0, 3).map((suggestion, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleSuggestionClick(suggestion)}
-                      className={`w-full text-left p-2 rounded-lg border text-sm hover:bg-gray-50 transition-colors ${
-                        suggestion.priority === 'high' ? 'border-red-200 bg-red-50' : 
-                        suggestion.priority === 'medium' ? 'border-yellow-200 bg-yellow-50' :
-                        'border-blue-200 bg-blue-50'
-                      }`}
-                    >
-                      <div className="font-medium">{suggestion.title}</div>
-                      <div className="text-gray-600">{suggestion.description}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
-              
               {messages.map((message, index) => (
                 <div
                   key={index}

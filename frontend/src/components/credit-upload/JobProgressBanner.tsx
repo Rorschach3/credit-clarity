@@ -29,11 +29,11 @@ export const JobProgressBanner: React.FC<JobProgressBannerProps> = ({ jobId, sta
   };
 
   return (
-    <Card className={
-      isCompleted ? 'border-green-200 bg-green-50 dark:bg-green-900/20' :
-      isFailed ? 'border-red-200 bg-red-50 dark:bg-red-900/20' :
-      'border-blue-200 bg-blue-50 dark:bg-blue-900/20'
-    }>
+    <Card className={`card-midnight ${
+      isCompleted ? 'border-[rgba(34,197,94,0.3)]' :
+      isFailed    ? 'border-[rgba(239,68,68,0.3)]' :
+      'border-[rgba(212,168,83,0.2)]'
+    }`}>
       <CardContent className="py-4">
         <div className="flex flex-col md:flex-row md:items-center gap-3">
           <div className="flex items-center gap-2 min-w-0">

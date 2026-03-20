@@ -1,8 +1,7 @@
 """
 Test tradeline parsing functionality
 """
-import sys
-sys.path.append('/mnt/c/projects/credit-clarity/backend')
+import pytest
 
 from services.tradeline_extraction.tradeline_parser import (
     TransUnionTradelineParser,
@@ -18,7 +17,7 @@ from tests.test_fixtures.tradeline_test_data import (
 class TestTransUnionTradelineParser:
     """Test tradeline parsing logic"""
     
-    def setUp(self):
+    def setup_method(self):
         """Set up test fixtures"""
         self.parser = TransUnionTradelineParser()
         self.sample_text = """
@@ -102,20 +101,20 @@ class TestTransUnionTradelineParser:
         
         assert tradeline is not None
         assert tradeline.creditor_name == "LENTEGRITY LLC"
-        assert tradeline.account_number == "2212311376****"
+        assert tradeline.account_number == "2212311376"
         assert tradeline.account_type == "Installment"
         assert tradeline.account_status == "Closed"
         assert tradeline.date_opened == "12/29/2022"
-        assert tradeline.monthly_payment == "$0"
-        assert tradeline.account_balance == "$0"
+        assert tradeline.monthly_payment is None
+        assert tradeline.account_balance is None
     
     def test_format_account_number(self):
         """Test account number formatting"""
         parser = TransUnionTradelineParser()
         
-        # Should preserve existing **** format
-        assert parser._format_account_number("2212311376****") == "2212311376****"
-        assert parser._format_account_number("414709844770****") == "414709844770****"
+        # Should remove masking markers and special characters
+        assert parser._format_account_number("2212311376****") == "2212311376"
+        assert parser._format_account_number("414709844770****") == "414709844770"
         
         # Should handle None/empty values
         assert parser._format_account_number("") is None
@@ -164,12 +163,15 @@ class TestTransUnionTradelineParser:
         """Test currency formatting"""
         parser = TransUnionTradelineParser()
         
-        # Test various currency formats
-        assert parser._format_currency("$0") == "$0"
-        assert parser._format_currency("$25") == "$25"
-        assert parser._format_currency("$25,000") == "$25,000"
-        assert parser._format_currency("$142,000") == "$142,000"
-        assert parser._format_currency("25000") == "$25,000"  # Add $ and comma
+        # monthly_payment should have cents, balance/limit should be whole dollars.
+        assert parser._format_currency("$0", field_name="monthly_payment") is None
+        assert parser._format_currency("$25", field_name="monthly_payment") == "$25.00"
+        assert parser._format_currency("25.5", field_name="monthly_payment") == "$25.50"
+
+        assert parser._format_currency("$0", field_name="credit_limit") is None
+        assert parser._format_currency("$25,000", field_name="credit_limit") == "$25,000"
+        assert parser._format_currency("25000", field_name="credit_limit") == "$25,000"
+        assert parser._format_currency("$142,000", field_name="account_balance") == "$142,000"
         
         # Test invalid amounts
         assert parser._format_currency("") is None
@@ -186,14 +188,14 @@ class TestTransUnionTradelineParser:
         # Check first tradeline (LENTEGRITY LLC)
         lentegrity = tradelines[0]
         assert lentegrity.creditor_name == "LENTEGRITY LLC"
-        assert lentegrity.account_number == "2212311376****"
+        assert lentegrity.account_number == "2212311376"
         assert lentegrity.account_type == "Installment"
         assert lentegrity.account_status == "Closed"
         
         # Check second tradeline (CAPITAL ONE)
         capital_one = tradelines[1]
         assert capital_one.creditor_name == "CAPITAL ONE"
-        assert capital_one.account_number == "414709844770****"
+        assert capital_one.account_number == "414709844770"
         assert capital_one.account_type == "Revolving"
         assert capital_one.account_status == "Current"
         
@@ -226,7 +228,7 @@ class TestTransUnionTradelineParser:
         
         # Invalid tradeline (missing creditor name)
         invalid_tradeline = ParsedTradeline(
-            account_number="414709844770****",
+            account_number="414709844770",
             account_type="Revolving",
             account_status="Current"
         )
@@ -239,20 +241,20 @@ class TestTransUnionTradelineParser:
         """Test converting ParsedTradeline to dictionary"""
         tradeline = ParsedTradeline(
             creditor_name="CAPITAL ONE",
-            account_number="414709844770****",
+            account_number="414709844770",
             account_type="Revolving",
             account_status="Current",
             date_opened="01/23/2013",
-            monthly_payment="$0",
+            monthly_payment=None,
             credit_limit="$25,000",
-            account_balance="$0"
+            account_balance=None
         )
         
         tradeline_dict = tradeline.to_dict()
         
         assert isinstance(tradeline_dict, dict)
         assert tradeline_dict['creditor_name'] == "CAPITAL ONE"
-        assert tradeline_dict['account_number'] == "414709844770****"
+        assert tradeline_dict['account_number'] == "414709844770"
         assert tradeline_dict['credit_bureau'] == "TransUnion"
         assert 'id' in tradeline_dict
         assert 'created_at' in tradeline_dict

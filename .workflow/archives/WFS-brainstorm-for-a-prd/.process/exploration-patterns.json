@@ -1,0 +1,85 @@
+{
+  "project_structure": "Patterns are split by language: Python backend uses dataclasses, service classes, and async workflows; TypeScript frontend uses hooks, context providers, and component composition. Documentation in docs/ captures architectural conventions that should be mirrored in PRD outputs.",
+  "relevant_files": [
+    {
+      "path": "docs/CLAUDE.md",
+      "relevance": 0.9,
+      "rationale": "High-level project patterns and conventions referenced in planning."
+    },
+    {
+      "path": "docs/ARCHITECTURE_GUIDE.md",
+      "relevance": 0.88,
+      "rationale": "Architecture patterns and integration conventions for backend and frontend."
+    },
+    {
+      "path": "backend/services/tradeline_extraction/tradeline_parser.py",
+      "relevance": 0.86,
+      "rationale": "Dataclass-based model and parsing patterns for tradelines."
+    },
+    {
+      "path": "backend/services/llm_parser_service.py",
+      "relevance": 0.78,
+      "rationale": "Async service pattern for LLM parsing and normalization."
+    },
+    {
+      "path": "backend/services/background_jobs.py",
+      "relevance": 0.72,
+      "rationale": "Enum-driven job status patterns and queue orchestration style."
+    },
+    {
+      "path": "backend/api/v1/routes/processing_v2.py",
+      "relevance": 0.76,
+      "rationale": "API routing patterns with dependency injection and monitoring decorators."
+    },
+    {
+      "path": "frontend/src/components/credit-upload/TradelineEditor.tsx",
+      "relevance": 0.74,
+      "rationale": "UI component structure and form patterns for tradeline editing."
+    },
+    {
+      "path": "frontend/src/hooks/use-auth.tsx",
+      "relevance": 0.8,
+      "rationale": "Context provider and hook pattern for authentication state."
+    },
+    {
+      "path": "frontend/src/utils/creditReportProcessor.ts",
+      "relevance": 0.82,
+      "rationale": "Typed utility functions and API integration patterns for uploads."
+    }
+  ],
+  "patterns": "- Python: dataclass models with helper methods (ParsedTradeline), service classes with async methods.\n- Backend: pipeline orchestration in a single service class, validation and normalization separated.\n- API routes use FastAPI dependencies for auth, rate limiting, and monitoring decorators.\n- Frontend: React context providers (use-auth) and hooks for shared state.\n- Frontend utilities use typed interfaces for processing results and progress callbacks.\n- Components are function components with explicit props interfaces and controlled inputs.",
+  "dependencies": "INTERNAL: tradeline_parser uses utils.date_parser and negative_tradeline_classifier; llm_parser_service uses models and prompt templates; use-auth uses Supabase client; creditReportProcessor uses API endpoints and Supabase auth tokens.\nEXTERNAL: FastAPI, asyncio, dataclasses; React, TanStack Query, Supabase JS; Google Document AI and Gemini for parsing.",
+  "integration_points": "- backend/services/tradeline_extraction/tradeline_parser.py:19-52 defines ParsedTradeline dataclass pattern.\n- backend/services/llm_parser_service.py:25-90 shows async normalization workflow.\n- backend/api/v1/routes/processing_v2.py:71-119 shows FastAPI dependency injection usage.\n- frontend/src/hooks/use-auth.tsx:15-45 defines auth provider pattern.\n- frontend/src/utils/creditReportProcessor.ts:102-138 shows shared utility and fetch patterns.\n- frontend/src/components/credit-upload/TradelineEditor.tsx:6-128 shows controlled form pattern.",
+  "constraints": "- Keep naming conventions consistent: snake_case for Python functions, PascalCase for classes, camelCase for TS functions.\n- Preserve existing hook/provider composition in frontend routing.\n- Avoid introducing cross-layer coupling in documentation (keep backend vs frontend patterns distinct).",
+  "clarification_needs": [
+    {
+      "question": "Should PRD patterns emphasize existing implementation details or generalized patterns?",
+      "context": "Some patterns are implementation-specific (e.g., exact dataclass fields) while PRD documents benefit from higher-level pattern descriptions.",
+      "options": [
+        "Implementation-specific details",
+        "Generalized pattern descriptions",
+        "Mix of both with implementation examples"
+      ],
+      "recommended": 2
+    },
+    {
+      "question": "Which frontend pattern should be treated as canonical: page-level routing or feature-level components?",
+      "context": "App.tsx defines route composition, but feature flows like dispute wizard are built from component modules. Clarify the primary pattern source.",
+      "options": [
+        "Page-level routing",
+        "Feature component composition",
+        "Both with explicit separation"
+      ],
+      "recommended": 2
+    }
+  ],
+  "_metadata": {
+    "timestamp": "2026-03-03T15:31:39.480858+00:00",
+    "task_description": "Resume workflow planning by completing Phase 2 context gathering for session WFS-brainstorm-for-a-prd; regenerate stale context-package.json using architecture, patterns, dependencies, and integration-points explorations.",
+    "source": "cli-explore-agent",
+    "exploration_angle": "patterns",
+    "exploration_index": 2,
+    "total_explorations": 4,
+    "duration_seconds": 120
+  }
+}

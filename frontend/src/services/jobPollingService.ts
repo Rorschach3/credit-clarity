@@ -3,7 +3,7 @@
  * Handles background job status polling with exponential backoff
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 export interface JobStatus {
   success: boolean;
@@ -50,10 +50,10 @@ export class JobPollingService {
     options: JobPollingOptions = {}
   ): Promise<void> {
     const {
-      initialInterval = 5000,      // Increased from 1000ms to 5000ms (5 seconds)
-      maxInterval = 30000,         // Increased from 10000ms to 30000ms (30 seconds)
+      initialInterval = 2000,      // Poll every 2s initially for snappy updates
+      maxInterval = 5000,          // Never slower than 5s while job is running
       maxDuration = 30 * 60 * 1000, // 30 minutes
-      backoffMultiplier = 2.0      // Increased from 1.5 to 2.0 for faster backoff
+      backoffMultiplier = 1.2      // Grow slowly so we stay near 5s cap
     } = options;
 
     // Clear any existing polling for this job

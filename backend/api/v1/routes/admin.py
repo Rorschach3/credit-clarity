@@ -8,15 +8,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from core.security import get_supabase_user, require_admin_access
 from schemas.responses import APIResponse, MetricsResponse
 from schemas.requests import CacheManagementRequest
-from services.monitoring import metrics_collector, monitor_api_call
-from services.cache_service import cache
-from services.background_jobs import job_processor
-from services.database_optimizer import db_optimizer
+import services.monitoring as monitoring
+import services.cache_service as cache_service
+import services.background_jobs as background_jobs
+import services.database_optimizer as database_optimizer
+from utils.async_utils import maybe_await
 
 router = APIRouter(prefix="/admin", tags=["Admin"], dependencies=[Depends(require_admin_access)])
 
 @router.get("/metrics/detailed", response_model=APIResponse[MetricsResponse])
-@monitor_api_call
+@monitoring.monitor_api_call
 async def get_detailed_metrics(
     minutes: int = Query(60, ge=1, le=1440, description="Time range in minutes"),
     current_user: Dict[str, Any] = Depends(get_supabase_user)
@@ -27,14 +28,14 @@ async def get_detailed_metrics(
     """
     try:
         # Get comprehensive metrics
-        system_metrics = metrics_collector.get_system_metrics_summary(minutes)
-        api_metrics = metrics_collector.get_api_metrics_summary(minutes)
-        business_metrics = metrics_collector.get_business_metrics_summary(minutes)
+        system_metrics = monitoring.metrics_collector.get_system_metrics_summary(minutes)
+        api_metrics = monitoring.metrics_collector.get_api_metrics_summary(minutes)
+        business_metrics = monitoring.metrics_collector.get_business_metrics_summary(minutes)
         
         # Get service-specific stats
-        job_stats = job_processor.get_detailed_stats() if job_processor else {}
-        cache_stats = cache.detailed_stats()
-        db_stats = await db_optimizer.get_performance_stats()
+        job_stats = background_jobs.job_processor.get_detailed_stats() if background_jobs.job_processor else {}
+        cache_stats = cache_service.cache.detailed_stats()
+        db_stats = await maybe_await(database_optimizer.db_optimizer.get_performance_stats())
         
         # Add admin-specific metrics
         admin_metrics = {
@@ -62,7 +63,7 @@ async def get_detailed_metrics(
         raise HTTPException(status_code=500, detail=f"Failed to retrieve metrics: {str(e)}")
 
 @router.post("/cache/manage", response_model=APIResponse[Dict[str, Any]])
-@monitor_api_call
+@monitoring.monitor_api_call
 async def manage_cache(
     request: CacheManagementRequest,
     current_user: Dict[str, Any] = Depends(get_supabase_user)
@@ -76,15 +77,15 @@ async def manage_cache(
         
         if request.action == "clear":
             if request.cache_type == "redis" or request.cache_type == "all":
-                await cache.clear()
+                await cache_service.cache.clear()
                 result["redis_cleared"] = True
             
             if request.cache_type == "memory" or request.cache_type == "all":
-                cache.clear_memory_cache()
+                cache_service.cache.clear_memory_cache()
                 result["memory_cleared"] = True
             
             if request.cache_type == "all":
-                db_optimizer.clear_cache()
+                database_optimizer.db_optimizer.clear_cache()
                 result["db_cache_cleared"] = True
             
             result["action"] = "cleared"
@@ -92,7 +93,7 @@ async def manage_cache(
             
         elif request.action == "warm":
             # Warm up frequently accessed data
-            warmed_keys = await cache.warm_cache()
+            warmed_keys = await cache_service.cache.warm_cache()
             result = {
                 "action": "warmed",
                 "warmed_keys": warmed_keys,
@@ -101,8 +102,8 @@ async def manage_cache(
             message = f"Cache warmed with {len(warmed_keys)} keys"
             
         elif request.action == "stats":
-            cache_stats = cache.detailed_stats()
-            db_cache_stats = db_optimizer.get_cache_stats()
+            cache_stats = cache_service.cache.detailed_stats()
+            db_cache_stats = database_optimizer.db_optimizer.get_cache_stats()
             
             result = {
                 "action": "stats",
@@ -129,7 +130,7 @@ async def manage_cache(
         raise HTTPException(status_code=500, detail=f"Cache management failed: {str(e)}")
 
 @router.get("/jobs/monitor", response_model=APIResponse[Dict[str, Any]])
-@monitor_api_call
+@monitoring.monitor_api_call
 async def monitor_background_jobs(
     status: Optional[str] = Query(None, description="Filter by job status"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum jobs to return"),
@@ -141,17 +142,17 @@ async def monitor_background_jobs(
     """
     try:
         # Get job queue statistics
-        job_stats = job_processor.get_detailed_stats() if job_processor else {}
+        job_stats = background_jobs.job_processor.get_detailed_stats() if background_jobs.job_processor else {}
         
         # Get recent jobs
-        recent_jobs = job_processor.job_queue.get_recent_jobs(limit, status_filter=status)
+        recent_jobs = background_jobs.job_processor.job_queue.get_recent_jobs(limit, status_filter=status)
         
         # Get processing performance
         processing_stats = {
-            "avg_processing_time": job_processor.get_avg_processing_time(),
-            "success_rate": job_processor.get_success_rate(),
-            "failure_rate": job_processor.get_failure_rate(),
-            "queue_health": job_processor.get_queue_health()
+            "avg_processing_time": background_jobs.job_processor.get_avg_processing_time(),
+            "success_rate": background_jobs.job_processor.get_success_rate(),
+            "failure_rate": background_jobs.job_processor.get_failure_rate(),
+            "queue_health": background_jobs.job_processor.get_queue_health()
         }
         
         result = {
@@ -159,9 +160,9 @@ async def monitor_background_jobs(
             "recent_jobs": [job.to_dict() for job in recent_jobs],
             "processing_performance": processing_stats,
             "system_status": {
-                "worker_status": job_processor.is_running if job_processor else False,
-                "queue_size": len(job_processor.job_queue.pending_jobs) if job_processor else 0,
-                "active_workers": job_processor.active_workers if job_processor else 0
+                "worker_status": background_jobs.job_processor.is_running if background_jobs.job_processor else False,
+                "queue_size": len(background_jobs.job_processor.job_queue.pending_jobs) if background_jobs.job_processor else 0,
+                "active_workers": background_jobs.job_processor.active_workers if background_jobs.job_processor else 0
             }
         }
         
@@ -175,14 +176,14 @@ async def monitor_background_jobs(
         raise HTTPException(status_code=500, detail=f"Job monitoring failed: {str(e)}")
 
 @router.post("/jobs/{job_id}/retry", response_model=APIResponse[Dict[str, str]])
-@monitor_api_call
+@monitoring.monitor_api_call
 async def retry_failed_job(
     job_id: str,
     current_user: Dict[str, Any] = Depends(get_supabase_user)
 ):
     """Retry a failed background job."""
     try:
-        success = await job_processor.retry_job(job_id)
+        success = await maybe_await(background_jobs.job_processor.retry_job(job_id))
         
         if not success:
             raise HTTPException(status_code=400, detail="Job cannot be retried")
@@ -197,14 +198,14 @@ async def retry_failed_job(
         raise HTTPException(status_code=500, detail=f"Job retry failed: {str(e)}")
 
 @router.get("/system/health", response_model=APIResponse[Dict[str, Any]])
-@monitor_api_call
+@monitoring.monitor_api_call
 async def get_system_health_detailed(
     current_user: Dict[str, Any] = Depends(get_supabase_user)
 ):
     """Get detailed system health information for admin monitoring."""
     try:
         # Get comprehensive health status
-        health_status = metrics_collector.get_health_status()
+        health_status = monitoring.metrics_collector.get_health_status()
         
         # Add detailed service checks
         service_health = {
@@ -273,7 +274,7 @@ def _calculate_resource_utilization(system_metrics: Dict[str, Any]) -> Dict[str,
 async def _check_database_health() -> Dict[str, Any]:
     """Check database connectivity and performance."""
     try:
-        stats = await db_optimizer.get_connection_health()
+        stats = await maybe_await(database_optimizer.db_optimizer.get_connection_health())
         return {"status": "healthy", "details": stats}
     except Exception as e:
         return {"status": "unhealthy", "error": str(e)}
@@ -281,7 +282,7 @@ async def _check_database_health() -> Dict[str, Any]:
 async def _check_cache_health() -> Dict[str, Any]:
     """Check cache system health."""
     try:
-        stats = cache.health_check()
+        stats = cache_service.cache.health_check()
         return {"status": "healthy", "details": stats}
     except Exception as e:
         return {"status": "unhealthy", "error": str(e)}
@@ -289,10 +290,10 @@ async def _check_cache_health() -> Dict[str, Any]:
 def _check_job_processor_health() -> Dict[str, Any]:
     """Check background job processor health."""
     try:
-        if not job_processor or not job_processor.is_running:
+        if not background_jobs.job_processor or not background_jobs.job_processor.is_running:
             return {"status": "unhealthy", "error": "Job processor not running"}
         
-        stats = job_processor.health_check()
+        stats = background_jobs.job_processor.health_check()
         return {"status": "healthy", "details": stats}
     except Exception as e:
         return {"status": "unhealthy", "error": str(e)}
@@ -300,7 +301,7 @@ def _check_job_processor_health() -> Dict[str, Any]:
 def _check_monitoring_health() -> Dict[str, Any]:
     """Check monitoring system health."""
     try:
-        if not metrics_collector.is_collecting:
+        if not monitoring.metrics_collector.is_collecting:
             return {"status": "unhealthy", "error": "Metrics collection not active"}
         
         return {"status": "healthy", "details": {"collecting": True}}

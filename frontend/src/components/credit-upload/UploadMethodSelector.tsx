@@ -41,13 +41,13 @@ export const UploadMethodSelector: React.FC<UploadMethodSelectorProps> = ({
   ];
 
   return (
-    <Card>
+    <Card className="bg-white/5 border-white/10 backdrop-blur-sm">
       <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
+        <CardTitle className="text-lg flex items-center gap-2 text-foreground">
           <FileText className="h-5 w-5" />
           Processing Method
         </CardTitle>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-slate-300">
           Choose how you want to process your credit report
         </p>
       </CardHeader>
@@ -58,29 +58,29 @@ export const UploadMethodSelector: React.FC<UploadMethodSelectorProps> = ({
               key={method.id}
               className={`relative p-4 border rounded-lg cursor-pointer transition-all ${
                 selectedMethod === method.id
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-blue-500 bg-blue-500/10'
+                  : 'border-white/10 bg-white/5 hover:border-white/20'
               } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
               onClick={() => !isProcessing && onMethodChange(method.id)}
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
                   {method.icon}
-                  <h3 className="font-medium">{method.name}</h3>
+                  <h3 className="font-semibold text-foreground">{method.name}</h3>
                 </div>
                 <Badge variant={method.badgeVariant}>{method.badge}</Badge>
               </div>
               
-              <p className="text-sm text-muted-foreground mb-3">
+              <p className="text-sm text-slate-300 mb-3">
                 {method.description}
               </p>
               
               <div className="space-y-2">
                 <div>
-                  <h4 className="text-xs font-medium text-green-700 dark:text-green-400 mb-1">
+                  <h4 className="text-xs font-medium text-green-400 mb-1">
                     ✓ Advantages
                   </h4>
-                  <ul className="text-xs text-muted-foreground space-y-1">
+                  <ul className="text-xs text-slate-300 space-y-1">
                     {method.pros.map((pro, index) => (
                       <li key={index}>• {pro}</li>
                     ))}
@@ -88,10 +88,10 @@ export const UploadMethodSelector: React.FC<UploadMethodSelectorProps> = ({
                 </div>
                 
                 <div>
-                  <h4 className="text-xs font-medium text-orange-700 dark:text-orange-400 mb-1">
+                  <h4 className="text-xs font-medium text-orange-400 mb-1">
                     ⚠ Considerations
                   </h4>
-                  <ul className="text-xs text-muted-foreground space-y-1">
+                  <ul className="text-xs text-slate-300 space-y-1">
                     {method.cons.map((con, index) => (
                       <li key={index}>• {con}</li>
                     ))}
@@ -108,19 +108,19 @@ export const UploadMethodSelector: React.FC<UploadMethodSelectorProps> = ({
           ))}
         </div>
         
-        <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+        <div className="mt-4 p-3 bg-white/5 border border-white/10 rounded-lg">
           <div className="flex items-center gap-2 text-sm">
             {selectedMethod === 'ocr' ? (
               <>
-                <Clock className="h-4 w-4 text-green-600" />
-                <span className="text-green-700 dark:text-green-400 font-medium">
+                <Clock className="h-4 w-4 text-green-400" />
+                <span className="text-green-400 font-medium">
                   Estimated time: 30-60 seconds
                 </span>
               </>
             ) : (
               <>
-                <Zap className="h-4 w-4 text-blue-600" />
-                <span className="text-blue-700 dark:text-blue-400 font-medium">
+                <Zap className="h-4 w-4 text-blue-400" />
+                <span className="text-blue-400 font-medium">
                   Estimated time: 2-5 minutes
                 </span>
               </>

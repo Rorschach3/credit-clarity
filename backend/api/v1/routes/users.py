@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, Field, validator
 
 from core.config import get_settings
 from core.security import get_supabase_user
@@ -34,8 +34,8 @@ class ProfileUpdateRequest(BaseModel):
     """Profile update request."""
     first_name: Optional[str] = Field(None, min_length=1, max_length=50)
     last_name: Optional[str] = Field(None, min_length=1, max_length=50)
-    phone: Optional[str] = Field(None, regex=r'^\+?[\d\s\-()]{10,}$')
-    date_of_birth: Optional[str] = Field(None, regex=r'^\d{4}-\d{2}-\d{2}$')
+    phone: Optional[str] = Field(None, pattern=r'^\+?[\d\s\-()]{10,}$')
+    date_of_birth: Optional[str] = Field(None, pattern=r'^\d{4}-\d{2}-\d{2}$')
     address: Optional[Dict[str, Any]] = None
     preferences: Optional[Dict[str, Any]] = None
 
@@ -48,7 +48,7 @@ class ProfileUpdateRequest(BaseModel):
 
 class EmailUpdateRequest(BaseModel):
     """Email update request."""
-    new_email: EmailStr
+    new_email: str = Field(..., pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     password: str = Field(..., min_length=1)
 
 

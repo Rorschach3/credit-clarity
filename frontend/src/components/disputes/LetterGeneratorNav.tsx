@@ -1,16 +1,19 @@
 import * as React from "react"
 import { Button } from "../ui/button"
 import { useNavigate } from "react-router-dom"
+import { useAuth } from "@/hooks/use-auth"
 
 export function LetterGeneratorNav() {
   const navigate = useNavigate()
+  const { logout } = useAuth()
 
-  const handleLogout = () => {
-    // Placeholder logout logic
-    // TODO: Replace with actual logout implementation
-    console.log("Logout clicked")
-    // For example, clear auth tokens and redirect to login page
-    navigate("/login")
+  const handleLogout = async () => {
+    try {
+      await logout()
+      navigate("/login")
+    } catch (error) {
+      console.error("Logout failed:", error)
+    }
   }
 
   const handleProfile = () => {

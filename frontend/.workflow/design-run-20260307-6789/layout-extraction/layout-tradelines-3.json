@@ -1,0 +1,39 @@
+{
+  "target": "tradelines",
+  "variant": 3,
+  "variant_name": "Card Grid with Bureau Tabs",
+  "description": "Tab bar for bureau filtering (All / Equifax / Experian / TransUnion). Below: masonry-style card grid. Each card shows full tradeline detail.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-tradelines-v3",
+      "children": [
+        { "tag": "aside", "class": "sidebar" },
+        {
+          "tag": "main",
+          "class": "card-grid-main",
+          "children": [
+            { "tag": "div", "class": "page-header" },
+            { "tag": "div", "class": "bureau-tab-bar" },
+            { "tag": "div", "class": "tradeline-cards-grid" },
+            { "tag": "div", "class": "pagination-bar" }
+          ]
+        }
+      ]
+    },
+    "css_layout_rules": {
+      ".layout-tradelines-v3": "display: grid; grid-template-columns: 260px 1fr; min-height: 100vh;",
+      ".card-grid-main": "padding: 2rem; overflow-y: auto;",
+      ".bureau-tab-bar": "display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;",
+      ".tradeline-cards-grid": "display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem;",
+      ".pagination-bar": "display: flex; align-items: center; justify-content: space-between; margin-top: 2rem;",
+      "@media (max-width: 1200px)": {
+        ".tradeline-cards-grid": "grid-template-columns: repeat(2, 1fr);"
+      },
+      "@media (max-width: 768px)": {
+        ".layout-tradelines-v3": "grid-template-columns: 1fr;",
+        ".tradeline-cards-grid": "grid-template-columns: 1fr;"
+      }
+    }
+  }
+}

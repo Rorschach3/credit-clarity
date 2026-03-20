@@ -1,0 +1,49 @@
+{
+  "target": "credit-report-upload",
+  "variant": 2,
+  "variant_name": "Split Upload + Live Preview",
+  "description": "Left: upload panel with method toggle (AI/OCR) and progress. Right: live results preview updating in real-time.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-upload-v2",
+      "children": [
+        { "tag": "nav", "class": "navbar" },
+        {
+          "tag": "main",
+          "class": "upload-split",
+          "children": [
+            {
+              "tag": "div",
+              "class": "upload-left",
+              "children": [
+                { "tag": "div", "class": "method-selector" },
+                { "tag": "div", "class": "dropzone" },
+                { "tag": "div", "class": "progress-section" }
+              ]
+            },
+            {
+              "tag": "div",
+              "class": "upload-right",
+              "children": [
+                { "tag": "div", "class": "results-header" },
+                { "tag": "div", "class": "bureau-tabs" },
+                { "tag": "div", "class": "tradelines-preview" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "css_layout_rules": {
+      ".upload-split": "display: grid; grid-template-columns: 420px 1fr; min-height: calc(100vh - 64px);",
+      ".upload-left": "padding: 2rem; border-right: 1px solid var(--border); overflow-y: auto;",
+      ".upload-right": "padding: 2rem; overflow-y: auto;",
+      ".bureau-tabs": "display: flex; gap: 0.5rem; margin-bottom: 1.5rem;",
+      "@media (max-width: 900px)": {
+        ".upload-split": "grid-template-columns: 1fr;",
+        ".upload-left": "border-right: none; border-bottom: 1px solid var(--border);"
+      }
+    }
+  }
+}

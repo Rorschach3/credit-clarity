@@ -9,13 +9,12 @@ import { Navbar } from './components/layout/Navbar';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { queryClient } from './lib/react-query';
 import * as Sentry from '@sentry/react';
-import { 
-  PageLoading, 
-  DisputeWizardLoading, 
-  CreditReportUploadLoading, 
-  TradelinesLoading, 
+import {
+  DisputeWizardLoading,
+  CreditReportUploadLoading,
+  TradelinesLoading,
   ProfileLoading,
-  DashboardLoading 
+  DashboardLoading
 } from './components/ui/loading';
 import { Analytics } from "@vercel/analytics/react"
 
@@ -26,10 +25,14 @@ import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
+import AuthCallbackPage from '@/pages/AuthCallbackPage';
 import DisputeLetterPage from './pages/DisputeLetterPage';
 import FaqPage from './pages/FaqPage';
 import PricingPage from './pages/PricingPage';
 import BlogPage from './pages/BlogPage';
+import ContactPage from './pages/ContactPage';
+import PrivacyPage from './pages/PrivacyPage';
+import TermsPage from './pages/TermsPage';
 
 // Lazy load heavy pages for code splitting
 const ProfilePage = React.lazy(() => import('@/pages/ProfilePage'));
@@ -37,13 +40,10 @@ const Dashboard = React.lazy(() => import('@/pages/DashboardPage'));
 const TradelinesPage = React.lazy(() => import('@/pages/TradelinesPage'));
 const CreditReportUploadPage = React.lazy(() => import('./pages/CreditReportUploadPage'));
 const DisputeWizardPage = React.lazy(() => import('./pages/DisputeWizardPage'));
+const DisputeHistoryPage = React.lazy(() => import('./pages/DisputeHistoryPage'));
+const DisputePlannerPage = React.lazy(() => import('./pages/DisputePlannerPage'));
 
-// Lazy load component chunks
-const Hero = React.lazy(() => import('./components/Hero/Hero'));
-const ServicesGrid = React.lazy(() => import('./components/Services/ServicesGrid'));
-const ProcessTimeline = React.lazy(() => import('./components/Process/ProcessTimeline'));
-const ContactForm = React.lazy(() => import('./components/Contact/ContactForm'));
-const Footer = React.lazy(() => import('./components/Footer/Footer'));
+import { Footer } from './components/layout/Footer';
 
 import { AuthProvider, useAuth } from './hooks/use-auth';
 import { OrganizationSchema } from './components/seo/OrganizationSchema';
@@ -55,7 +55,7 @@ function App() {
         <Analytics />
         <OrganizationSchema />
         <AuthProvider>
-          <Router>
+          <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <AppContent />
           </Router>
         </AuthProvider>
@@ -92,19 +92,13 @@ function AppContent() {
       <main>
         <AnimatePresence mode="wait">
           <Routes location={location} key={routeKey}>
-            <Route path="/" element={
-              <Suspense fallback={<PageLoading message="Loading homepage..." />}>
-                <Hero />
-                <ServicesGrid />
-                <ProcessTimeline />                 
-                <ContactForm />
-              </Suspense>
-            } />
+            <Route path="/" element={<HomePage />} />
             <Route path="/home" element={<HomePage />} />
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route path="/profile" element={
               <Suspense fallback={<ProfileLoading />}>
                 <ProfilePage />
@@ -132,22 +126,28 @@ function AppContent() {
                 <TradelinesPage />
               </Suspense>
             } />
-            <Route path="/contact" element={
-              <Suspense fallback={<PageLoading message="Loading contact form..." />}>
-                <ContactForm />
-              </Suspense>
-            } />
+            <Route path="/contact" element={<ContactPage />} />
             <Route path="/faq" element={<FaqPage />} />
             <Route path="/pricing" element={<PricingPage />} />
             <Route path="/blog" element={<BlogPage />} />
+            <Route path="/dispute-history" element={
+              <Suspense fallback={<DisputeWizardLoading />}>
+                <DisputeHistoryPage />
+              </Suspense>
+            } />
+            <Route path="/dispute-planner" element={
+              <Suspense fallback={<DisputeWizardLoading />}>
+                <DisputePlannerPage />
+              </Suspense>
+            } />
+            <Route path="/privacy-policy" element={<PrivacyPage />} />
+            <Route path="/terms-and-conditions" element={<TermsPage />} />
           </Routes>
         </AnimatePresence>
       </main>
-      <Suspense fallback={<div />}>
-        <Footer />
-      </Suspense>
+      <Footer />
     </div>
   );
 }
 
-export default App;
+export default Sentry.withProfiler(App);

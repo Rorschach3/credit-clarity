@@ -1,11 +1,11 @@
 
 import { Button } from "@/components/ui/button";
-import { EnhancedDisputeLetterGenerator } from "@/components/disputes/EnhancedDisputeLetterGenerator";
+import { EnhancedDisputeLetterGenerator, type PersonalInfo } from "@/components/disputes/EnhancedDisputeLetterGenerator";
 import { NegativeItem } from "@/types/negative-item";
 
 interface GenerateLettersSectionProps {
   selectedItems: NegativeItem[];
-  personalInfo: any;
+  personalInfo?: PersonalInfo;
   onComplete: () => void;
   onBackToDocuments: () => void;
   onBackToItems: () => void;

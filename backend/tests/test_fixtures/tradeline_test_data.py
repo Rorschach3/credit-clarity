@@ -2,6 +2,7 @@
 Test fixtures and data for tradeline extraction pipeline
 Contains the exact test data from tradeline_test_rows.sql for validation
 """
+import re
 from typing import List, Dict, Any
 from datetime import datetime
 from uuid import UUID
@@ -311,10 +312,22 @@ EXPECTED_TRADELINE_RECORDS = [
 ]
 
 
+def _normalize_account_number(value: str | None) -> str:
+    """Normalize masked account numbers for stable matching across parser/normalizer outputs."""
+    if not value:
+        return ""
+    text = str(value)
+    # Remove masking markers and non-alphanumerics.
+    text = re.sub(r'[Xx*•]+', '', text)
+    text = re.sub(r'[^A-Za-z0-9]', '', text)
+    return text.upper()
+
+
 def get_expected_tradeline_by_account_number(account_number: str) -> Dict[str, Any] | None:
-    """Get expected tradeline record by account number"""
+    """Get expected tradeline record by account number (masked or unmasked)."""
+    needle = _normalize_account_number(account_number)
     for record in EXPECTED_TRADELINE_RECORDS:
-        if record['account_number'] == account_number:
+        if _normalize_account_number(record.get('account_number')) == needle:
             return record
     return None
 
@@ -364,6 +377,7 @@ def validate_tradeline_format(tradeline: Dict[str, Any]) -> Dict[str, Any]:
         try:
             datetime.strptime(date_str, '%m/%d/%Y')
         except ValueError:
+            validation_result['valid'] = False
             validation_result['errors'].append(f"Invalid date format: {date_str}")
     
     # Validate currency format (starts with $ or is None)
@@ -374,6 +388,9 @@ def validate_tradeline_format(tradeline: Dict[str, Any]) -> Dict[str, Any]:
             if not (isinstance(value, str) and value.startswith('$')):
                 validation_result['warnings'].append(f"Currency field {field} should start with $: {value}")
     
+    if validation_result['errors']:
+        validation_result['valid'] = False
+
     return validation_result
 
 

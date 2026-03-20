@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Credit Clarity — AI-Powered Credit Disputes</title>
+  <meta name="description" content="Fight back against credit report errors with AI-powered FCRA-compliant dispute letters. Free to start. Join 50,000+ users.">
+  <meta property="og:title" content="Credit Clarity — AI-Powered Credit Disputes">
+  <meta property="og:description" content="Fight back against credit report errors. AI finds errors, we write dispute letters.">
+  <link rel="canonical" href="https://creditclarity.app/">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --base:#0A0F1E; --card:#0F1729; --elevated:#1A2340; --border:#1E2D47;
+      --border-subtle:rgba(30,45,71,0.6);
+      --gold:#D4A853; --gold-hover:#E8C06A; --gold-muted:rgba(212,168,83,0.15);
+      --gold-border:rgba(212,168,83,0.3);
+      --text:#F0F4FF; --text-muted:#8892A4;
+      --success:#22C55E; --error:#EF4444;
+      --font:'Inter', system-ui, sans-serif;
+    }
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    html { scroll-behavior:smooth; }
+    body { background:var(--base); color:var(--text); font-family:var(--font); line-height:1.5; -webkit-font-smoothing:antialiased; }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes fadeInScale { from{opacity:0;transform:scale(0.96)} to{opacity:1;transform:scale(1)} }
+    @keyframes pulseGold { 0%,100%{box-shadow:0 0 0 0 rgba(212,168,83,0)} 50%{box-shadow:0 0 0 8px rgba(212,168,83,0.12)} }
+    @media (prefers-reduced-motion:reduce) { *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important} }
+    .btn-gold { display:inline-flex;align-items:center;gap:0.5rem;background:linear-gradient(135deg,var(--gold),var(--gold-hover));color:#0A0F1E;font-weight:600;padding:0.75rem 1.5rem;border-radius:0.5rem;border:none;cursor:pointer;font-size:0.9375rem;transition:transform 150ms ease,box-shadow 150ms ease;text-decoration:none; }
+    .btn-gold:hover { transform:translateY(-2px);box-shadow:0 8px 32px rgba(212,168,83,0.35); }
+    .btn-ghost { display:inline-flex;align-items:center;gap:0.5rem;background:transparent;border:1px solid var(--gold-border);color:var(--gold);padding:0.75rem 1.5rem;border-radius:0.5rem;cursor:pointer;font-size:0.9375rem;transition:border-color 150ms ease,background 150ms ease;text-decoration:none; }
+    .btn-ghost:hover { border-color:var(--gold);background:var(--gold-muted); }
+    .card { background:var(--card);border:1px solid var(--border);border-radius:0.75rem;transition:transform 250ms ease,box-shadow 250ms ease,border-color 250ms ease; }
+    .card:hover { transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.5);border-color:var(--gold-border); }
+    .badge { display:inline-flex;align-items:center;gap:0.4rem;padding:0.3rem 0.75rem;border-radius:9999px;font-size:0.75rem;font-weight:600; }
+    .badge-gold { background:var(--gold-muted);color:var(--gold);border:1px solid var(--gold-border); }
+    .badge-success { background:rgba(34,197,94,0.1);color:#22C55E; }
+    .badge-error { background:rgba(239,68,68,0.1);color:#EF4444; }
+    .container { max-width:1280px;margin:0 auto;padding:0 1rem; }
+    @media(min-width:640px){ .container{padding:0 1.5rem;} }
+
+    /* NAV */
+    header { position:fixed;top:0;left:0;right:0;z-index:100;transition:background 300ms,border-color 300ms;border-bottom:1px solid transparent; }
+    header.scrolled { background:rgba(10,15,30,0.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-color:var(--border-subtle); }
+    .nav-inner { display:flex;align-items:center;justify-content:space-between;height:64px;gap:1rem; }
+    .logo { font-size:1.125rem;font-weight:700;color:var(--gold);text-decoration:none;display:flex;align-items:center;gap:0.4rem;white-space:nowrap; }
+    .nav-links { display:none;align-items:center;gap:1.75rem; }
+    .nav-links a { color:var(--text-muted);text-decoration:none;font-size:0.9rem;font-weight:500;transition:color 150ms; }
+    .nav-links a:hover { color:var(--text); }
+    .nav-actions { display:flex;align-items:center;gap:0.75rem; }
+    .nav-actions .btn-ghost,.nav-actions .btn-gold { padding:0.5rem 1rem;font-size:0.875rem; }
+    .hamburger { display:flex;flex-direction:column;gap:5px;cursor:pointer;padding:4px;background:none;border:none; }
+    .hamburger span { display:block;width:22px;height:2px;background:var(--text);border-radius:2px; }
+    .mobile-menu { display:none;position:fixed;inset:64px 0 0 0;background:var(--base);z-index:99;padding:1.5rem;flex-direction:column;gap:0.5rem; }
+    .mobile-menu.open { display:flex; }
+    .mobile-menu a { color:var(--text);text-decoration:none;font-size:1rem;font-weight:500;padding:0.875rem 0;border-bottom:1px solid var(--border-subtle); }
+    @media(min-width:768px){ .nav-links{display:flex;} .hamburger{display:none;} }
+
+    /* HERO */
+    .hero { padding:8rem 0 5rem;text-align:center;position:relative;overflow:hidden; }
+    .hero::before { content:'';position:absolute;top:-40%;left:50%;transform:translateX(-50%);width:700px;height:700px;background:radial-gradient(circle,rgba(212,168,83,0.08) 0%,transparent 70%);pointer-events:none; }
+    .hero-inner { position:relative;z-index:1; }
+    .hero-badge { animation:fadeUp 500ms ease both; }
+    .hero-title { font-size:clamp(2rem,5vw,3.5rem);font-weight:800;line-height:1.1;margin-top:1.25rem;max-width:800px;margin-left:auto;margin-right:auto;animation:fadeUp 500ms 100ms ease both; }
+    .hero-title span { color:var(--gold); }
+    .hero-desc { color:var(--text-muted);font-size:1.125rem;margin-top:1rem;max-width:580px;margin-left:auto;margin-right:auto;animation:fadeUp 500ms 200ms ease both; }
+    .hero-ctas { display:flex;flex-wrap:wrap;gap:0.75rem;justify-content:center;margin-top:2rem;animation:fadeUp 500ms 300ms ease both; }
+    .hero-ctas .btn-gold { animation:pulseGold 2.5s 1.5s infinite;font-size:1rem;padding:0.875rem 2rem; }
+
+    /* DASHBOARD PREVIEW */
+    .dashboard-preview { margin-top:3.5rem;animation:fadeInScale 700ms 400ms ease both; }
+    .dash-card { padding:1.5rem;max-width:720px;margin:0 auto; }
+    .dash-header { display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem; }
+    .dash-header h4 { font-size:0.875rem;font-weight:600;color:var(--text-muted); }
+    .dash-stats { display:grid;grid-template-columns:repeat(4,1fr);gap:0.75rem;margin-bottom:1.25rem; }
+    @media(max-width:480px){ .dash-stats{grid-template-columns:repeat(2,1fr);} }
+    .dash-stat { background:var(--elevated);border-radius:0.5rem;padding:0.875rem;text-align:center; }
+    .dash-stat-num { font-size:1.375rem;font-weight:700;color:var(--gold); }
+    .dash-stat-label { font-size:0.6875rem;color:var(--text-muted);margin-top:0.125rem; }
+    .dash-progress-row { display:flex;align-items:center;gap:0.75rem;font-size:0.8125rem; }
+    .dash-progress-bar { flex:1;height:6px;background:var(--elevated);border-radius:3px;overflow:hidden; }
+    .dash-progress-fill { height:100%;background:linear-gradient(90deg,var(--gold),var(--gold-hover));border-radius:3px; }
+
+    /* TRUST STRIP */
+    .trust-strip { padding:1.5rem 0;text-align:center;border-top:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle);color:var(--text-muted);font-size:0.9rem; }
+    .trust-strip span { color:var(--gold);font-weight:500; }
+
+    /* PROBLEM/SOLUTION */
+    .section { padding:5rem 0; }
+    .section-label { font-size:0.75rem;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:.1em; }
+    .section-title { font-size:clamp(1.5rem,3vw,2rem);font-weight:700;margin-top:0.5rem; }
+    .section-desc { color:var(--text-muted);margin-top:0.5rem;max-width:520px; }
+    .ps-grid { display:grid;grid-template-columns:1fr;gap:1.5rem;margin-top:2.5rem; }
+    @media(min-width:640px){ .ps-grid{grid-template-columns:1fr 1fr;} }
+    .ps-card { padding:2rem; }
+    .ps-title { font-size:1.0625rem;font-weight:700;margin-bottom:1rem; }
+    .ps-item { display:flex;align-items:flex-start;gap:0.75rem;margin-bottom:0.75rem;font-size:0.9rem;color:var(--text-muted); }
+    .ps-icon { flex-shrink:0;font-size:1rem; }
+
+    /* FEATURE ROWS */
+    .feature-row { display:grid;grid-template-columns:1fr;gap:2.5rem;align-items:center;padding:3rem 0; }
+    @media(min-width:768px){ .feature-row{grid-template-columns:1fr 1fr;} .feature-row.reverse{direction:rtl;} .feature-row.reverse>*{direction:ltr;} }
+    .feat-visual { background:var(--card);border:1px solid var(--border);border-radius:0.75rem;padding:1.5rem;aspect-ratio:4/3;display:flex;flex-direction:column;justify-content:center;gap:0.875rem; }
+    .feat-bar { height:8px;background:var(--elevated);border-radius:4px;overflow:hidden; }
+    .feat-bar-fill { height:100%;border-radius:4px; }
+    .feat-label { font-size:0.75rem;color:var(--text-muted); }
+
+    /* PRICING */
+    .pricing-grid { display:grid;grid-template-columns:1fr;gap:1.25rem;margin-top:2.5rem; }
+    @media(min-width:640px){ .pricing-grid{grid-template-columns:repeat(3,1fr);} }
+    .price-card { padding:1.75rem; }
+    .price-card.featured { border-color:var(--gold-border);background:var(--elevated);position:relative; }
+    .price-badge { position:absolute;top:-12px;left:50%;transform:translateX(-50%);white-space:nowrap; }
+    .price-name { font-size:0.875rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em; }
+    .price-amount { font-size:2.25rem;font-weight:800;color:var(--text);margin-top:0.5rem; }
+    .price-amount span { font-size:1rem;font-weight:400;color:var(--text-muted); }
+    .price-features { margin-top:1.25rem;display:flex;flex-direction:column;gap:0.625rem; }
+    .pf { display:flex;align-items:center;gap:0.6rem;font-size:0.875rem;color:var(--text-muted); }
+    .pf-check { color:var(--success);font-size:0.875rem; }
+    .price-cta { margin-top:1.5rem;width:100%;text-align:center;justify-content:center; }
+
+    /* FAQ */
+    .faq-list { margin-top:2.5rem;display:flex;flex-direction:column;gap:0.75rem; }
+    .faq-item { border:1px solid var(--border);border-radius:0.75rem;overflow:hidden; }
+    .faq-q { width:100%;background:var(--card);border:none;color:var(--text);font-size:0.9375rem;font-weight:600;text-align:left;padding:1.125rem 1.25rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:1rem;transition:background 150ms;font-family:var(--font); }
+    .faq-q:hover { background:var(--elevated); }
+    .faq-icon { color:var(--gold);font-size:1.125rem;transition:transform 300ms;flex-shrink:0; }
+    .faq-item.open .faq-icon { transform:rotate(45deg); }
+    .faq-a { display:none;padding:0 1.25rem 1.125rem;color:var(--text-muted);font-size:0.9rem;line-height:1.6; }
+    .faq-item.open .faq-a { display:block; }
+
+    /* CTA BAND */
+    .cta-band { padding:5rem 0;background:linear-gradient(135deg,var(--card) 0%,var(--elevated) 100%);border-top:1px solid var(--border);border-bottom:1px solid var(--border);text-align:center; }
+    .cta-band h2 { font-size:clamp(1.5rem,3vw,2.25rem);font-weight:700; }
+    .cta-band p { color:var(--text-muted);margin-top:0.75rem; }
+    .cta-band .btn-gold { margin-top:2rem;font-size:1rem;padding:0.875rem 2rem; }
+
+    footer { padding:2.5rem 0;border-top:1px solid var(--border-subtle); }
+    .footer-inner { display:flex;flex-direction:column;align-items:center;gap:1rem;text-align:center; }
+    @media(min-width:640px){ .footer-inner{flex-direction:row;justify-content:space-between;text-align:left;} }
+    .footer-links { display:flex;gap:1.5rem;flex-wrap:wrap;justify-content:center; }
+    .footer-links a { color:var(--text-muted);text-decoration:none;font-size:0.875rem;transition:color 150ms; }
+    .footer-links a:hover { color:var(--text); }
+    .footer-copy { font-size:0.8125rem;color:var(--text-muted); }
+  </style>
+</head>
+<body>
+
+<header role="banner" id="main-header">
+  <div class="container">
+    <nav class="nav-inner" aria-label="Main navigation">
+      <a href="/" class="logo">◈ Credit Clarity</a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#faq">FAQ</a>
+      </div>
+      <div class="nav-actions">
+        <a href="/signin" class="btn-ghost" style="display:none" id="nav-signin">Sign In</a>
+        <a href="/signup" class="btn-gold" style="display:none" id="nav-signup">Start Free →</a>
+        <button class="hamburger" aria-label="Toggle menu" aria-expanded="false" id="hamburger">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </nav>
+  </div>
+  <nav class="mobile-menu" id="mobile-menu" aria-label="Mobile navigation">
+    <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#faq">FAQ</a>
+    <a href="/signin">Sign In</a>
+    <a href="/signup" class="btn-gold" style="margin-top:0.5rem;justify-content:center;">Start Free →</a>
+  </nav>
+</header>
+
+<main role="main">
+
+  <section class="hero" aria-labelledby="hero-heading">
+    <div class="container">
+      <div class="hero-inner">
+        <span class="badge badge-gold hero-badge">✓ FCRA Compliant · Trusted by 50,000+ Users</span>
+        <h1 class="hero-title" id="hero-heading">AI-Powered Credit Disputes —<br><span>Fight Back Against Errors</span></h1>
+        <p class="hero-desc">Upload your credit report, let our AI find every error and violation, then send professionally crafted dispute letters in minutes.</p>
+        <div class="hero-ctas">
+          <a href="/signup" class="btn-gold">Start for Free →</a>
+          <a href="#how-it-works" class="btn-ghost">▶ See How It Works</a>
+        </div>
+        <div class="dashboard-preview">
+          <div class="card dash-card">
+            <div class="dash-header">
+              <h4>Jane Smith's Credit Overview</h4>
+              <span class="badge badge-gold" style="font-size:0.6875rem;">Live Demo</span>
+            </div>
+            <div class="dash-stats">
+              <div class="dash-stat"><div class="dash-stat-num">680</div><div class="dash-stat-label">Score</div></div>
+              <div class="dash-stat"><div class="dash-stat-num" style="color:#EF4444">4</div><div class="dash-stat-label">Negatives</div></div>
+              <div class="dash-stat"><div class="dash-stat-num" style="color:#F59E0B">2</div><div class="dash-stat-label">Active Disputes</div></div>
+              <div class="dash-stat"><div class="dash-stat-num" style="color:#22C55E">1</div><div class="dash-stat-label">Resolved</div></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0.625rem;">
+              <div class="dash-progress-row"><span style="font-size:0.75rem;min-width:100px;color:var(--text-muted)">Experian</span><div class="dash-progress-bar"><div class="dash-progress-fill" style="width:80%"></div></div><span style="font-size:0.75rem;color:var(--gold)">80%</span></div>
+              <div class="dash-progress-row"><span style="font-size:0.75rem;min-width:100px;color:var(--text-muted)">TransUnion</span><div class="dash-progress-bar"><div class="dash-progress-fill" style="width:65%"></div></div><span style="font-size:0.75rem;color:var(--gold)">65%</span></div>
+              <div class="dash-progress-row"><span style="font-size:0.75rem;min-width:100px;color:var(--text-muted)">Equifax</span><div class="dash-progress-bar"><div class="dash-progress-fill" style="width:72%"></div></div><span style="font-size:0.75rem;color:var(--gold)">72%</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="trust-strip">
+    Trusted by users disputing with <span>Experian</span> · <span>TransUnion</span> · <span>Equifax</span>
+  </div>
+
+  <section class="section" id="features" aria-labelledby="ps-heading">
+    <div class="container">
+      <span class="section-label">The Problem We Solve</span>
+      <h2 class="section-title" id="ps-heading">Credit Errors Are Everywhere — And Costly</h2>
+      <div class="ps-grid">
+        <div class="card ps-card">
+          <div class="ps-title">❌ The Problem</div>
+          <div class="ps-item"><span class="ps-icon">📊</span><span>79% of credit reports contain errors that can lower your score</span></div>
+          <div class="ps-item"><span class="ps-icon">⏱️</span><span>Disputing manually takes weeks of back-and-forth letters</span></div>
+          <div class="ps-item"><span class="ps-icon">💸</span><span>Credit repair agencies charge $99–$149/month for basic services</span></div>
+          <div class="ps-item"><span class="ps-icon">😤</span><span>Bureaus make it intentionally difficult to file effective disputes</span></div>
+        </div>
+        <div class="card ps-card" style="border-color:var(--gold-border);">
+          <div class="ps-title" style="color:var(--gold);">✓ The Solution</div>
+          <div class="ps-item"><span class="ps-icon">🤖</span><span>AI automatically identifies every error and FCRA violation</span></div>
+          <div class="ps-item"><span class="ps-icon">⚡</span><span>Generate dispute letters in under 2 minutes — not 2 weeks</span></div>
+          <div class="ps-item"><span class="ps-icon">🆓</span><span>Start free, upgrade only when you need more letters</span></div>
+          <div class="ps-item"><span class="ps-icon">📬</span><span>Track every dispute response in your personal dashboard</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURE ROWS -->
+  <section class="section" style="padding-top:0;" aria-label="Platform features">
+    <div class="container">
+      <div class="feature-row">
+        <div>
+          <span class="section-label">Step 1</span>
+          <h3 style="font-size:1.5rem;font-weight:700;margin-top:0.5rem;">Upload Your Credit Report PDF</h3>
+          <p style="color:var(--text-muted);margin-top:0.75rem;font-size:0.9375rem;">Drag and drop your PDF from Experian, TransUnion, or Equifax. Our secure parser extracts every tradeline, account, and inquiry automatically.</p>
+          <div style="margin-top:1.25rem;display:flex;flex-direction:column;gap:0.5rem;">
+            <div style="display:flex;align-items:center;gap:0.6rem;font-size:0.875rem;color:var(--text-muted)"><span style="color:var(--success)">✓</span> 256-bit encryption</div>
+            <div style="display:flex;align-items:center;gap:0.6rem;font-size:0.875rem;color:var(--text-muted)"><span style="color:var(--success)">✓</span> Supports all 3 major bureaus</div>
+            <div style="display:flex;align-items:center;gap:0.6rem;font-size:0.875rem;color:var(--text-muted)"><span style="color:var(--success)">✓</span> Annual Credit Report compatible</div>
+          </div>
+        </div>
+        <div class="feat-visual">
+          <div style="font-size:2.5rem;text-align:center;margin-bottom:0.5rem;">📄</div>
+          <div class="feat-label">Uploading credit_report.pdf...</div>
+          <div class="feat-bar"><div class="feat-bar-fill" style="width:78%;background:linear-gradient(90deg,var(--gold),var(--gold-hover))"></div></div>
+          <div style="display:flex;justify-content:space-between;font-size:0.6875rem;color:var(--text-muted);"><span>Parsing tradelines</span><span>78%</span></div>
+          <div style="font-size:0.75rem;color:var(--success);margin-top:0.5rem;">✓ 14 tradelines found · 3 inquiries</div>
+        </div>
+      </div>
+      <div class="feature-row reverse">
+        <div>
+          <span class="section-label">Step 2</span>
+          <h3 style="font-size:1.5rem;font-weight:700;margin-top:0.5rem;">AI Finds Every Error and Violation</h3>
+          <p style="color:var(--text-muted);margin-top:0.75rem;font-size:0.9375rem;">Our AI compares each item against FCRA requirements, flags inaccurate balances, dates, statuses, and identifies items past the 7-year reporting limit.</p>
+        </div>
+        <div class="feat-visual">
+          <div style="display:flex;flex-direction:column;gap:0.5rem;">
+            <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:0.375rem;padding:0.625rem 0.75rem;font-size:0.8125rem;"><span style="color:#EF4444;font-weight:600;">⚠ Error:</span> <span style="color:var(--text-muted)">Midland Credit — balance mismatch</span></div>
+            <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:0.375rem;padding:0.625rem 0.75rem;font-size:0.8125rem;"><span style="color:#EF4444;font-weight:600;">⚠ FCRA §623:</span> <span style="color:var(--text-muted)">Account past 7-year limit</span></div>
+            <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:0.375rem;padding:0.625rem 0.75rem;font-size:0.8125rem;"><span style="color:#22C55E;font-weight:600;">✓ Clear:</span> <span style="color:var(--text-muted)">Capital One — verified accurate</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="feature-row">
+        <div>
+          <span class="section-label">Step 3</span>
+          <h3 style="font-size:1.5rem;font-weight:700;margin-top:0.5rem;">Send FCRA-Compliant Dispute Letters</h3>
+          <p style="color:var(--text-muted);margin-top:0.75rem;font-size:0.9375rem;">Each letter is written to the FCRA standard, personalized with your information and specific dispute grounds, ready to print and mail or upload online.</p>
+        </div>
+        <div class="feat-visual" style="align-items:center;justify-content:center;">
+          <div style="text-align:center;">
+            <div style="font-size:2.5rem;margin-bottom:0.75rem;">📨</div>
+            <div style="font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;">3 Letters Generated</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:1rem;">Experian · TransUnion · Equifax</div>
+            <div class="btn-gold" style="font-size:0.8125rem;padding:0.5rem 1.25rem;cursor:default;">Download All →</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section class="section" id="pricing" aria-labelledby="pricing-heading" style="background:var(--card);border-top:1px solid var(--border);">
+    <div class="container">
+      <span class="section-label">Pricing</span>
+      <h2 class="section-title" id="pricing-heading">Simple, Transparent Pricing</h2>
+      <p class="section-desc">Start free. Upgrade when you're ready.</p>
+      <div class="pricing-grid">
+        <div class="card price-card">
+          <div class="price-name">Free</div>
+          <div class="price-amount">$0<span>/mo</span></div>
+          <div class="price-features">
+            <div class="pf"><span class="pf-check">✓</span> 1 credit report upload</div>
+            <div class="pf"><span class="pf-check">✓</span> AI error analysis</div>
+            <div class="pf"><span class="pf-check">✓</span> 1 dispute letter</div>
+            <div class="pf" style="color:var(--border);"><span>✗</span> Unlimited letters</div>
+            <div class="pf" style="color:var(--border);"><span>✗</span> Response tracking</div>
+          </div>
+          <a href="/signup" class="btn-ghost price-cta">Get Started Free</a>
+        </div>
+        <div class="card price-card featured">
+          <span class="badge badge-gold price-badge" style="font-size:0.6875rem;">Most Popular</span>
+          <div class="price-name">Pro</div>
+          <div class="price-amount">$19<span>/mo</span></div>
+          <div class="price-features">
+            <div class="pf"><span class="pf-check">✓</span> Unlimited report uploads</div>
+            <div class="pf"><span class="pf-check">✓</span> AI error analysis</div>
+            <div class="pf"><span class="pf-check">✓</span> Unlimited dispute letters</div>
+            <div class="pf"><span class="pf-check">✓</span> Response tracking</div>
+            <div class="pf"><span class="pf-check">✓</span> Priority support</div>
+          </div>
+          <a href="/signup?plan=pro" class="btn-gold price-cta">Start Pro Trial →</a>
+        </div>
+        <div class="card price-card">
+          <div class="price-name">Enterprise</div>
+          <div class="price-amount">Custom</div>
+          <div class="price-features">
+            <div class="pf"><span class="pf-check">✓</span> Everything in Pro</div>
+            <div class="pf"><span class="pf-check">✓</span> Team accounts</div>
+            <div class="pf"><span class="pf-check">✓</span> API access</div>
+            <div class="pf"><span class="pf-check">✓</span> Custom integrations</div>
+            <div class="pf"><span class="pf-check">✓</span> Dedicated support</div>
+          </div>
+          <a href="/contact" class="btn-ghost price-cta">Contact Sales</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="section" id="faq" aria-labelledby="faq-heading">
+    <div class="container" style="max-width:720px;">
+      <span class="section-label">FAQ</span>
+      <h2 class="section-title" id="faq-heading">Common Questions</h2>
+      <div class="faq-list" role="list">
+        <div class="faq-item" role="listitem">
+          <button class="faq-q" aria-expanded="false">Is Credit Clarity really free to start?<span class="faq-icon">+</span></button>
+          <div class="faq-a">Yes. Our free tier lets you upload one credit report and generate one dispute letter at no cost. You only need to upgrade if you want to dispute multiple items or track responses over time.</div>
+        </div>
+        <div class="faq-item" role="listitem">
+          <button class="faq-q" aria-expanded="false">How does the AI find errors?<span class="faq-icon">+</span></button>
+          <div class="faq-a">Our AI parses your credit report and checks each tradeline against FCRA requirements — including reporting time limits, balance accuracy, and account status. It flags anything that doesn't match the rules bureaus must follow.</div>
+        </div>
+        <div class="faq-item" role="listitem">
+          <button class="faq-q" aria-expanded="false">Are the dispute letters legally valid?<span class="faq-icon">+</span></button>
+          <div class="faq-a">Yes. All letters are written to comply with the Fair Credit Reporting Act (FCRA), including proper citations of the specific sections being invoked. They cite the same legal grounds professional credit repair attorneys use.</div>
+        </div>
+        <div class="faq-item" role="listitem">
+          <button class="faq-q" aria-expanded="false">How long does the dispute process take?<span class="faq-icon">+</span></button>
+          <div class="faq-a">Once you mail your dispute letters, credit bureaus are legally required to investigate within 30 days. Many disputes are resolved within 45–60 days. We track all responses in your dashboard so you always know the status.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta-band" aria-labelledby="cta-heading">
+    <div class="container">
+      <h2 id="cta-heading">Ready to Fix Your Credit?</h2>
+      <p>Join thousands of users who've already improved their scores. It's free to start.</p>
+      <a href="/signup" class="btn-gold">Start Free Today →</a>
+    </div>
+  </section>
+</main>
+
+<footer role="contentinfo">
+  <div class="container">
+    <div class="footer-inner">
+      <a href="/" class="logo">◈ Credit Clarity</a>
+      <div class="footer-links"><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/about">About</a></div>
+      <p class="footer-copy">© 2026 Credit Clarity. All rights reserved.</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Nav opacity on scroll
+  const header = document.getElementById('main-header');
+  window.addEventListener('scroll', () => {
+    header.classList.toggle('scrolled', window.scrollY > 20);
+  }, { passive: true });
+  document.getElementById('nav-signin').style.display='inline-flex';
+  document.getElementById('nav-signup').style.display='inline-flex';
+  // Hamburger
+  const h=document.getElementById('hamburger'),m=document.getElementById('mobile-menu');
+  h.addEventListener('click',()=>{const o=m.classList.toggle('open');h.setAttribute('aria-expanded',String(o));});
+  // FAQ accordion
+  document.querySelectorAll('.faq-q').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const item=btn.closest('.faq-item');
+      const isOpen=item.classList.toggle('open');
+      btn.setAttribute('aria-expanded',String(isOpen));
+    });
+  });
+</script>
+</body>
+</html>

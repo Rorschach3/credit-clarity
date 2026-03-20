@@ -2,6 +2,15 @@
 Comprehensive test runner for Phase 4 parsing accuracy validation.
 Runs all test suites and generates consolidated reports.
 """
+import pytest
+
+# This module is an executable harness (not a unit test) and depends on optional heavy
+# packages + local test assets. Skip it during normal `pytest` runs.
+pytest.skip(
+    "Phase 4 parsing test runner is a manual harness (requires optional dependencies).",
+    allow_module_level=True,
+)
+
 import asyncio
 import json
 import os
@@ -13,6 +22,7 @@ import argparse
 # Import test modules
 from test_parsing_accuracy import ParsingAccuracyTester, PerformanceBenchmark
 from test_real_world_validation import RealWorldValidator, EdgeCaseTester
+from test_sprint0_validation import Sprint0Validator
 
 
 class Phase4TestRunner:
@@ -34,21 +44,29 @@ class Phase4TestRunner:
         run_performance: bool = True,
         run_real_world: bool = True,
         run_edge_cases: bool = True,
+        run_sprint0: bool = True,
         test_count: int = 50
     ):
         """Run all Phase 4 tests."""
-        
+
         self.start_time = time.time()
         print("🚀 Starting Phase 4 Comprehensive Testing Suite")
         print("=" * 80)
         print(f"Test Configuration:")
+        print(f"  - Sprint 0 Validation: {'✅' if run_sprint0 else '❌'}")
         print(f"  - Accuracy Tests: {'✅' if run_accuracy else '❌'}")
         print(f"  - Performance Tests: {'✅' if run_performance else '❌'}")
         print(f"  - Real-World Validation: {'✅' if run_real_world else '❌'}")
         print(f"  - Edge Case Testing: {'✅' if run_edge_cases else '❌'}")
         print(f"  - Test Count: {test_count}")
         print("=" * 80)
-        
+
+        # Run Sprint 0 validation (PRIORITY: Real PDF vs Ground Truth SQL)
+        if run_sprint0:
+            print("\n🎯 Running Sprint 0 Validation (TransUnion PDF vs Ground Truth SQL)...")
+            sprint0_results = await self.run_sprint0_validation()
+            self.results["sprint0_validation"] = sprint0_results
+
         # Run accuracy tests
         if run_accuracy:
             print("\n📊 Running Parsing Accuracy Tests...")
@@ -82,6 +100,61 @@ class Phase4TestRunner:
         
         return self.results
     
+    async def run_sprint0_validation(self):
+        """Run Sprint 0 validation: Real PDF vs Ground Truth SQL."""
+        try:
+            from pathlib import Path
+
+            backend_dir = Path(__file__).resolve().parents[2]
+            pdf_path = backend_dir / 'TransUnion-06-10-2025.pdf'
+            sql_path = backend_dir / 'tradeline_test_rows.sql'
+            output_dir = Path(self.output_dir) / 'sprint0'
+
+            validator = Sprint0Validator()
+            report = await validator.run_validation(
+                pdf_path=pdf_path,
+                sql_path=sql_path,
+                output_dir=output_dir
+            )
+
+            return {
+                "success": report.passed,
+                "report": {
+                    "expected_count": report.expected_count,
+                    "extracted_count": report.extracted_count,
+                    "matched_count": report.matched_count,
+                    "critical_accuracy": report.critical_accuracy,
+                    "optional_accuracy": report.optional_accuracy,
+                    "overall_accuracy": report.overall_accuracy,
+                    "passed": report.passed,
+                    "errors": report.errors,
+                    "warnings": report.warnings
+                },
+                "summary": {
+                    "overall_accuracy": report.overall_accuracy,
+                    "critical_accuracy": report.critical_accuracy,
+                    "optional_accuracy": report.optional_accuracy,
+                    "target_achieved": report.passed,
+                    "tests_passed": 1 if report.passed else 0,
+                    "total_tests": 1
+                }
+            }
+        except Exception as e:
+            import traceback
+            return {
+                "success": False,
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+                "summary": {
+                    "overall_accuracy": 0.0,
+                    "critical_accuracy": 0.0,
+                    "optional_accuracy": 0.0,
+                    "target_achieved": False,
+                    "tests_passed": 0,
+                    "total_tests": 1
+                }
+            }
+
     async def run_accuracy_tests(self, test_count: int):
         """Run parsing accuracy tests."""
         try:
@@ -237,17 +310,25 @@ class Phase4TestRunner:
     
     def calculate_overall_metrics(self) -> Dict[str, Any]:
         """Calculate overall performance metrics."""
-        
+
         metrics = {
             "phase4_target_achieved": False,
+            "sprint0_passed": False,
             "overall_accuracy": 0.0,
             "performance_rating": "Unknown",
             "robustness_score": 0.0,
             "production_readiness": "Not Ready"
         }
-        
-        # Accuracy metrics
-        if "accuracy_tests" in self.results and self.results["accuracy_tests"]["success"]:
+
+        # Sprint 0 validation (highest priority)
+        if "sprint0_validation" in self.results and self.results["sprint0_validation"]["success"]:
+            sprint0_data = self.results["sprint0_validation"]["summary"]
+            metrics["sprint0_passed"] = sprint0_data["target_achieved"]
+            metrics["overall_accuracy"] = sprint0_data["overall_accuracy"]
+            metrics["phase4_target_achieved"] = sprint0_data["target_achieved"]
+
+        # Accuracy metrics (fallback if Sprint 0 not run)
+        elif "accuracy_tests" in self.results and self.results["accuracy_tests"]["success"]:
             accuracy_data = self.results["accuracy_tests"]["summary"]
             metrics["overall_accuracy"] = accuracy_data["overall_accuracy"]
             metrics["phase4_target_achieved"] = accuracy_data["target_achieved"]
@@ -487,7 +568,9 @@ CONCLUSIONS:
 async def main():
     """Main function to run tests based on command line arguments."""
     parser = argparse.ArgumentParser(description="Run Phase 4 comprehensive testing suite")
-    
+
+    parser.add_argument("--sprint0", action="store_true", default=True, help="Run Sprint 0 validation (PDF vs SQL)")
+    parser.add_argument("--no-sprint0", action="store_true", help="Skip Sprint 0 validation")
     parser.add_argument("--accuracy", action="store_true", default=True, help="Run accuracy tests")
     parser.add_argument("--no-accuracy", action="store_true", help="Skip accuracy tests")
     parser.add_argument("--performance", action="store_true", default=True, help="Run performance tests")
@@ -498,10 +581,11 @@ async def main():
     parser.add_argument("--no-edge-cases", action="store_true", help="Skip edge case tests")
     parser.add_argument("--test-count", type=int, default=50, help="Number of accuracy tests to run")
     parser.add_argument("--output-dir", type=str, default="/tmp/phase4_test_results", help="Output directory")
-    
+
     args = parser.parse_args()
-    
+
     # Configure test execution
+    run_sprint0 = args.sprint0 and not args.no_sprint0
     run_accuracy = args.accuracy and not args.no_accuracy
     run_performance = args.performance and not args.no_performance
     run_real_world = args.real_world and not args.no_real_world
@@ -512,6 +596,7 @@ async def main():
     
     # Run all tests
     results = await runner.run_all_tests(
+        run_sprint0=run_sprint0,
         run_accuracy=run_accuracy,
         run_performance=run_performance,
         run_real_world=run_real_world,
@@ -523,12 +608,20 @@ async def main():
     print("\n" + "=" * 80)
     print("🎉 PHASE 4 TESTING COMPLETE!")
     print("=" * 80)
-    
-    if results.get("accuracy_tests", {}).get("success"):
+
+    if results.get("sprint0_validation", {}).get("success") is not None:
+        sprint0_data = results["sprint0_validation"]["summary"]
+        target_met = "✅ PASSED" if sprint0_data["target_achieved"] else "❌ FAILED"
+        print(f"🎯 Sprint 0 Validation: {target_met}")
+        print(f"   Overall Accuracy: {sprint0_data['overall_accuracy']:.2f}%")
+        print(f"   Critical Accuracy: {sprint0_data['critical_accuracy']:.2f}% (Target: 100%)")
+        print(f"   Optional Accuracy: {sprint0_data['optional_accuracy']:.2f}% (Target: ≥95%)")
+
+    elif results.get("accuracy_tests", {}).get("success"):
         accuracy = results["accuracy_tests"]["summary"]["overall_accuracy"]
         target_met = "✅ TARGET MET" if accuracy >= 99.0 else "❌ TARGET MISSED"
         print(f"📊 Overall Accuracy: {accuracy:.2f}% - {target_met}")
-    
+
     print(f"📁 Full results: {args.output_dir}")
     print(f"🌐 HTML Report: {args.output_dir}/report.html")
     print("=" * 80)

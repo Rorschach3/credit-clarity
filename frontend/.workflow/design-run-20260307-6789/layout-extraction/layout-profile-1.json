@@ -1,0 +1,39 @@
+{
+  "target": "profile",
+  "variant": 1,
+  "variant_name": "Settings Sidebar",
+  "description": "Left vertical nav with settings categories. Right content area for each setting section. Standard settings UX.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-profile-v1",
+      "children": [
+        { "tag": "aside", "class": "sidebar" },
+        {
+          "tag": "main",
+          "class": "settings-main",
+          "children": [
+            { "tag": "div", "class": "settings-nav" },
+            {
+              "tag": "div",
+              "class": "settings-content",
+              "children": [
+                { "tag": "div", "class": "settings-section section-personal" },
+                { "tag": "div", "class": "settings-section section-security" },
+                { "tag": "div", "class": "settings-section section-notifications" },
+                { "tag": "div", "class": "settings-section section-billing" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "css_layout_rules": {
+      ".layout-profile-v1": "display: grid; grid-template-columns: 260px 1fr; min-height: 100vh;",
+      ".settings-main": "display: grid; grid-template-columns: 200px 1fr; padding: 2rem; gap: 3rem;",
+      ".settings-nav": "position: sticky; top: 2rem; align-self: start; display: flex; flex-direction: column; gap: 0.25rem;",
+      ".settings-content": "display: flex; flex-direction: column; gap: 3rem; max-width: 640px;",
+      ".settings-section": "border-bottom: 1px solid var(--border); padding-bottom: 3rem;"
+    }
+  }
+}

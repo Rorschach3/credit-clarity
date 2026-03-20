@@ -71,7 +71,9 @@ class ResponseFormatter:
             "success": True,
             "data": data,
             "error": None,
-            "request_id": req_id
+            "request_id": req_id,
+            "timestamp": datetime.now().isoformat(),
+            "version": "1.0",
         }
 
     @staticmethod
@@ -108,7 +110,9 @@ class ResponseFormatter:
             "success": False,
             "error": error_detail.model_dump(),
             "data": None,
-            "request_id": req_id
+            "request_id": req_id,
+            "timestamp": datetime.now().isoformat(),
+            "version": "1.0",
         }
 
     @staticmethod
@@ -148,7 +152,9 @@ class ResponseFormatter:
             "data": data,
             "error": None,
             "request_id": req_id,
-            "pagination": pagination
+            "pagination": pagination,
+            "timestamp": datetime.now().isoformat(),
+            "version": "1.0",
         }
 
     @staticmethod

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,11 +17,12 @@ type Profile = Database['public']['Tables']['profiles']['Row'];
 
 export default function ProfilePage() {
   const { user } = useAuth();
-  const { 
-    profile: persistentProfile, 
-    updateProfile, 
+  const {
+    profile: persistentProfile,
+    updateProfile,
+    refreshProfile,
     loading: profileLoading,
-    error: profileError 
+    error: profileError
   } = usePersistentProfile();
   
   const profileSchema = z.object({
@@ -73,51 +74,7 @@ export default function ProfilePage() {
     }
   }, [persistentProfile]);
 
-  // Memoize fetchProfile with useCallback
-  const fetchProfile = useCallback(async () => {
-    if (!user) return;
-    
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('first_name, last_name, address1, address2, city, state, zip_code, phone_number, last_four_of_ssn, dob')
-        .eq('user_id', user.id)
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching profile:', error);
-        throw error;
-      }
-
-      if (data) {
-        setProfile({
-          first_name: data.first_name ?? '',
-          last_name: data.last_name ?? '',
-          address1: data.address1 ?? null,
-          address2: data.address2 ?? null,
-          city: data.city ?? null,
-          state: data.state ?? null,
-          zip_code: data.zip_code ?? null,
-          phone_number: data.phone_number ?? null,
-          last_four_of_ssn: data.last_four_of_ssn ?? null,
-          dob: data.dob ?? null
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching profile:', error instanceof Error ? error.message : 'Unknown error');
-      toast.error('Failed to load profile');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user]); // Include user in dependencies
-
-  // Simplified useEffect with proper dependencies
-  useEffect(() => {
-    if (user) {
-      fetchProfile();
-    }
-  }, [user, fetchProfile]); // Include both user and fetchProfile
+  // Profile data comes from usePersistentProfile hook — no separate fetch needed
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,7 +106,6 @@ export default function ProfilePage() {
 
     setIsLoading(true);
     try {
-      // Use the persistent profile hook to update the profile
       await updateProfile({
         first_name: profile.first_name,
         last_name: profile.last_name,
@@ -163,11 +119,11 @@ export default function ProfilePage() {
         dob: profile.dob || null,
         avatar_url: avatarUrl || null
       });
-
-      // Success toast is handled by the hook
+      // Refresh to ensure UI reflects saved data
+      await refreshProfile();
     } catch (error) {
       console.error('Error updating profile:', error);
-      // Error toast is handled by the hook
+      // Error toast handled by hook — re-throw ensures finally still runs
     } finally {
       setIsLoading(false);
     }
@@ -198,7 +154,7 @@ export default function ProfilePage() {
       // Upload to Supabase storage
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-      
+
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(fileName, file, { upsert: true });
@@ -212,19 +168,11 @@ export default function ProfilePage() {
 
       const newAvatarUrl = urlData.publicUrl;
 
-      // Update profile with new avatar URL
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ 
-          avatar_url: newAvatarUrl,
-          updated_at: new Date().toISOString() 
-        })
-        .eq('user_id', user.id);
+      // Update via hook so cache is cleared and state stays in sync
+      await updateProfile({ avatar_url: newAvatarUrl });
 
-      if (updateError) throw updateError;
-
+      // Immediately reflect in local avatar state
       setAvatarUrl(newAvatarUrl);
-      toast.success('Avatar updated successfully!');
     } catch (error) {
       console.error('Avatar upload error:', error);
       toast.error('Failed to update avatar');
@@ -234,182 +182,177 @@ export default function ProfilePage() {
   };
 
   return (
-      <div className="container mx-auto py-10 max-w-2xl">
-        <Card>
-          <CardHeader>
-            <CardTitle>Profile Settings</CardTitle>
-            <CardDescription>
-              Update your personal information and preferences
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {/* Avatar Section */}
-            <div className="flex flex-col items-center mb-6 p-4 border rounded-lg">
-              <div className="relative mb-4">
-                {/* Custom larger avatar for profile page */}
-                <div 
-                  className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-gray-200 bg-gray-100 cursor-pointer transition-all duration-200 hover:border-primary hover:shadow-md group"
-                  onClick={() => fileInputRef.current?.click()}
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Upload profile picture"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      fileInputRef.current?.click();
-                    }
-                  }}
-                >
-                  {avatarUrl ? (
-                    <img 
-                      src={avatarUrl} 
-                      alt="Profile avatar" 
-                      className="w-full h-full object-cover group-hover:brightness-75 transition-all duration-200"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-primary/10 flex items-center justify-center text-2xl font-semibold text-primary group-hover:bg-primary/20 transition-colors duration-200">
-                      {profile.first_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
-                    </div>
-                  )}
-                  
-                  {/* Camera overlay that appears on hover */}
-                  <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                    <Camera className="h-6 w-6 text-white" />
+    <div className="has-navbar container mx-auto py-10 max-w-2xl">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">Profile <span className="text-gold-gradient">Settings</span></h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Your name, address, and SSN last 4 are required to generate dispute letters.
+        </p>
+      </div>
+
+      <Card className="card-midnight">
+        <CardContent className="pt-6">
+          {/* Avatar Section */}
+          <div
+            className="flex flex-col items-center mb-6 p-4 rounded-lg border"
+            style={{ borderColor: '#1E2D47', background: 'rgba(26,35,64,0.4)' }}
+          >
+            <div className="relative mb-3">
+              <div
+                className="relative w-24 h-24 rounded-full overflow-hidden border-2 cursor-pointer transition-all duration-200 group"
+                style={{ borderColor: '#1E2D47' }}
+                onClick={() => fileInputRef.current?.click()}
+                role="button"
+                tabIndex={0}
+                aria-label="Upload profile picture"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    fileInputRef.current?.click();
+                  }
+                }}
+              >
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="Profile avatar"
+                    className="w-full h-full object-cover group-hover:brightness-75 transition-all duration-200"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-2xl font-semibold text-[#D4A853]"
+                    style={{ background: 'rgba(212,168,83,0.1)' }}>
+                    {profile.first_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
                   </div>
-                  
-                  {/* Camera button overlay */}
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="default"
-                    className="absolute -bottom-1 -right-1 rounded-full w-8 h-8 shadow-lg z-10"
-                    onClick={(e) => {
-                      e.stopPropagation(); // Prevent double-clicking
-                      fileInputRef.current?.click();
-                    }}
-                    disabled={uploadingAvatar}
-                    aria-label="Change profile picture"
-                  >
-                    {uploadingAvatar ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-                    ) : (
-                      <Camera className="h-4 w-4" />
-                    )}
-                  </Button>
+                )}
+                <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                  <Camera className="h-6 w-6 text-white" />
                 </div>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="default"
+                  className="absolute -bottom-1 -right-1 rounded-full w-8 h-8 shadow-lg z-10 btn-gold"
+                  onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                  disabled={uploadingAvatar}
+                  aria-label="Change profile picture"
+                >
+                  {uploadingAvatar
+                    ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                    : <Camera className="h-4 w-4" />}
+                </Button>
               </div>
-              
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarUpload}
-                className="hidden"
-              />
-              
-              <p className="text-sm text-muted-foreground text-center">
-                Click anywhere on the avatar or camera icon to update your profile picture
-              </p>
+            </div>
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
+            <p className="text-xs text-muted-foreground text-center">Click avatar to update photo</p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Name */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="firstName">First Name <span className="text-red-400">*</span></Label>
+                <Input
+                  id="firstName"
+                  value={profile.first_name || ''}
+                  onChange={(e) => handleInputChange('first_name', e.target.value)}
+                  placeholder="Jane"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="lastName">Last Name <span className="text-red-400">*</span></Label>
+                <Input
+                  id="lastName"
+                  value={profile.last_name || ''}
+                  onChange={(e) => handleInputChange('last_name', e.target.value)}
+                  placeholder="Smith"
+                  required
+                />
+              </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="firstName">First Name *</Label>
-                <Input
-                id="firstName"
-                value={profile.first_name || ''}
-                onChange={(e) => handleInputChange('first_name', e.target.value)}
-                placeholder="Enter your first name"
-                required
-                />
-              </div>
-              <div>
-                <Label htmlFor="lastName">Last Name *</Label>
-                <Input
-                id="lastName"
-                value={profile.last_name || ''}
-                onChange={(e) => handleInputChange('last_name', e.target.value)}
-                placeholder="Enter your last name"
-                required
-                />
-              </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+            {/* DOB + SSN */}
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="dob">Date of Birth</Label>
                 <Input
-                id="dob"
-                type="date"
-                value={profile.dob || ''}
-                onChange={(e) => handleInputChange('dob', e.target.value)}
+                  id="dob"
+                  type="date"
+                  value={profile.dob || ''}
+                  onChange={(e) => handleInputChange('dob', e.target.value)}
                 />
               </div>
               <div>
-                <Label htmlFor="lastFourSSN">Last 4 digits of SSN</Label>
+                <Label htmlFor="lastFourSSN">
+                  Last 4 of SSN <span className="text-red-400">*</span>
+                  <span className="ml-1 text-xs text-muted-foreground">(required for disputes)</span>
+                </Label>
                 <Input
-                id="lastFourSSN"
-                value={profile.last_four_of_ssn || ''}
-                onChange={(e) => handleInputChange('last_four_of_ssn', e.target.value.replace(/\D/g, '').slice(0, 4))}
-                placeholder="1234"
-                maxLength={4}
+                  id="lastFourSSN"
+                  value={profile.last_four_of_ssn || ''}
+                  onChange={(e) => handleInputChange('last_four_of_ssn', e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="1234"
+                  maxLength={4}
+                  inputMode="numeric"
                 />
               </div>
-              </div>
+            </div>
 
-              <div>
-              <Label htmlFor="address1">Address Line 1</Label>
+            {/* Address */}
+            <div>
+              <Label htmlFor="address1">Address Line 1 <span className="text-red-400">*</span></Label>
               <Input
                 id="address1"
                 value={profile.address1 || ''}
                 onChange={(e) => handleInputChange('address1', e.target.value)}
                 placeholder="123 Main Street"
               />
-              </div>
-
-              <div>
+            </div>
+            <div>
               <Label htmlFor="address2">Address Line 2</Label>
               <Input
                 id="address2"
                 value={profile.address2 || ''}
                 onChange={(e) => handleInputChange('address2', e.target.value)}
-                placeholder="Apt 4B, Suite 100, etc."
+                placeholder="Apt 4B (optional)"
               />
-              </div>
+            </div>
 
-              <div className="grid grid-cols-3 gap-4">
+            {/* City / State / Zip */}
+            <div className="grid grid-cols-3 gap-4">
               <div>
-                <Label htmlFor="city">City</Label>
+                <Label htmlFor="city">City <span className="text-red-400">*</span></Label>
                 <Input
-                id="city"
-                value={profile.city || ''}
-                onChange={(e) => handleInputChange('city', e.target.value)}
-                placeholder="New York"
+                  id="city"
+                  value={profile.city || ''}
+                  onChange={(e) => handleInputChange('city', e.target.value)}
+                  placeholder="New York"
                 />
               </div>
               <div>
-                <Label htmlFor="state">State</Label>
+                <Label htmlFor="state">State <span className="text-red-400">*</span></Label>
                 <Input
-                id="state"
-                value={profile.state || ''}
-                onChange={(e) => handleInputChange('state', e.target.value.toUpperCase().slice(0, 2))}
-                placeholder="NY"
-                maxLength={2}
+                  id="state"
+                  value={profile.state || ''}
+                  onChange={(e) => handleInputChange('state', e.target.value.toUpperCase().slice(0, 2))}
+                  placeholder="NY"
+                  maxLength={2}
                 />
               </div>
               <div>
-                <Label htmlFor="zip">Zip Code</Label>
+                <Label htmlFor="zip">Zip Code <span className="text-red-400">*</span></Label>
                 <Input
-                id="zip"
-                value={profile.zip_code || ''}
-                onChange={(e) => handleInputChange('zip_code', e.target.value)}
-                placeholder="10001"
+                  id="zip"
+                  value={profile.zip_code || ''}
+                  onChange={(e) => handleInputChange('zip_code', e.target.value)}
+                  placeholder="10001"
+                  inputMode="numeric"
                 />
               </div>
-              </div>
+            </div>
 
-              <div>
+            {/* Phone */}
+            <div>
               <Label htmlFor="phone">Phone Number</Label>
               <Input
                 id="phone"
@@ -417,14 +360,18 @@ export default function ProfilePage() {
                 onChange={(e) => handleInputChange('phone_number', e.target.value)}
                 placeholder="(555) 123-4567"
               />
-              </div>
+            </div>
 
-              <Button type="submit" disabled={isLoading || profileLoading} className="w-full">
-              {isLoading || profileLoading ? 'Updating...' : 'Update Profile'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
+            <Button
+              type="submit"
+              disabled={isLoading || profileLoading}
+              className="btn-gold w-full rounded-md"
+            >
+              {isLoading || profileLoading ? 'Saving...' : 'Save Profile'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

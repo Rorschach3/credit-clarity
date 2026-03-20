@@ -1,0 +1,216 @@
+{
+  "summary": "The plan focuses on establishing the missing `services.advanced_parsing` module to satisfy the dependencies of the Phase 4 test suite. We will implement this new module as an adapter layer that wraps the existing, verified `services.tradeline_extraction` components (Sprint 0 pipeline), ensuring that the advanced tests run against the actual production logic. This approach resolves the missing dependencies while validating the core extraction engine.",
+  "approach": "Create the `services.advanced_parsing` package structure with necessary data structures (ExtractionMethod, ConsolidatedResult). Implement adapters (MultiLayerExtractor, UniversalBureauParser) that wrap existing TradelineExtractionPipeline components. Implement validation logic (AITradelineValidator) porting Sprint0Validator rules, and ErrorCorrectionSystem as a basic pass-through. Verify by running the full test_runner.py suite to confirm both Sprint 0 and Phase 4 tests pass.",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Initialize Advanced Parsing Module & Data Structures",
+      "scope": "backend/services/advanced_parsing/",
+      "action": "Create",
+      "description": "Create the package structure and define the shared data classes/enums required by the test suite to resolve immediate import errors.",
+      "modification_points": [
+        {
+          "file": "backend/services/advanced_parsing/__init__.py",
+          "target": "new file",
+          "change": "Expose submodules for test imports"
+        },
+        {
+          "file": "backend/services/advanced_parsing/definitions.py",
+          "target": "new file",
+          "change": "Define ExtractionMethod enum, ConsolidatedResult, ParsingResult, TradelineData"
+        }
+      ],
+      "implementation": [
+        "Create __init__.py to make services.advanced_parsing a package",
+        "Define data structures expected by test_parsing_accuracy.py (ExtractionMethod, ValidationResult, ConsolidatedResult, ParsingResult, TradelineData)",
+        "Ensure imports from test files resolve without ImportError"
+      ],
+      "reference": {
+        "pattern": "Dataclass pattern with @dataclass decorator",
+        "files": [
+          "backend/services/tradeline_extraction/tradeline_parser.py",
+          "backend/tests/advanced_parsing/test_parsing_accuracy.py"
+        ],
+        "examples": "Follow ParsedTradeline dataclass structure from tradeline_parser.py:16-65"
+      },
+      "acceptance": [
+        "test_parsing_accuracy.py imports ExtractionMethod and ConsolidatedResult without ImportError",
+        "Module structure matches expected imports from test files"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "T2",
+      "title": "Implement Extractor & Parser Adapters",
+      "scope": "backend/services/advanced_parsing/",
+      "action": "Implement",
+      "description": "Implement MultiLayerExtractor and UniversalBureauParser by wrapping the existing TradelineExtractionPipeline components.",
+      "modification_points": [
+        {
+          "file": "backend/services/advanced_parsing/multi_layer_extractor.py",
+          "target": "new class:MultiLayerExtractor",
+          "change": "Implement extract_text_multi_layer calling pdf_extractor.extract_text_from_pdf"
+        },
+        {
+          "file": "backend/services/advanced_parsing/bureau_specific_parser.py",
+          "target": "new class:UniversalBureauParser",
+          "change": "Implement get_best_result calling parser.parse_tradelines_from_text"
+        }
+      ],
+      "implementation": [
+        "Import TradelineExtractionPipeline from services.tradeline_extraction.pipeline",
+        "In MultiLayerExtractor, instantiate the pipeline's extractor and return a ConsolidatedResult wrapping extraction results",
+        "In UniversalBureauParser, take text input and use the pipeline's parser to return ParsingResult with parsed tradelines",
+        "Ensure adapter methods match signatures expected by test files",
+        "Add error handling and logging to match pipeline patterns"
+      ],
+      "reference": {
+        "pattern": "Adapter Pattern wrapping tradeline_extraction services",
+        "files": [
+          "backend/tests/advanced_parsing/test_sprint0_validation.py",
+          "backend/services/tradeline_extraction/pipeline.py",
+          "backend/services/tradeline_extraction/pdf_extractor.py"
+        ],
+        "examples": "test_sprint0_validation.py shows usage of TradelineExtractionPipeline at line 618-627"
+      },
+      "acceptance": [
+        "MultiLayerExtractor.extract_text_multi_layer returns valid text from PDF without errors",
+        "UniversalBureauParser.get_best_result returns parsed tradelines matching ParsedTradeline structure",
+        "Both adapters integrate seamlessly with existing pipeline components"
+      ],
+      "depends_on": ["T1"]
+    },
+    {
+      "id": "T3",
+      "title": "Implement Validator & Error Correction",
+      "scope": "backend/services/advanced_parsing/",
+      "action": "Implement",
+      "description": "Implement AITradelineValidator and ErrorCorrectionSystem using the validation rules established in Sprint 0.",
+      "modification_points": [
+        {
+          "file": "backend/services/advanced_parsing/ai_tradeline_validator.py",
+          "target": "new class:AITradelineValidator",
+          "change": "Implement validate_and_correct_tradeline checking for critical fields (creditor_name, account_number)"
+        },
+        {
+          "file": "backend/services/advanced_parsing/error_correction_system.py",
+          "target": "new class:ErrorCorrectionSystem",
+          "change": "Implement detect_and_correct_errors (pass-through or simple heuristic corrector)"
+        }
+      ],
+      "implementation": [
+        "Implement rule-based validation logic in AITradelineValidator checking critical fields (account_number, creditor_name, account_status, account_type)",
+        "Port validation rules from Sprint0Validator (100% accuracy for critical fields, ≥95% for optional)",
+        "Create ErrorCorrectionSystem that returns the original result with confidence score",
+        "Add normalization methods for field comparison (_normalize_account_number, _normalize_for_comparison)",
+        "Ensure method signatures match test expectations"
+      ],
+      "reference": {
+        "pattern": "Validation Pipeline Pattern with field-level validation",
+        "files": [
+          "backend/tests/advanced_parsing/test_sprint0_validation.py",
+          "backend/services/tradeline_extraction/validation_pipeline.py",
+          "backend/services/tradeline_extraction/field_validators.py"
+        ],
+        "examples": "Sprint0Validator critical/optional field validation pattern at test_sprint0_validation.py:169-172"
+      },
+      "acceptance": [
+        "AITradelineValidator correctly identifies missing critical fields (creditor_name, account_number, account_status, account_type)",
+        "ErrorCorrectionSystem satisfies method signature expected by tests (detect_and_correct_errors)",
+        "Validation matches Sprint 0 accuracy requirements (100% critical, ≥95% optional)"
+      ],
+      "depends_on": ["T1"]
+    },
+    {
+      "id": "T4",
+      "title": "Full Suite Execution & Validation",
+      "scope": "backend/tests/advanced_parsing/",
+      "action": "Test",
+      "description": "Run the comprehensive test runner to validate the entire pipeline (Sprint 0 + Phase 4) works with the new adapter layer.",
+      "modification_points": [
+        {
+          "file": "backend/tests/advanced_parsing/run_tests.py",
+          "target": "execution",
+          "change": "Run the comprehensive test suite"
+        },
+        {
+          "file": "backend/tests/advanced_parsing/test_runner.py",
+          "target": "execution",
+          "change": "Verify all test phases complete successfully"
+        }
+      ],
+      "implementation": [
+        "Navigate to backend/tests/advanced_parsing/ directory",
+        "Run python test_runner.py to execute full test suite",
+        "Check sprint0_validation_report.md for Sprint 0 success (100% critical accuracy)",
+        "Check comprehensive_report.json for Phase 4 metrics",
+        "Verify test reports are generated in backend/tests/reports/ or /tmp/phase4_test_results/",
+        "Address any import errors or validation failures"
+      ],
+      "reference": {
+        "pattern": "Test orchestration pattern with Phase4TestRunner",
+        "files": [
+          "backend/tests/advanced_parsing/test_runner.py",
+          "backend/tests/advanced_parsing/test_sprint0_validation.py",
+          "backend/tests/conftest.py"
+        ],
+        "examples": "Phase4TestRunner.run_all_tests orchestration pattern at test_runner.py:32-92"
+      },
+      "acceptance": [
+        "Sprint 0 Validation passes with 100% critical field accuracy",
+        "test_runner.py completes without ImportError or ModuleNotFoundError",
+        "At least 90% of Real World tests pass using the wrapped pipeline",
+        "Test reports generated successfully (sprint0_validation_report.md, comprehensive_report.json)"
+      ],
+      "depends_on": ["T2", "T3"]
+    }
+  ],
+  "flow_control": {
+    "execution_order": [
+      {
+        "phase": "sequential-1",
+        "tasks": ["T1"],
+        "type": "sequential"
+      },
+      {
+        "phase": "parallel-2",
+        "tasks": ["T2", "T3"],
+        "type": "parallel"
+      },
+      {
+        "phase": "sequential-3",
+        "tasks": ["T4"],
+        "type": "sequential"
+      }
+    ],
+    "exit_conditions": {
+      "success": "test_runner.py completes with exit code 0 and Sprint 0 validation passes with 100% critical field accuracy",
+      "failure": "Persistent import errors or critical validation failure in Sprint 0 preventing test execution"
+    }
+  },
+  "focus_paths": [
+    "backend/services/advanced_parsing/__init__.py",
+    "backend/services/advanced_parsing/definitions.py",
+    "backend/services/advanced_parsing/multi_layer_extractor.py",
+    "backend/services/advanced_parsing/bureau_specific_parser.py",
+    "backend/services/advanced_parsing/ai_tradeline_validator.py",
+    "backend/services/advanced_parsing/error_correction_system.py",
+    "backend/tests/advanced_parsing/test_runner.py",
+    "backend/tests/advanced_parsing/test_sprint0_validation.py",
+    "backend/tests/advanced_parsing/run_tests.py"
+  ],
+  "estimated_time": "2 hours",
+  "recommended_execution": "Agent",
+  "complexity": "Medium",
+  "_metadata": {
+    "timestamp": "2026-01-11T00:00:00Z",
+    "source": "cli-lite-planning-agent",
+    "planning_mode": "agent-based",
+    "exploration_angles": [
+      "patterns",
+      "integration-points",
+      "testing"
+    ],
+    "duration_seconds": 120
+  }
+}

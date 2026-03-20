@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profile Settings — Credit Clarity</title>
+  <meta name="description" content="Manage your personal details, security settings, and notification preferences for your Credit Clarity account.">
+  <meta property="og:title" content="Profile — Credit Clarity">
+  <link rel="canonical" href="https://creditclarity.app/profile">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --base:#0A0F1E; --card:#0F1729; --elevated:#1A2340; --border:#1E2D47;
+      --border-subtle:rgba(30,45,71,0.6);
+      --gold:#D4A853; --gold-hover:#E8C06A; --gold-muted:rgba(212,168,83,0.15);
+      --gold-border:rgba(212,168,83,0.3);
+      --text:#F0F4FF; --text-muted:#8892A4;
+      --success:#22C55E; --error:#EF4444;
+      --font:'Inter',system-ui,sans-serif;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--base);color:var(--text);font-family:var(--font);line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh;padding-bottom:4rem}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}}
+
+    /* TOPNAV */
+    .topnav{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:1rem;padding:0 1.25rem;height:58px;background:rgba(10,15,30,0.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+    .topnav-logo{font-size:0.9375rem;font-weight:700;color:var(--gold);text-decoration:none}
+    .back-link{font-size:0.875rem;color:var(--text-muted);text-decoration:none;transition:color 150ms}
+    .back-link:hover{color:var(--text)}
+
+    /* PROFILE HERO */
+    .profile-hero{background:linear-gradient(150deg,#0A0F1E 0%,#1A2340 60%,#0F1729 100%);padding:2.5rem 1.25rem 0;border-bottom:1px solid var(--border)}
+    .profile-hero-inner{max-width:900px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:1rem;text-align:center;animation:fadeUp 500ms ease both}
+    @media(min-width:640px){.profile-hero-inner{flex-direction:row;text-align:left;gap:1.75rem;align-items:flex-end}}
+    .hero-avatar{position:relative;cursor:pointer;flex-shrink:0}
+    .hero-avatar-circle{width:88px;height:88px;border-radius:50%;background:var(--gold-muted);border:3px solid var(--gold-border);display:flex;align-items:center;justify-content:center;font-size:1.75rem;font-weight:700;color:var(--gold);overflow:hidden;transition:border-color 200ms}
+    .hero-avatar:hover .hero-avatar-circle{border-color:var(--gold)}
+    .hero-avatar-overlay{position:absolute;inset:0;border-radius:50%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 200ms}
+    .hero-avatar:hover .hero-avatar-overlay{opacity:1}
+    .cam-badge{position:absolute;bottom:2px;right:2px;width:26px;height:26px;border-radius:50%;background:var(--gold);border:2px solid var(--base);display:flex;align-items:center;justify-content:center;font-size:0.7rem}
+    .hero-info h1{font-size:1.375rem;font-weight:700}
+    .hero-info .email{font-size:0.875rem;color:var(--text-muted);margin-top:0.125rem}
+    .hero-pills{display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.75rem;justify-content:center}
+    @media(min-width:640px){.hero-pills{justify-content:flex-start}}
+    .hero-pill{padding:0.3rem 0.75rem;border-radius:9999px;font-size:0.75rem;font-weight:500;background:var(--elevated);border:1px solid var(--border);color:var(--text-muted)}
+    .hero-pill.complete{background:var(--gold-muted);border-color:var(--gold-border);color:var(--gold)}
+
+    /* TABS */
+    .tabs-bar{border-bottom:1px solid var(--border);max-width:900px;margin:0 auto;display:flex;gap:0.25rem;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 1.25rem;margin-top:1.5rem}
+    .tab-btn{flex-shrink:0;padding:0.75rem 1.125rem;font-size:0.875rem;font-weight:500;color:var(--text-muted);background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:color 150ms,border-color 150ms;white-space:nowrap;font-family:var(--font)}
+    .tab-btn:hover{color:var(--text)}
+    .tab-btn.active{color:var(--gold);border-bottom-color:var(--gold)}
+
+    /* TAB CONTENT */
+    .tab-content-wrap{max-width:672px;margin:0 auto;padding:2rem 1.25rem 4rem}
+    .tab-panel{display:none;animation:fadeUp 300ms ease both}
+    .tab-panel.active{display:block}
+
+    /* FORM */
+    .form-card{background:var(--card);border:1px solid var(--border);border-radius:0.625rem;padding:1.75rem}
+    .section-label{font-size:0.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:1rem;padding-bottom:0.625rem;border-bottom:1px solid var(--border-subtle)}
+    .form-section{margin-bottom:1.5rem}
+    .form-grid-2{display:grid;grid-template-columns:1fr;gap:1rem}
+    @media(min-width:520px){.form-grid-2{grid-template-columns:1fr 1fr}}
+    .form-grid-3{display:grid;grid-template-columns:1fr;gap:1rem}
+    @media(min-width:520px){.form-grid-3{grid-template-columns:2fr 1fr 1fr}}
+    .field{display:flex;flex-direction:column;gap:0.375rem}
+    .field label{font-size:0.8125rem;font-weight:500}
+    .req{color:var(--error);margin-left:0.25rem}
+    .field input{background:var(--elevated);border:1px solid var(--border);border-radius:0.5rem;padding:0.6875rem 0.875rem;font-size:0.9375rem;color:var(--text);font-family:var(--font);outline:none;transition:border-color 150ms,box-shadow 150ms;width:100%}
+    .field input::placeholder{color:var(--text-muted)}
+    .field input:focus{border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-muted)}
+    .btn-gold{display:flex;align-items:center;justify-content:center;gap:0.5rem;background:linear-gradient(135deg,var(--gold),var(--gold-hover));color:#0A0F1E;font-weight:700;padding:0.875rem;border-radius:0.5rem;border:none;cursor:pointer;font-size:0.9375rem;transition:transform 150ms,box-shadow 150ms;width:100%;margin-top:1.5rem;font-family:var(--font)}
+    .btn-gold:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(212,168,83,0.35)}
+    .btn-ghost{display:inline-flex;align-items:center;gap:0.5rem;background:transparent;border:1px solid var(--border);color:var(--text-muted);padding:0.625rem 1rem;border-radius:0.5rem;cursor:pointer;font-size:0.875rem;transition:border-color 150ms,color 150ms;font-family:var(--font)}
+    .btn-ghost:hover{border-color:var(--gold-border);color:var(--text)}
+
+    /* SECURITY TAB */
+    .security-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;padding:1.125rem 0;border-bottom:1px solid var(--border-subtle)}
+    .security-row:last-child{border-bottom:none}
+    .security-label{font-size:0.875rem;font-weight:500}
+    .security-sub{font-size:0.75rem;color:var(--text-muted);margin-top:0.125rem}
+
+    /* NOTIFICATIONS TAB */
+    .notif-row{display:flex;align-items:center;justify-content:space-between;padding:1rem 0;border-bottom:1px solid var(--border-subtle)}
+    .notif-row:last-child{border-bottom:none}
+    .toggle{position:relative;width:44px;height:24px;flex-shrink:0}
+    .toggle input{opacity:0;width:0;height:0;position:absolute}
+    .toggle-track{position:absolute;inset:0;border-radius:12px;background:var(--elevated);border:1px solid var(--border);cursor:pointer;transition:background 200ms,border-color 200ms}
+    .toggle input:checked+.toggle-track{background:var(--gold-muted);border-color:var(--gold-border)}
+    .toggle-thumb{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--text-muted);transition:transform 200ms,background 200ms}
+    .toggle input:checked~.toggle-thumb{transform:translateX(20px);background:var(--gold)}
+  </style>
+</head>
+<body>
+
+<header class="topnav" role="banner">
+  <a href="/dashboard" class="back-link">← Dashboard</a>
+  <div style="flex:1"></div>
+  <a href="/" class="topnav-logo">◈ Credit Clarity</a>
+</header>
+
+<!-- PROFILE HERO BANNER -->
+<section class="profile-hero" aria-label="Profile overview">
+  <div class="profile-hero-inner">
+    <div class="hero-avatar" role="button" tabindex="0" aria-label="Upload profile photo" onclick="document.getElementById('avatar-input').click()">
+      <div class="hero-avatar-circle">JS</div>
+      <div class="hero-avatar-overlay">📷</div>
+      <div class="cam-badge">📷</div>
+    </div>
+    <input type="file" id="avatar-input" accept="image/*" style="display:none">
+    <div class="hero-info">
+      <h1>Jane Smith</h1>
+      <div class="email">jane.smith@example.com</div>
+      <div class="hero-pills">
+        <span class="hero-pill">Member since Jan 2025</span>
+        <span class="hero-pill">3 Disputes Filed</span>
+        <span class="hero-pill complete">Profile 85% Complete</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs-bar" role="tablist" aria-label="Profile sections">
+    <button class="tab-btn active" role="tab" aria-selected="true" aria-controls="tab-personal" id="btn-personal">Personal Info</button>
+    <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-security" id="btn-security">Security</button>
+    <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-notif" id="btn-notif">Notifications</button>
+    <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-billing" id="btn-billing">Billing</button>
+  </div>
+</section>
+
+<div class="tab-content-wrap">
+
+  <!-- TAB: Personal Info -->
+  <div class="tab-panel active" id="tab-personal" role="tabpanel" aria-labelledby="btn-personal">
+    <form class="form-card" onsubmit="handleSave(event)" novalidate>
+      <div class="form-section">
+        <div class="section-label">Personal Information</div>
+        <div class="form-grid-2">
+          <div class="field"><label for="p-firstName">First Name<span class="req">*</span></label><input type="text" id="p-firstName" placeholder="Jane" autocomplete="given-name"></div>
+          <div class="field"><label for="p-lastName">Last Name<span class="req">*</span></label><input type="text" id="p-lastName" placeholder="Smith" autocomplete="family-name"></div>
+        </div>
+        <div class="form-grid-2" style="margin-top:1rem">
+          <div class="field"><label for="p-dob">Date of Birth</label><input type="date" id="p-dob" autocomplete="bday"></div>
+          <div class="field"><label for="p-ssn">Last 4 SSN<span class="req">*</span></label><input type="text" id="p-ssn" placeholder="1234" maxlength="4" inputmode="numeric"></div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="section-label">Mailing Address</div>
+        <div class="field" style="margin-bottom:1rem"><label for="p-addr1">Address Line 1<span class="req">*</span></label><input type="text" id="p-addr1" placeholder="123 Main Street" autocomplete="address-line1"></div>
+        <div class="field" style="margin-bottom:1rem"><label for="p-addr2">Address Line 2</label><input type="text" id="p-addr2" placeholder="Apt 4B (optional)" autocomplete="address-line2"></div>
+        <div class="form-grid-3">
+          <div class="field"><label for="p-city">City<span class="req">*</span></label><input type="text" id="p-city" placeholder="New York" autocomplete="address-level2"></div>
+          <div class="field"><label for="p-state">State<span class="req">*</span></label><input type="text" id="p-state" placeholder="NY" maxlength="2" autocomplete="address-level1"></div>
+          <div class="field"><label for="p-zip">ZIP<span class="req">*</span></label><input type="text" id="p-zip" placeholder="10001" inputmode="numeric" autocomplete="postal-code"></div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="section-label">Contact</div>
+        <div class="field"><label for="p-phone">Phone</label><input type="tel" id="p-phone" placeholder="(555) 123-4567" autocomplete="tel"></div>
+      </div>
+      <button type="submit" class="btn-gold">💾 Save Profile</button>
+    </form>
+  </div>
+
+  <!-- TAB: Security -->
+  <div class="tab-panel" id="tab-security" role="tabpanel" aria-labelledby="btn-security">
+    <div class="form-card">
+      <div class="section-label">Security Settings</div>
+      <div class="security-row">
+        <div><div class="security-label">Password</div><div class="security-sub">Last changed 3 months ago</div></div>
+        <button class="btn-ghost">Change Password</button>
+      </div>
+      <div class="security-row">
+        <div><div class="security-label">Two-Factor Authentication</div><div class="security-sub">Add an extra layer of security</div></div>
+        <button class="btn-ghost">Enable 2FA</button>
+      </div>
+      <div class="security-row">
+        <div><div class="security-label">Delete Account</div><div class="security-sub">Permanently remove your data and disputes</div></div>
+        <button class="btn-ghost" style="border-color:rgba(239,68,68,0.3);color:#EF4444;">Delete Account</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Notifications -->
+  <div class="tab-panel" id="tab-notif" role="tabpanel" aria-labelledby="btn-notif">
+    <div class="form-card">
+      <div class="section-label">Notification Preferences</div>
+      <div class="notif-row">
+        <div><div class="security-label">Dispute Status Updates</div><div class="security-sub">When a bureau responds to your dispute</div></div>
+        <label class="toggle" aria-label="Toggle dispute notifications">
+          <input type="checkbox" checked>
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </label>
+      </div>
+      <div class="notif-row">
+        <div><div class="security-label">Credit Report Reminders</div><div class="security-sub">Monthly reminder to check your report</div></div>
+        <label class="toggle" aria-label="Toggle report reminders">
+          <input type="checkbox" checked>
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </label>
+      </div>
+      <div class="notif-row">
+        <div><div class="security-label">Marketing Emails</div><div class="security-sub">Tips, features, and promotions</div></div>
+        <label class="toggle" aria-label="Toggle marketing emails">
+          <input type="checkbox">
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Billing -->
+  <div class="tab-panel" id="tab-billing" role="tabpanel" aria-labelledby="btn-billing">
+    <div class="form-card" style="text-align:center;padding:3rem 1.5rem;">
+      <div style="font-size:2rem;margin-bottom:1rem">⚡</div>
+      <h2 style="font-size:1.125rem;font-weight:700;margin-bottom:0.5rem">You're on the Free Plan</h2>
+      <p style="font-size:0.875rem;color:var(--text-muted);max-width:360px;margin:0 auto 1.5rem;">Upgrade to Pro for unlimited dispute letters, priority processing, and advanced analytics.</p>
+      <button class="btn-gold" style="max-width:260px;margin:0 auto;animation:none">🚀 Upgrade to Pro — $19/mo</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Tab switching
+const tabs = document.querySelectorAll('.tab-btn');
+const panels = document.querySelectorAll('.tab-panel');
+tabs.forEach(btn => {
+  btn.addEventListener('click', () => {
+    tabs.forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+    panels.forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    btn.setAttribute('aria-selected','true');
+    const target = btn.getAttribute('aria-controls');
+    document.getElementById(target).classList.add('active');
+  });
+});
+
+// Save handler
+function handleSave(e) {
+  e.preventDefault();
+  const fn = document.getElementById('p-firstName').value.trim();
+  const ln = document.getElementById('p-lastName').value.trim();
+  if (!fn || !ln) { alert('First name and last name are required.'); return; }
+  const ssn = document.getElementById('p-ssn').value.trim();
+  if (ssn && !/^\d{4}$/.test(ssn)) { alert('Last 4 SSN must be exactly 4 digits.'); return; }
+  const btn = e.target.querySelector('.btn-gold');
+  const orig = btn.textContent;
+  btn.textContent = '✓ Saved!';
+  btn.style.background = 'linear-gradient(135deg,#22C55E,#16A34A)';
+  setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 2000);
+}
+
+// Avatar preview
+document.getElementById('avatar-input').addEventListener('change', function() {
+  const file = this.files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    document.querySelectorAll('.hero-avatar-circle').forEach(el => {
+      el.innerHTML = `<img src="${ev.target.result}" style="width:100%;height:100%;object-fit:cover;">`;
+    });
+  };
+  reader.readAsDataURL(file);
+});
+
+// State uppercase + SSN digits
+document.getElementById('p-state')?.addEventListener('input', function() { this.value = this.value.toUpperCase().slice(0,2); });
+document.getElementById('p-ssn')?.addEventListener('input', function() { this.value = this.value.replace(/\D/g,'').slice(0,4); });
+</script>
+</body>
+</html>

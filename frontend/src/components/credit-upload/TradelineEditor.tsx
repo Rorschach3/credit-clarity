@@ -1,5 +1,7 @@
 import React from 'react';
 import { ParsedTradeline } from "@/utils/tradelineParser";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface TradelineEditorProps {
   tradeline: ParsedTradeline;
@@ -57,73 +59,88 @@ export const TradelineEditor: React.FC<TradelineEditorProps> = ({
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium mb-1">Creditor Name</label>
-          <input
-            type="text"
+          <Input
             value={tradeline.creditor_name || ''}
             onChange={(e) => handleFieldUpdate('creditor_name', e.target.value)}
-            className="w-full border rounded px-3 py-2"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">Account Number</label>
-          <input
-            type="text"
+          <Input
             value={tradeline.account_number || ''}
             onChange={(e) => handleFieldUpdate('account_number', e.target.value)}
-            className="w-full border rounded px-3 py-2"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">Balance</label>
-          <input
-            type="text"
+          <Input
             value={tradeline.account_balance || ''}
             onChange={(e) => handleFieldUpdate('account_balance', e.target.value)}
-            className="w-full border rounded px-3 py-2"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">Credit Limit</label>
-          <input
-            type="text"
+          <Input
             value={tradeline.credit_limit || ''}
             onChange={(e) => handleFieldUpdate('credit_limit', e.target.value)}
-            className="w-full border rounded px-3 py-2"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">Account Status</label>
-          <select
+          <Select
             value={tradeline.account_status || ''}
-            onChange={(e) => handleFieldUpdate('account_status', e.target.value)}
-            className="w-full border rounded px-3 py-2"
+            onValueChange={(value) => handleFieldUpdate('account_status', value)}
           >
-            <option value="">Select Status</option>
-            <option value="Open">Open</option>
-            <option value="Closed">Closed</option>
-            <option value="Current">Current</option>
-            <option value="Delinquent">Delinquent</option>
-          </select>
+            <SelectTrigger>
+              <SelectValue placeholder="Select Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Open">Open</SelectItem>
+              <SelectItem value="Closed">Closed</SelectItem>
+              <SelectItem value="Current">Current</SelectItem>
+              <SelectItem value="Delinquent">Delinquent</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">Account Type</label>
-          <select
+          <Select
             value={tradeline.account_type || ''}
-            onChange={(e) => handleFieldUpdate('account_type', e.target.value)}
-            className="w-full border rounded px-3 py-2"
+            onValueChange={(value) => handleFieldUpdate('account_type', value)}
           >
-            <option value="">Select Type</option>
-            <option value="Credit Card">Credit Card</option>
-            <option value="Mortgage">Mortgage</option>
-            <option value="Auto Loan">Auto Loan</option>
-            <option value="Student Loan">Student Loan</option>
-            <option value="Personal Loan">Personal Loan</option>
-          </select>
+            <SelectTrigger>
+              <SelectValue placeholder="Select Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Credit Card">Credit Card</SelectItem>
+              <SelectItem value="Mortgage">Mortgage</SelectItem>
+              <SelectItem value="Auto Loan">Auto Loan</SelectItem>
+              <SelectItem value="Student Loan">Student Loan</SelectItem>
+              <SelectItem value="Personal Loan">Personal Loan</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Credit Bureau</label>
+          <Select
+            value={tradeline.credit_bureau || ''}
+            onValueChange={(value) => handleFieldUpdate('credit_bureau', value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select Bureau" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Equifax">Equifax</SelectItem>
+              <SelectItem value="Experian">Experian</SelectItem>
+              <SelectItem value="TransUnion">TransUnion</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -150,3 +167,5 @@ export const TradelineEditor: React.FC<TradelineEditorProps> = ({
     </div>
   );
 };
+
+export default TradelineEditor;

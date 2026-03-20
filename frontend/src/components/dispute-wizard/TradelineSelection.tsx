@@ -90,7 +90,16 @@ export const TradelineSelection: React.FC<TradelineSelectionProps> = ({
                     <h4 className="font-medium text-sm">
                       {tradeline.creditor_name || 'Unknown Creditor'}
                     </h4>
-                    <Badge variant="destructive" className="ml-2">
+                    <Badge
+                      className="ml-2 text-white border-0"
+                      style={{
+                        backgroundColor:
+                          tradeline.credit_bureau?.toLowerCase().includes('transunion') ? '#2563EB'
+                          : tradeline.credit_bureau?.toLowerCase().includes('experian') ? '#7C3AED'
+                          : tradeline.credit_bureau?.toLowerCase().includes('equifax') ? '#DC2626'
+                          : undefined,
+                      }}
+                    >
                       {tradeline.credit_bureau}
                     </Badge>
                   </div>

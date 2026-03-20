@@ -21,7 +21,7 @@ Return ONLY corrected code.
 `;
 
   const res = await client.messages.create({
-    model: "claude-3.5-sonnet",
+    model: "claude-3-5-sonnet-latest",
     max_tokens: 4096,
     messages: [{ role: "user", content: prompt }]
   });

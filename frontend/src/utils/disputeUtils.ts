@@ -1,18 +1,19 @@
 import jsPDF from 'jspdf';
 import { PDFDocument, rgb } from 'pdf-lib';
 import { type ParsedTradeline } from '@/utils/tradelineParser';
-import { 
-  DocumentBlob, 
-  convertImageToPdfPage, 
-  addPdfPages, 
-  getDocumentTitle 
+import {
+  DocumentBlob,
+  convertImageToPdfPage,
+  addPdfPages,
+  getDocumentTitle
 } from './documentPacketUtils';
+import { supabase } from '@/integrations/supabase/client';
 
 // Credit Bureau Information
 export const CREDIT_BUREAU_ADDRESSES = {
   'Experian': {
     name: 'Experian',
-    address: 'P.O. Box 4000',
+    address: 'P.O. Box 4500',
     city: 'Allen',
     state: 'TX',
     zip: '75013'
@@ -48,6 +49,140 @@ export interface PacketProgress {
   message: string;
 }
 
+const formatLetterDate = (date: Date = new Date()): string => {
+  const day = date.getDate();
+  const teen = day % 100;
+  const suffix =
+    teen >= 11 && teen <= 13
+      ? 'th'
+      : day % 10 === 1
+        ? 'st'
+        : day % 10 === 2
+          ? 'nd'
+          : day % 10 === 3
+            ? 'rd'
+            : 'th';
+
+  return `${date.toLocaleDateString('en-US', { month: 'long' })} ${day}${suffix} ${date.getFullYear()}`;
+};
+
+const getProfileLine = (profile: any, keys: string[]): string =>
+  keys
+    .map((key) => profile?.[key])
+    .find((value) => typeof value === 'string' && value.trim().length > 0)
+    ?.trim() ?? '';
+
+const getProfileCityStateZipLine = (profile: any): string => {
+  const city = getProfileLine(profile, ['city']);
+  const state = getProfileLine(profile, ['state']);
+  const zip = getProfileLine(profile, ['zipCode', 'zip']);
+
+  return [city, state, zip].filter(Boolean).join(' ');
+};
+
+const getSenderBlock = (profile: any): string[] => {
+  const name = [getProfileLine(profile, ['firstName']), getProfileLine(profile, ['lastName'])].filter(Boolean).join(' ').trim();
+  const address1 = getProfileLine(profile, ['address1', 'address']);
+  const address2 = getProfileLine(profile, ['address2']);
+  const city = getProfileLine(profile, ['city']);
+  const state = getProfileLine(profile, ['state']);
+  const zip = getProfileLine(profile, ['zipCode', 'zip']);
+
+  return [
+    name,
+    address1,
+    address2,
+    [city, [state, zip].filter(Boolean).join(' ')].filter(Boolean).join(', '),
+  ].filter(Boolean);
+};
+
+const getMaskedSSN = (profile: any): string => {
+  const lastFour = getProfileLine(profile, ['lastFourSSN']) || getProfileLine(profile, ['ssn']).slice(-4);
+  return lastFour ? `XXX-XX-${lastFour}` : '[Insert SSN Here]';
+};
+
+const getReportNumber = (profile: any): string =>
+  getProfileLine(profile, ['reportNumber', 'fileNumber', 'creditReportNumber', 'creditReportId']) || '[Insert Report Number Here]';
+
+const maskAccountNumber = (accountNumber?: string | null): string => {
+  const trimmed = accountNumber?.trim();
+  if (!trimmed) return '[Account Number]';
+  if (/[*xX]/.test(trimmed)) return trimmed;
+  return trimmed.length > 4 ? `****${trimmed.slice(-4)}` : trimmed;
+};
+
+const getReasonForDispute = (tradeline: ParsedTradeline): string => {
+  const status = tradeline.account_status?.trim();
+  if (status) {
+    return `The current status of this account (listed as "${status}") is inaccurate. Alternatively, if this account is being reported past the allowable reporting timeframe, it is obsolete and must be removed.`;
+  }
+
+  return 'This account is inaccurate, incomplete, and/or obsolete. If it cannot be fully verified, it must be removed.';
+};
+
+const buildTradelineSummaryLines = (tradeline: ParsedTradeline): string[] => {
+  const lines = [`Creditor Name: ${tradeline.creditor_name || '[Creditor]'}`];
+  const accountNumber = maskAccountNumber(tradeline.account_number);
+  const balance = tradeline.account_balance?.trim();
+  const dateOpened = tradeline.date_opened?.trim();
+  const status = tradeline.account_status?.trim();
+
+  lines.push(`Account #: ${accountNumber}`);
+  if (status) {
+    lines.push(`Reported Status: ${status}`);
+  }
+  if (balance) {
+    lines.push(`Balance: ${balance}`);
+  }
+  if (dateOpened) {
+    lines.push(`Date Opened: ${dateOpened}`);
+  }
+  lines.push(`Reason for Dispute: ${getReasonForDispute(tradeline)}`);
+
+  return lines;
+};
+
+const renderLetterContent = (pdf: jsPDF, letterContent: string): void => {
+  const margin = 24;
+  const lineHeight = 6.5;
+  const pageHeight = pdf.internal.pageSize.height;
+  const pageWidth = pdf.internal.pageSize.width;
+  const maxLineWidth = pageWidth - (margin * 2);
+  let currentY = margin;
+
+  const resetTypography = () => {
+    pdf.setFont('times', 'normal');
+    pdf.setFontSize(12);
+    pdf.setTextColor(0, 0, 0);
+  };
+
+  const ensurePageSpace = () => {
+    if (currentY <= pageHeight - margin) return;
+    pdf.addPage();
+    currentY = margin;
+    resetTypography();
+  };
+
+  resetTypography();
+
+  letterContent.split('\n').forEach((rawLine) => {
+    if (rawLine.trim().length === 0) {
+      currentY += lineHeight;
+      ensurePageSpace();
+      return;
+    }
+
+    const indent = rawLine.startsWith('  ') ? 8 : 0;
+    const wrappedLines = pdf.splitTextToSize(rawLine.trimStart(), maxLineWidth - indent);
+
+    wrappedLines.forEach((wrappedLine: string) => {
+      ensurePageSpace();
+      pdf.text(wrappedLine, margin + indent, currentY);
+      currentY += lineHeight;
+    });
+  });
+};
+
 // Generate dispute reasons based on tradeline status
 export const getDisputeReasons = (tradeline: ParsedTradeline): string[] => {
   const reasons: string[] = [];
@@ -80,67 +215,43 @@ export const generateDisputeLetterContent = (
   creditBureau: string, 
   profile: any
 ): string => {
-  const currentDate = new Date().toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
-  
+  const currentDate = formatLetterDate();
   const bureauInfo = CREDIT_BUREAU_ADDRESSES[creditBureau as keyof typeof CREDIT_BUREAU_ADDRESSES];
-  
-  // Create account table
-  const accountRows = tradelines.map(tradeline => {
-    const formattedAccountNumber = tradeline.account_number && tradeline.account_number.length > 4 
-      ? `****${tradeline.account_number.slice(-4)}` 
-      : tradeline.account_number || '[Account Number]';
-    
-    const formattedDateOpened = tradeline.date_opened || '[Date]';
-    
-    return `${tradeline.creditor_name || '[Creditor]'} | ${formattedAccountNumber} | ${formattedDateOpened} | Inaccurate Information`;
-  });
-  
-  const accountTable = `Creditor Name | Account Number | Date Opened | Dispute Reason
-${'='.repeat(70)}
-${accountRows.join('\n')}`;
+  const letterSections = [
+    ...getSenderBlock(profile),
+    '',
+    currentDate,
+    '',
+    bureauInfo.name,
+    bureauInfo.address,
+    `${bureauInfo.city}, ${bureauInfo.state} ${bureauInfo.zip}`,
+    '',
+    'RE: Dispute of Inaccurate Information',
+    `File/Report Number: ${getReportNumber(profile)}`,
+    `Social Security Number: ${getMaskedSSN(profile)}`,
+    '',
+    'To Whom It May Concern:',
+    '',
+    `I am writing to dispute the following ${tradelines.length === 1 ? 'account' : 'accounts'} that ${tradelines.length === 1 ? 'is' : 'are'} reporting inaccurately on my ${creditBureau} credit report. This information is a serious error and I request that it be investigated and removed immediately pursuant to my rights under the Fair Credit Reporting Act (15 U.S.C. § 1681i).`,
+    '',
+    `The following ${tradelines.length === 1 ? 'account contains' : 'accounts contain'} incorrect information and/or ${tradelines.length === 1 ? 'is' : 'are'} obsolete:`,
+    '',
+    ...tradelines.flatMap((tradeline) => [...buildTradelineSummaryLines(tradeline), '']),
+    'Please investigate this matter thoroughly. I request that you verify the accuracy of each item with the furnisher of the information and send me the results of your investigation, including the method of verification, to the address above.',
+    '',
+    'If any item cannot be verified within the 30-day timeframe required by law, I expect it to be permanently deleted from my credit file.',
+    '',
+    'Sincerely,',
+    '',
+    [getProfileLine(profile, ['firstName']), getProfileLine(profile, ['lastName'])].filter(Boolean).join(' ').trim(),
+    '',
+    'Enclosures:',
+    '- Copy of credit report (highlighted)',
+    '- Copy of government ID',
+    '- Copy of proof of address',
+  ];
 
-  return `${currentDate}
-
-${profile.firstName} ${profile.lastName}
-${profile.address}
-${profile.city}, ${profile.state} ${profile.zipCode}
-
-${bureauInfo.name}
-${bureauInfo.address}
-${bureauInfo.city}, ${bureauInfo.state} ${bureauInfo.zip}
-
-Re: Request for Investigation of Credit Report Inaccuracies
-Consumer Name: ${profile.firstName} ${profile.lastName}
-Date of Birth: ${profile.dateOfBirth || '[Date of Birth]'}
-Social Security Number: ${profile.ssn ? `***-**-${profile.ssn.slice(-4)}` : '[SSN]'}
-
-Dear Sir or Madam,
-
-I am writing to dispute inaccurate information on my credit report. Under the Fair Credit Reporting Act (FCRA), I have the right to request that you investigate and correct any inaccuracies.
-
-The following accounts contain inaccurate information that must be investigated and corrected or removed:
-
-${accountTable}
-
-I am requesting that these items be investigated under Section 611 of the FCRA. Please conduct a reasonable investigation of these disputed items and provide me with the results of your investigation.
-
-If you cannot verify the accuracy of these items, they must be deleted from my credit file immediately as required by law.
-
-Please send me an updated copy of my credit report showing the corrections made, along with a list of everyone who has received my credit report in the past year (or two years for employment purposes).
-
-I expect to receive a response within 30 days as required by the FCRA. Please contact me at the address above if you need additional information.
-
-Thank you for your prompt attention to this matter.
-
-Sincerely,
-
-${profile.firstName} ${profile.lastName}
-
-Enclosures: Copy of Driver's License, Copy of Social Security Card, Copy of Utility Bill`;
+  return letterSections.join('\n').trim();
 };
 
 // Generate dispute letters grouped by credit bureau
@@ -213,6 +324,124 @@ export const generateDisputeLetters = async (
 };
 
 // Generate PDF packet
+const BUREAU_COLORS: Record<string, [number, number, number]> = {
+  transunion: [37, 99, 235],   // blue
+  experian:   [124, 58, 237],  // purple
+  equifax:    [220, 38, 38],   // red
+};
+
+const BUREAU_ADDRESSES: Record<string, string[]> = {
+  transunion: ['TransUnion LLC', 'Consumer Dispute Center', 'P.O. Box 2000', 'Chester, PA 19016'],
+  experian:   ['Experian', 'P.O. Box 4500', 'Allen, TX 75013'],
+  equifax:    ['Equifax Information Services LLC', 'P.O. Box 740256', 'Atlanta, GA 30374'],
+};
+
+const getBureauKey = (name: string): string =>
+  Object.keys(BUREAU_COLORS).find(k => name.toLowerCase().includes(k)) ?? 'transunion';
+
+const addCoverPage = (pdf: jsPDF, bureau: string, isFirstLetter: boolean) => {
+  if (!isFirstLetter) pdf.addPage();
+
+  const pageW = pdf.internal.pageSize.width;
+  const pageH = pdf.internal.pageSize.height;
+  const margin = 20;
+  const key = getBureauKey(bureau);
+  const [r, g, b] = BUREAU_COLORS[key] ?? [37, 99, 235];
+  const address = BUREAU_ADDRESSES[key] ?? [];
+
+  // Colored header bar
+  pdf.setFillColor(r, g, b);
+  pdf.rect(0, 0, pageW, 38, 'F');
+
+  // "COVER LETTER" title in header
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(20);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('COVER LETTER', margin, 16);
+
+  // Bureau name in header
+  pdf.setFontSize(13);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(bureau, margin, 28);
+
+  // Reset text color
+  pdf.setTextColor(0, 0, 0);
+
+  // Warning box
+  pdf.setFillColor(254, 242, 242);
+  pdf.setDrawColor(220, 38, 38);
+  pdf.setLineWidth(0.8);
+  pdf.roundedRect(margin, 48, pageW - margin * 2, 22, 2, 2, 'FD');
+
+  pdf.setTextColor(185, 28, 28);
+  pdf.setFontSize(12);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('⚠  DO NOT MAIL THIS PAGE WITH YOUR DISPUTE', margin + 6, 58);
+  pdf.setFontSize(9);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text('This cover page is for your reference only. Remove it before mailing.', margin + 6, 66);
+
+  pdf.setTextColor(0, 0, 0);
+
+  // Instructions heading
+  pdf.setFontSize(12);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Instructions — What To Do:', margin, 86);
+
+  const steps = [
+    'Print all pages in this section (this cover page + the dispute letter following it).',
+    'Read the dispute letter carefully and sign it at the bottom where indicated.',
+    'Make a copy of the signed letter and keep it for your records.',
+    `Mail ONLY the signed dispute letter (not this cover page) to ${bureau} at the address below.`,
+    'Send via Certified Mail with Return Receipt Requested so you have proof of delivery.',
+    'Write your tracking / confirmation number below and keep this page in your records.',
+    'Wait 30–45 days for the bureau to investigate and respond.',
+  ];
+
+  pdf.setFontSize(10);
+  pdf.setFont('helvetica', 'normal');
+  let y = 96;
+  steps.forEach((step, i) => {
+    const lines = pdf.splitTextToSize(`${i + 1}.  ${step}`, pageW - margin * 2 - 10);
+    lines.forEach((line: string, li: number) => {
+      pdf.text(li === 0 ? line : `     ${line.trim()}`, margin + 4, y);
+      y += 6;
+    });
+    y += 2;
+  });
+
+  // Mailing address box
+  y += 4;
+  pdf.setFillColor(245, 247, 255);
+  pdf.setDrawColor(r, g, b);
+  pdf.setLineWidth(0.5);
+  pdf.roundedRect(margin, y, pageW - margin * 2, 8 + address.length * 7, 2, 2, 'FD');
+
+  pdf.setFontSize(9);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setTextColor(r, g, b);
+  pdf.text('Mailing Address:', margin + 5, y + 7);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setTextColor(0, 0, 0);
+  address.forEach((line, i) => {
+    pdf.text(line, margin + 5, y + 14 + i * 7);
+  });
+
+  // Tracking number line
+  const trackY = pageH - 50;
+  pdf.setDrawColor(180, 180, 180);
+  pdf.setLineWidth(0.4);
+  pdf.line(margin, trackY, pageW - margin, trackY);
+  pdf.setFontSize(9);
+  pdf.setTextColor(100, 100, 100);
+  pdf.text('Certified Mail Tracking #: ___________________________________________   Date Mailed: ________________', margin, trackY + 6);
+
+  // Footer
+  pdf.setFontSize(8);
+  pdf.setTextColor(150, 150, 150);
+  pdf.text('Generated by Credit Clarity  •  For personal use only  •  Not legal advice', margin, pageH - 10);
+};
+
 export const generatePDFPacket = async (
   letters: GeneratedDisputeLetter[],
   updateProgress: (progress: PacketProgress) => void
@@ -224,37 +453,14 @@ export const generatePDFPacket = async (
   });
 
   const pdf = new jsPDF();
-  const pageHeight = pdf.internal.pageSize.height;
-  const margin = 20;
-  const lineHeight = 6;
-  let currentY = margin;
 
   letters.forEach((letter, letterIndex) => {
-    if (letterIndex > 0) {
-      pdf.addPage();
-      currentY = margin;
-    }
+    // Cover page for this bureau
+    addCoverPage(pdf, letter.creditBureau, letterIndex === 0);
 
-    // Add letter title
-    pdf.setFontSize(16);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text(`Dispute Letter - ${letter.creditBureau}`, margin, currentY);
-    currentY += lineHeight * 2;
-
-    // Add letter content
-    pdf.setFontSize(11);
-    pdf.setFont('helvetica', 'normal');
-    
-    const lines = pdf.splitTextToSize(letter.letterContent, pdf.internal.pageSize.width - 2 * margin);
-    
-    lines.forEach((line: string) => {
-      if (currentY > pageHeight - margin) {
-        pdf.addPage();
-        currentY = margin;
-      }
-      pdf.text(line, margin, currentY);
-      currentY += lineHeight;
-    });
+    // Dispute letter starts on a new page
+    pdf.addPage();
+    renderLetterContent(pdf, letter.letterContent);
   });
 
   updateProgress({
@@ -281,126 +487,58 @@ export const generateCompletePacket = async (
   try {
     // Create main PDF document using pdf-lib
     const mainPdf = await PDFDocument.create();
-    
-    // Add title page
-    const titlePage = mainPdf.addPage();
-    const { width, height } = titlePage.getSize();
-    
-    titlePage.drawText('Credit Dispute Packet', {
-      x: 50,
-      y: height - 100,
-      size: 24,
-      color: rgb(0, 0, 0),
-    });
-    
-    titlePage.drawText('Generated by Credit Clarity', {
-      x: 50,
-      y: height - 140,
-      size: 12,
-      color: rgb(0.5, 0.5, 0.5),
-    });
-    
-    titlePage.drawText(new Date().toLocaleDateString(), {
-      x: 50,
-      y: height - 160,
-      size: 10,
-      color: rgb(0.5, 0.5, 0.5),
-    });
-
-    // Add table of contents
-    let yPos = height - 220;
-    titlePage.drawText('Contents:', {
-      x: 50,
-      y: yPos,
-      size: 16,
-      color: rgb(0, 0, 0),
-    });
-    
-    yPos -= 30;
-    letters.forEach((letter, index) => {
-      titlePage.drawText(`${index + 1}. Dispute Letter - ${letter.creditBureau}`, {
-        x: 70,
-        y: yPos,
-        size: 12,
-        color: rgb(0, 0, 0),
-      });
-      yPos -= 20;
-    });
-    
-    documents.forEach((doc, index) => {
-      titlePage.drawText(`${letters.length + index + 1}. ${getDocumentTitle(doc.document.document_type)}`, {
-        x: 70,
-        y: yPos,
-        size: 12,
-        color: rgb(0, 0, 0),
-      });
-      yPos -= 20;
-    });
 
     updateProgress({
-      step: 'Adding dispute letters...',
+      step: 'Building packet...',
       progress: 60,
-      message: 'Converting dispute letters to PDF'
+      message: 'Combining letters and supporting documents per bureau'
     });
 
-    // Convert jsPDF dispute letters to pdf-lib format
+    // For each bureau: cover page → dispute letter → supporting documents
+    const totalSteps = letters.length * (1 + documents.length);
+    let stepsDone = 0;
+
     for (let i = 0; i < letters.length; i++) {
       const letter = letters[i];
-      
-      // Create temporary jsPDF for this letter
+
+      // --- Cover page (jsPDF → pdf-lib) ---
+      const coverPdf = new jsPDF();
+      addCoverPage(coverPdf, letter.creditBureau, true);
+      const coverBlob = new Blob([coverPdf.output('arraybuffer')], { type: 'application/pdf' });
+      await addPdfPages(coverBlob, mainPdf, `Cover - ${letter.creditBureau}`);
+
+      // --- Dispute letter ---
       const tempPdf = new jsPDF();
-      const pageHeight = tempPdf.internal.pageSize.height;
-      const margin = 20;
-      const lineHeight = 6;
-      let currentY = margin;
+      renderLetterContent(tempPdf, letter.letterContent);
 
-      // Add letter title
-      tempPdf.setFontSize(16);
-      tempPdf.setFont('helvetica', 'bold');
-      tempPdf.text(`Dispute Letter - ${letter.creditBureau}`, margin, currentY);
-      currentY += lineHeight * 2;
-
-      // Add letter content
-      tempPdf.setFontSize(11);
-      tempPdf.setFont('helvetica', 'normal');
-      
-      const lines = tempPdf.splitTextToSize(letter.letterContent, tempPdf.internal.pageSize.width - 2 * margin);
-      
-      lines.forEach((line: string) => {
-        if (currentY > pageHeight - margin) {
-          tempPdf.addPage();
-          currentY = margin;
-        }
-        tempPdf.text(line, margin, currentY);
-        currentY += lineHeight;
-      });
-
-      // Convert to blob and add to main PDF
       const letterBlob = new Blob([tempPdf.output('arraybuffer')], { type: 'application/pdf' });
       await addPdfPages(letterBlob, mainPdf, `Dispute Letter - ${letter.creditBureau}`);
-    }
 
-    updateProgress({
-      step: 'Adding documents...',
-      progress: 80,
-      message: 'Processing uploaded documents'
-    });
-
-    // Add user documents
-    for (let i = 0; i < documents.length; i++) {
-      const docBlob = documents[i];
-      const title = getDocumentTitle(docBlob.document.document_type);
-      
+      stepsDone++;
       updateProgress({
-        step: `Adding ${title}...`,
-        progress: 80 + (i / documents.length) * 15,
-        message: `Processing ${docBlob.document.file_name}`
+        step: `Adding ${letter.creditBureau} section...`,
+        progress: 60 + (stepsDone / totalSteps) * 35,
+        message: `Letter added — appending supporting documents`
       });
 
-      if (docBlob.type === 'image') {
-        await convertImageToPdfPage(docBlob.blob, mainPdf, title);
-      } else if (docBlob.type === 'pdf') {
-        await addPdfPages(docBlob.blob, mainPdf, title);
+      // --- Supporting documents after each letter ---
+      for (let d = 0; d < documents.length; d++) {
+        const docBlob = documents[d];
+        const title = getDocumentTitle(docBlob.document.document_type);
+
+        updateProgress({
+          step: `Adding ${title} (${letter.creditBureau})...`,
+          progress: 60 + (stepsDone / totalSteps) * 35,
+          message: `Processing ${docBlob.document.file_name}`
+        });
+
+        if (docBlob.type === 'image') {
+          await convertImageToPdfPage(docBlob.blob, mainPdf, title);
+        } else if (docBlob.type === 'pdf') {
+          await addPdfPages(docBlob.blob, mainPdf, title);
+        }
+
+        stepsDone++;
       }
     }
 
@@ -425,5 +563,268 @@ export const generateCompletePacket = async (
   } catch (error) {
     console.error('Error generating complete packet:', error);
     throw error;
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI-Powered Dispute Letter Generation Pipeline
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Thrown when a duplicate dispute is found within 24 hours */
+export class DuplicateDisputeError extends Error {
+  constructor(message: string, public readonly existingDisputeId: string) {
+    super(message);
+    this.name = 'DuplicateDisputeError';
+  }
+}
+
+export interface DisputePayload {
+  userId: string;
+  bureau: string;
+  creditorName: string;
+  accountNumberMasked: string;
+  disputeReason: string;
+}
+
+export interface StoredDispute {
+  id: string;
+  user_id: string;
+  creditor_name: string | null;
+  account_number_masked: string | null;
+  bureau: string | null;
+  dispute_reason: string | null;
+  letter_text: string | null;
+  status: string;
+  created_at: string | null;
+  mailing_address: string;
+}
+
+/**
+ * Returns the existing dispute ID if a duplicate was filed within the last 24 h, null otherwise.
+ */
+export const checkDuplicateDispute = async (
+  userId: string,
+  creditorName: string,
+  accountNumberMasked: string,
+  bureau: string
+): Promise<string | null> => {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data } = await supabase
+    .from('disputes')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('creditor_name', creditorName)
+    .eq('account_number_masked', accountNumberMasked)
+    .eq('bureau', bureau)
+    .gte('created_at', since)
+    .maybeSingle();
+  return data?.id ?? null;
+};
+
+/** Build a static fallback letter when the AI Edge Function is unavailable */
+const buildFallbackSingleLetter = (
+  pi: { firstName: string; lastName: string; address: string; address2?: string; city: string; state: string; zip: string; lastFourSSN: string },
+  payload: DisputePayload,
+  bureauAddress: string
+): string => {
+  return `${pi.firstName} ${pi.lastName}
+${pi.address}${pi.address2 ? `\n${pi.address2}` : ''}
+${pi.city}, ${pi.state} ${pi.zip}
+
+${formatLetterDate()}
+
+${bureauAddress}
+
+RE: Dispute of Inaccurate Information
+File/Report Number: [Insert Report Number Here]
+Social Security Number: XXX-XX-${pi.lastFourSSN}
+
+To Whom It May Concern:
+
+I am writing to dispute the following account that is reporting inaccurately on my credit report. This information is a serious error and I request that it be investigated and removed immediately pursuant to my rights under the Fair Credit Reporting Act (15 U.S.C. § 1681i).
+
+The following account contains incorrect information and/or is obsolete:
+
+Creditor Name: ${payload.creditorName}
+Account #: ${payload.accountNumberMasked}
+Reason for Dispute: ${payload.disputeReason || 'This account is inaccurate, incomplete, and/or obsolete. If it cannot be fully verified, it must be removed.'}
+
+Please investigate this matter thoroughly. I request that you verify the accuracy of this item with the furnisher of the information and send me the results of your investigation, including the method of verification, to the address above.
+
+If this item cannot be verified within the 30-day timeframe required by law, I expect it to be permanently deleted from my credit file.
+
+Sincerely,
+
+${pi.firstName} ${pi.lastName}
+
+Enclosures:
+- Copy of credit report (highlighted)
+- Copy of government ID
+- Copy of proof of address`;
+};
+
+/**
+ * Generate and persist a single dispute letter via the AI Edge Function.
+ * Falls back to a static template if the Edge Function is unavailable.
+ * Throws DuplicateDisputeError if a duplicate exists within 24 h.
+ */
+export const generateDisputeLetterViaAI = async (
+  payload: DisputePayload
+): Promise<StoredDispute> => {
+  // 1. Duplicate check
+  const duplicateId = await checkDuplicateDispute(
+    payload.userId,
+    payload.creditorName,
+    payload.accountNumberMasked,
+    payload.bureau
+  );
+  if (duplicateId) {
+    throw new DuplicateDisputeError(
+      'A dispute for this account was already generated in the last 24 hours.',
+      duplicateId
+    );
+  }
+
+  // 2. Fetch user profile
+  const { data: profileData, error: profileError } = await supabase
+    .from('profiles')
+    .select('first_name, last_name, address1, address2, city, state, zip_code, phone_number, last_four_of_ssn')
+    .eq('user_id', payload.userId)
+    .single();
+
+  if (profileError || !profileData) {
+    console.error('[disputeUtils] Profile fetch failed:', profileError);
+    throw new Error('Profile not found. Please complete your profile before generating letters.');
+  }
+
+  const pi = {
+    firstName: profileData.first_name ?? '',
+    lastName: profileData.last_name ?? '',
+    address: profileData.address1 ?? '',
+    address2: profileData.address2 ?? undefined,
+    city: profileData.city ?? '',
+    state: profileData.state ?? '',
+    zip: profileData.zip_code ?? '',
+    phone: profileData.phone_number ?? undefined,
+    lastFourSSN: profileData.last_four_of_ssn ?? 'XXXX',
+  };
+
+  // 3. Resolve bureau mailing address (DB → hardcoded fallback)
+  const { data: bureauRow } = await supabase
+    .from('credit_bureaus')
+    .select('address')
+    .eq('name', payload.bureau)
+    .maybeSingle();
+
+  let mailingAddress = bureauRow?.address ?? '';
+  if (!mailingAddress) {
+    const bi = CREDIT_BUREAU_ADDRESSES[payload.bureau as keyof typeof CREDIT_BUREAU_ADDRESSES];
+    mailingAddress = bi
+      ? `${bi.name}\n${bi.address}\n${bi.city}, ${bi.state} ${bi.zip}`
+      : payload.bureau;
+  }
+
+  // 4. Call Edge Function (with static fallback)
+  let letterText: string;
+  try {
+    const { data: edgeData, error: edgeError } = await supabase.functions.invoke('generate-dispute-letter', {
+      body: {
+        personalInfo: {
+          firstName: pi.firstName,
+          lastName: pi.lastName,
+          address: pi.address,
+          address2: pi.address2,
+          city: pi.city,
+          state: pi.state,
+          zip: pi.zip,
+          phone: pi.phone,
+          lastFourSSN: pi.lastFourSSN,
+        },
+        selectedTradelines: [{
+          creditor_name: payload.creditorName,
+          account_number: payload.accountNumberMasked,
+          dispute_reason: payload.disputeReason,
+        }],
+        bureaus: [payload.bureau],
+      },
+    });
+
+    if (edgeError) throw edgeError;
+    letterText = (edgeData?.letters?.[payload.bureau] as string) ?? '';
+    if (!letterText) throw new Error('AI service returned an empty letter');
+  } catch (err) {
+    console.warn('[disputeUtils] Edge function unavailable, using fallback template:', err);
+    letterText = buildFallbackSingleLetter(pi, payload, mailingAddress);
+  }
+
+  // 5. Persist to disputes table
+  const { data: saved, error: insertError } = await supabase
+    .from('disputes')
+    .insert({
+      user_id: payload.userId,
+      credit_report_id: `dispute-${Date.now()}`,
+      creditor_name: payload.creditorName,
+      account_number_masked: payload.accountNumberMasked,
+      bureau: payload.bureau,
+      dispute_reason: payload.disputeReason,
+      letter_text: letterText,
+      mailing_address: mailingAddress,
+      status: 'generated',
+    })
+    .select()
+    .single();
+
+  if (insertError || !saved) {
+    console.error('[disputeUtils] Failed to save dispute record:', insertError);
+    throw new Error('Failed to save dispute letter. Please try again.');
+  }
+
+  return saved as StoredDispute;
+};
+
+/**
+ * Persist batch-generated (static template) letters to the disputes table so
+ * they appear in Dispute History. Non-throwing — logs errors internally.
+ */
+export const saveLettersToDisputesTable = async (
+  letters: GeneratedDisputeLetter[],
+  userId: string,
+  tradelines: ParsedTradeline[]
+): Promise<void> => {
+  if (letters.length === 0 || !userId) return;
+
+  const inserts = letters.flatMap((letter) => {
+    const bureauTradelines = tradelines.filter(
+      (t) => !t.credit_bureau || t.credit_bureau === letter.creditBureau
+    );
+    const targets = bureauTradelines.length > 0 ? bureauTradelines : tradelines;
+
+    const bi = CREDIT_BUREAU_ADDRESSES[letter.creditBureau as keyof typeof CREDIT_BUREAU_ADDRESSES];
+    const mailingAddress = bi
+      ? `${bi.name}\n${bi.address}\n${bi.city}, ${bi.state} ${bi.zip}`
+      : letter.creditBureau;
+
+    return targets.map((t) => ({
+      user_id: userId,
+      credit_report_id: `batch-${Date.now()}-${t.id}`,
+      creditor_name: t.creditor_name ?? null,
+      account_number_masked: t.account_number
+        ? t.account_number.length > 4
+          ? `****${t.account_number.slice(-4)}`
+          : t.account_number
+        : null,
+      bureau: letter.creditBureau,
+      dispute_reason: 'Inaccurate or unverifiable information',
+      letter_text: letter.letterContent,
+      mailing_address: mailingAddress,
+      status: 'generated',
+    }));
+  });
+
+  if (inserts.length === 0) return;
+
+  const { error } = await supabase.from('disputes').insert(inserts);
+  if (error) {
+    console.error('[disputeUtils] Failed to save batch disputes to history:', error);
   }
 };

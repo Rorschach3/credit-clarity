@@ -1,0 +1,41 @@
+{
+  "template": {
+    "id": "home-layout-2",
+    "target": "home",
+    "variant": 2,
+    "name": "Hero-Fullwidth Stacked",
+    "device": "responsive",
+    "dom_structure": {
+      "sections": [
+        { "id": "nav", "tag": "header", "role": "banner", "sticky": true, "transparent_hero": true },
+        { "id": "hero", "tag": "section", "aria-label": "Hero", "layout": "centered-overlay", "full_viewport": true, "children": ["hero-badge", "hero-h1", "hero-subtitle", "hero-cta-group", "hero-demo-preview"] },
+        { "id": "logos", "tag": "section", "aria-label": "Trusted by users from", "layout": "logo-strip", "children": ["bureau-equifax", "bureau-experian", "bureau-transunion", "fcra-badge"] },
+        { "id": "problem-solution", "tag": "section", "aria-label": "The problem we solve", "layout": "before-after-split", "children": ["problem-col", "solution-col"] },
+        { "id": "features", "tag": "section", "aria-label": "Features", "layout": "alternating-rows", "children": ["feature-row-1", "feature-row-2", "feature-row-3"] },
+        { "id": "pricing", "tag": "section", "aria-label": "Pricing", "layout": "3-col-cards", "children": ["plan-free", "plan-pro", "plan-enterprise"] },
+        { "id": "faq", "tag": "section", "aria-label": "FAQ", "layout": "accordion-2col", "children": ["faq-items"] },
+        { "id": "final-cta", "tag": "section", "aria-label": "Get started today", "layout": "full-width-gradient-band" },
+        { "id": "footer", "tag": "footer", "role": "contentinfo" }
+      ]
+    },
+    "css_layout_rules": {
+      "hero": "position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100svh; text-align: center; padding: 7rem 1.5rem 5rem; overflow: hidden;",
+      "hero_bg": "background: var(--gradient-hero); position: absolute; inset: 0; z-index: 0;",
+      "hero_content": "position: relative; z-index: 1; max-width: 720px; margin: 0 auto;",
+      "logos": "display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: center; align-items: center; padding: 3rem 1.5rem;",
+      "problem_solution": "display: grid; grid-template-columns: 1fr; gap: 2rem; padding: 5rem 1.5rem;",
+      "problem_solution_md": "@media(min-width:768px){ .problem-solution { grid-template-columns: 1fr 1fr; gap: 3rem; } }",
+      "features_alternating": "display: flex; flex-direction: column; gap: 4rem; padding: 5rem 1.5rem;",
+      "pricing_grid": "display: grid; grid-template-columns: 1fr; gap: 1.5rem; padding: 5rem 1.5rem;",
+      "pricing_grid_md": "@media(min-width:768px){ .pricing-grid { grid-template-columns: repeat(3, 1fr); } }",
+      "faq": "display: grid; grid-template-columns: 1fr; gap: 1rem; padding: 5rem 1.5rem; max-width: 800px; margin: 0 auto;"
+    },
+    "seo": {
+      "h1": "AI-Powered Credit Dispute Letters — Fight Back Against Errors",
+      "meta_description": "Upload your credit report, let AI find errors, and generate FCRA-compliant dispute letters in minutes. Start free with Credit Clarity.",
+      "schema_type": "WebPage",
+      "canonical": "/",
+      "og_image_ratio": "1200x630"
+    }
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "id": "IMPL-010",
+  "title": "Multi-Bureau Dashboard & Dispute Tracking",
+  "status": "pending",
+  "context_package_path": ".workflow/active/WFS-implement-credit-clarity-platform/.process/context-package.json",
+  "meta": {
+    "priority": "high",
+    "effort_estimate": "3 days",
+    "phase": "Phase 1 - Core Feature",
+    "type": "fullstack",
+    "depends_on": ["IMPL-001"],
+    "tags": ["dashboard", "disputes", "multi-bureau", "tracking", "status", "frontend"]
+  },
+  "context": {
+    "description": "Enhance DashboardPage.tsx with multi-bureau tradeline columns (Experian / Equifax / TransUnion side-by-side), dispute lifecycle status tracking, and manual dispute status updates. Implement dispute status state machine in backend.",
+    "focus_paths": [
+      "frontend/src/pages/DashboardPage.tsx",
+      "frontend/src/components/dashboard/",
+      "frontend/src/hooks/useDashboardData.ts",
+      "frontend/src/hooks/queries/useDashboardQueries.ts",
+      "backend/api/v1/routes/tradelines.py",
+      "docs/PRD-Feature-Specifications.md"
+    ],
+    "acceptance_criteria": [
+      "DashboardPage.tsx displays 3-column bureau view: each negative tradeline row shows Experian / Equifax / TransUnion presence with colored status badge",
+      "Dispute status badges: 7 states - pending (gray), letter_generated (blue), mailing_dispatched (purple), bureau_received (yellow), investigating (orange), resolved (green), denied (red)",
+      "Manual status update UI: each tradeline row has dropdown to manually update dispute status (calls PATCH /api/v1/tradelines/{id}/dispute-status)",
+      "backend: PATCH /api/v1/tradelines/{id}/dispute-status endpoint validates status transition, writes to disputes table, logs to notification_log (type='dispute_update')",
+      "Dashboard summary row: '5 negative items found | 2 letters generated | 1 mailed | 0 resolved' (counts from disputes table)",
+      "useDashboardData.ts uses TanStack Query with refetch interval of 30s for real-time status updates",
+      "Dashboard filter UI: filter by bureau (All / Experian / Equifax / TransUnion) and by status (All / pending / letter_generated / mailing_dispatched / resolved / denied) — filters applied client-side",
+      "Status change writes to status_history table: {dispute_id, old_status, new_status, changed_at, changed_by} via PATCH /api/v1/tradelines/{id}/dispute-status endpoint",
+      "Dashboard initial load completes in <2s for up to 50 tradelines (TanStack Query staleTime=30s to avoid redundant fetches)",
+      "Verify: Update dispute status via dropdown → badge color changes immediately → notification_log entry created → status_history row added"
+    ],
+    "implementation_approach": [
+      "Step 1: Read frontend/src/pages/DashboardPage.tsx and components/dashboard/ to understand current structure",
+      "Step 2: Read frontend/src/hooks/useDashboardData.ts and useDashboardQueries.ts for data fetching patterns",
+      "Step 3: Enhance tradelines query to group by (creditor, account_number) with bureau pivot",
+      "Step 4: Add bureau columns to dashboard table component",
+      "Step 5: Add DisputeStatusBadge component with 7 states and color mapping",
+      "Step 6: Add status dropdown to each tradeline row",
+      "Step 7: Add PATCH /api/v1/tradelines/{id}/dispute-status to backend/api/v1/routes/tradelines.py",
+      "Step 8: Dashboard summary row component"
+    ],
+    "pre_analysis": [
+      "Read frontend/src/pages/DashboardPage.tsx - current dashboard structure",
+      "Read frontend/src/hooks/useDashboardData.ts - data fetching approach",
+      "Read backend/api/v1/routes/tradelines.py - existing tradeline endpoints to extend"
+    ]
+  },
+  "flow_control": {
+    "execution_mode": "sequential",
+    "parallel_with": ["IMPL-006", "IMPL-007", "IMPL-008", "IMPL-009"],
+    "requires": ["IMPL-001"],
+    "blocks": ["IMPL-012"]
+  }
+}

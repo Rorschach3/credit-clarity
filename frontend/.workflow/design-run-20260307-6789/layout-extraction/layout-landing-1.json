@@ -1,0 +1,103 @@
+{
+  "target": "landing",
+  "variant": 1,
+  "variant_name": "Hero-First Conversion",
+  "description": "Full-viewport hero with bold headline, single CTA, trust signals below. Classic SaaS landing pattern optimized for conversion.",
+  "template": {
+    "dom_structure": {
+      "tag": "div",
+      "class": "layout-landing-v1",
+      "children": [
+        {
+          "tag": "nav",
+          "class": "navbar navbar-transparent",
+          "children": [
+            { "tag": "div", "class": "nav-logo" },
+            { "tag": "div", "class": "nav-links" },
+            { "tag": "div", "class": "nav-cta" }
+          ]
+        },
+        {
+          "tag": "section",
+          "class": "hero hero-full-viewport",
+          "children": [
+            { "tag": "div", "class": "hero-badge" },
+            { "tag": "h1", "class": "hero-headline" },
+            { "tag": "p", "class": "hero-subheadline" },
+            { "tag": "div", "class": "hero-cta-group" },
+            { "tag": "div", "class": "hero-social-proof" },
+            { "tag": "div", "class": "hero-visual" }
+          ]
+        },
+        {
+          "tag": "section",
+          "class": "trust-bar",
+          "children": [
+            { "tag": "div", "class": "trust-logos" }
+          ]
+        },
+        {
+          "tag": "section",
+          "class": "features-grid",
+          "children": [
+            { "tag": "div", "class": "section-header" },
+            { "tag": "div", "class": "features-3-col" }
+          ]
+        },
+        {
+          "tag": "section",
+          "class": "how-it-works",
+          "children": [
+            { "tag": "div", "class": "section-header" },
+            { "tag": "div", "class": "steps-timeline" }
+          ]
+        },
+        {
+          "tag": "section",
+          "class": "testimonials",
+          "children": [
+            { "tag": "div", "class": "section-header" },
+            { "tag": "div", "class": "testimonials-carousel" }
+          ]
+        },
+        {
+          "tag": "section",
+          "class": "pricing-preview",
+          "children": [
+            { "tag": "div", "class": "section-header" },
+            { "tag": "div", "class": "pricing-cards-3" }
+          ]
+        },
+        {
+          "tag": "section",
+          "class": "final-cta",
+          "children": [
+            { "tag": "div", "class": "cta-content" }
+          ]
+        },
+        { "tag": "footer", "class": "footer-full" }
+      ]
+    },
+    "css_layout_rules": {
+      ".layout-landing-v1": "display: flex; flex-direction: column; min-height: 100vh;",
+      ".hero": "min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 4rem; padding: 8rem 6rem 6rem;",
+      ".hero-headline": "font-size: clamp(2.5rem, 5vw, 4.5rem); font-weight: 800; line-height: 1.1; letter-spacing: -0.03em;",
+      ".hero-cta-group": "display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-top: 2rem;",
+      ".trust-bar": "padding: 2rem 6rem; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);",
+      ".trust-logos": "display: flex; align-items: center; justify-content: center; gap: 3rem; opacity: 0.5; flex-wrap: wrap;",
+      ".features-grid": "padding: 6rem;",
+      ".features-3-col": "display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; margin-top: 3rem;",
+      ".how-it-works": "padding: 6rem; background: var(--surface-alt);",
+      ".steps-timeline": "display: flex; gap: 2rem; margin-top: 3rem; position: relative;",
+      ".testimonials": "padding: 6rem;",
+      ".pricing-preview": "padding: 6rem; background: var(--surface-alt);",
+      ".pricing-cards-3": "display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; margin-top: 3rem;",
+      ".final-cta": "padding: 8rem 6rem; text-align: center;",
+      "@media (max-width: 768px)": {
+        ".hero": "grid-template-columns: 1fr; padding: 6rem 1.5rem 3rem; text-align: center;",
+        ".features-3-col": "grid-template-columns: 1fr;",
+        ".pricing-cards-3": "grid-template-columns: 1fr;"
+      }
+    }
+  }
+}

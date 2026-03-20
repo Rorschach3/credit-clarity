@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional, Tuple
 
 from datetime import datetime, timedelta
 
-from ..models.tradeline_models import ProcessingStatus
+from models.tradeline_models import ProcessingStatus
 
 logger = logging.getLogger(__name__)
 

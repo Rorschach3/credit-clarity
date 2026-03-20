@@ -1,0 +1,32 @@
+{
+  "template": {
+    "id": "profile-layout-1",
+    "target": "profile",
+    "variant": 1,
+    "name": "Card-Centered Form",
+    "device": "responsive",
+    "dom_structure": {
+      "sections": [
+        { "id": "page-header", "children": ["breadcrumb", "title", "subtitle"] },
+        { "id": "avatar-section", "layout": "centered-card", "children": ["avatar-upload", "display-name", "email"] },
+        { "id": "form-card", "tag": "form", "layout": "single-column-card", "children": [
+          { "id": "personal-section", "children": ["first-name", "last-name", "dob", "ssn"] },
+          { "id": "address-section", "children": ["address1", "address2", "city-state-zip"] },
+          { "id": "contact-section", "children": ["phone"] },
+          { "id": "save-btn" }
+        ]},
+        { "id": "danger-zone", "layout": "card", "children": ["change-password", "delete-account"] }
+      ]
+    },
+    "css_layout_rules": {
+      "page": "max-width: 672px; margin: 0 auto; padding: 2rem 1rem 4rem;",
+      "page_header": "margin-bottom: 2rem;",
+      "avatar_section": "background: var(--surface-card); border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 2rem; display: flex; flex-direction: column; align-items: center; gap: 1rem; margin-bottom: 1.5rem;",
+      "form_card": "background: var(--surface-card); border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 2rem; display: flex; flex-direction: column; gap: 1.5rem; margin-bottom: 1.5rem;",
+      "form_grid_2": "display: grid; grid-template-columns: 1fr; gap: 1rem;",
+      "form_grid_2_md": "@media(min-width:640px){ .form-grid-2 { grid-template-columns: 1fr 1fr; } }",
+      "form_grid_3": "display: grid; grid-template-columns: 1fr; gap: 1rem;",
+      "form_grid_3_md": "@media(min-width:640px){ .form-grid-3 { grid-template-columns: 2fr 1fr 1fr; } }"
+    }
+  }
+}

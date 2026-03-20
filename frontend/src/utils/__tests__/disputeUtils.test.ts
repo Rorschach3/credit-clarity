@@ -153,8 +153,7 @@ describe('Dispute Utils', () => {
       city: 'Anytown',
       state: 'CA',
       zipCode: '12345',
-      dateOfBirth: '01/01/1990',
-      ssn: '123456789',
+      lastFourSSN: '6789',
     };
 
     const mockTradelines: ParsedTradeline[] = [
@@ -182,37 +181,43 @@ describe('Dispute Utils', () => {
       expect(content).toContain('123 Main St');
       expect(content).toContain('Anytown, CA 12345');
       expect(content).toContain('Experian');
+      expect(content).toContain('RE: Dispute of Inaccurate Information');
+      expect(content).toContain('To Whom It May Concern:');
       expect(content).toContain('Test Bank');
-      expect(content).toContain('Fair Credit Reporting Act');
-      expect(content).toContain('Request for Investigation');
+      expect(content).toContain('Fair Credit Reporting Act (15 U.S.C. § 1681i)');
+      expect(content).toContain('Sincerely,');
     });
 
     it('should mask SSN in letter content', () => {
       const content = generateDisputeLetterContent(mockTradelines, 'Experian', mockProfile);
       
-      expect(content).toContain('***-**-6789');
-      expect(content).not.toContain('123456789');
+      expect(content).toContain('Social Security Number: XXX-XX-6789');
+      expect(content).not.toContain('[Insert SSN Here]');
     });
 
-    it('should mask account number in letter content', () => {
+    it('should include a report number placeholder until one is provided', () => {
       const content = generateDisputeLetterContent(mockTradelines, 'Experian', mockProfile);
       
-      expect(content).toContain('****7890');
-      expect(content).not.toContain('1234567890');
+      expect(content).toContain('File/Report Number: [Insert Report Number Here]');
     });
 
     it('should include bureau address information', () => {
       const content = generateDisputeLetterContent(mockTradelines, 'Experian', mockProfile);
       
-      expect(content).toContain('P.O. Box 4000');
+      expect(content).toContain('P.O. Box 4500');
       expect(content).toContain('Allen, TX 75013');
     });
 
-    it('should include account table with tradeline information', () => {
+    it('should include labeled tradeline details and a specific dispute reason', () => {
       const content = generateDisputeLetterContent(mockTradelines, 'Experian', mockProfile);
       
-      expect(content).toContain('Creditor Name | Account Number | Date Opened | Dispute Reason');
-      expect(content).toContain('Test Bank | ****7890 | 01/01/2020 | Inaccurate Information');
+      expect(content).toContain('Creditor Name: Test Bank');
+      expect(content).toContain('Account #: ****7890');
+      expect(content).toContain('Reported Status: Open');
+      expect(content).toContain('$1,000');
+      expect(content).toContain('01/01/2020');
+      expect(content).toContain('Reason for Dispute: The current status of this account (listed as "Open") is inaccurate.');
+      expect(content).toContain('method of verification');
     });
   });
 

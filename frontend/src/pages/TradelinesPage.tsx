@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { CreditNavbar } from "@/components/navbar/CreditNavbar";
 import { AlertCircle, CheckCircle, X, RefreshCw } from "lucide-react";
 import { useTradelines, useUpdateTradeline, useDeleteTradeline } from "@/hooks/queries/useTradelinesQueries";
 
@@ -174,15 +173,11 @@ const NegativeTradelinesPage = () => {
 
   // Save edit using React Query mutation
   const handleSaveEdit = useCallback(async (updatedTradeline: Tradeline) => {
+    const { id, user_id, created_at, ...updates } = updatedTradeline;
     updateTradelineMutation.mutate(
-      { id: updatedTradeline.id, updates: updatedTradeline },
+      { id, updates },
       {
-        onSuccess: () => {
-          setEditingAccount(null);
-        },
-        onError: (error) => {
-          console.error("Error updating tradeline:", error);
-        }
+        onSuccess: () => setEditingAccount(null),
       }
     );
   }, [updateTradelineMutation]);
@@ -302,7 +297,6 @@ const NegativeTradelinesPage = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background text-foreground">
-        <CreditNavbar />
         <div className="container mx-auto px-4 py-8">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
@@ -319,7 +313,6 @@ const NegativeTradelinesPage = () => {
   if (accounts.length === 0) {
     return (
       <div className="min-h-screen bg-background text-foreground">
-        <CreditNavbar />
         <div className="container mx-auto px-4 py-8">
           <div className="text-center py-12">
             <p className="text-muted-foreground mb-4">No tradelines found.</p>
@@ -334,7 +327,6 @@ const NegativeTradelinesPage = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <CreditNavbar />
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">

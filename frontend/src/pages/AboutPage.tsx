@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { Shield, UserCheck, BookOpen } from "lucide-react";
+import { Shield, UserCheck, BookOpen, ArrowRight } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 
 export default function AboutPage() {
@@ -42,159 +42,163 @@ export default function AboutPage() {
         <link rel="canonical" href="https://creditclarity.ai/about" />
       </Helmet>
 
-      <div className="bg-gradient-to-r from-brand-900 to-brand-700 text-white py-20">
+      <div className="has-navbar">
+
         {/* Hero Section */}
-        <div className="container px-4 mx-auto">
-          <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-4xl font-bold mb-6">About Credit Clarity</h1>
-            <p className="text-xl text-gray-700 mb-8">
+        <section className="relative overflow-hidden px-6 pt-24 pb-20 md:pt-32 md:pb-28">
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(212,168,83,0.12) 0%, transparent 70%)',
+            }}
+          />
+          <div className="relative max-w-3xl mx-auto text-center">
+            <h1 className="text-5xl md:text-6xl font-extrabold mb-6 leading-tight" style={{ letterSpacing: '-0.03em' }}>
+              About <span className="text-gold-gradient">Credit Clarity</span>
+            </h1>
+            <p className="text-xl text-muted-foreground mb-10 leading-relaxed">
               We're on a mission to help millions of Americans improve their credit scores through the power of artificial intelligence.
             </p>
-            <div className="flex justify-center space-x-4">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link to="/signup">
-                <Button>Get Started</Button>
+                <Button size="lg" className="btn-gold rounded-md px-8 text-base h-12">
+                  Get Started
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
               </Link>
               <Link to="/contact">
-                <Button variant="outline">Contact Us</Button>
+                <Button size="lg" variant="ghost" className="rounded-md px-8 text-base h-12 text-muted-foreground hover:text-foreground hover:bg-white/5">
+                  Contact Us
+                </Button>
               </Link>
             </div>
           </div>
-        </div>
-      </div>
+        </section>
 
-      <section className="py-16">
-      <div className="container px-4 mx-auto mt-12">
-        {/* Our Story Section */}
-        <div className="container px-4 mx-auto">
-          <div className="max-w-3xl mx-auto">
-            <h2 className="text-3xl font-bold mb-6 text-center">Our Story</h2>
-            <div className="prose prose-lg max-w-none">
-              <p>
-                CreditClarityAI was founded in 2024 with a simple idea: what if we could use artificial intelligence to make credit repair more accessible, affordable, and effective for everyday Americans?
-              </p>
-              <p>
-                Our founder, a former credit analyst, saw firsthand how errors on credit reports were causing major financial hardships for consumers. At the same time, traditional credit repair companies were charging high fees with questionable results.
-              </p>
-              <p>
-                By combining cutting-edge OCR technology with advanced AI models trained on thousands of successful dispute letters, we've created a platform that can identify errors on credit reports with incredible accuracy and generate customized dispute letters that get results.
-              </p>
-              <p>
-                Today, CreditClarityAI has helped thousands of customers improve their credit scores, saving them money on mortgages, auto loans, and credit cards while opening doors to better financial opportunities.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-      </section>
-
-      {/* Our Values Section */}
-      <section className="py-16 bg-gray-50">
-        <div className="container px-4 mx-auto">
-          <div className="max-w-3xl mx-auto text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">Our Core Values</h2>
-            <p className="text-lg text-gray-600">
-              The principles that guide everything we do
+        {/* Our Story */}
+        <section className="px-6 py-20 max-w-3xl mx-auto">
+          <h2 className="text-3xl md:text-4xl font-bold mb-8 text-center" style={{ letterSpacing: '-0.02em' }}>
+            Our Story
+          </h2>
+          <div className="card-midnight rounded-xl p-8 space-y-4 text-muted-foreground leading-relaxed">
+            <p>
+              CreditClarityAI was founded in 2024 with a simple idea: what if we could use artificial intelligence to make credit repair more accessible, affordable, and effective for everyday Americans?
+            </p>
+            <p>
+              Our founder, a former credit analyst, saw firsthand how errors on credit reports were causing major financial hardships for consumers. At the same time, traditional credit repair companies were charging high fees with questionable results.
+            </p>
+            <p>
+              By combining cutting-edge OCR technology with advanced AI models trained on thousands of successful dispute letters, we've created a platform that can identify errors on credit reports with incredible accuracy and generate customized dispute letters that get results.
+            </p>
+            <p>
+              Today, CreditClarityAI has helped thousands of customers improve their credit scores, saving them money on mortgages, auto loans, and credit cards while opening doors to better financial opportunities.
             </p>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            <div className="bg-white p-6 rounded-lg shadow-sm text-center">
-              <div className="bg-brand-100 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Shield className="h-7 w-7 text-brand-600" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Transparency</h3>
-              <p className="text-gray-600">
-                We're honest and upfront about what our service can and cannot do, with fair pricing and no hidden fees.
-              </p>
-            </div>
-            
-            <div className="bg-white p-6 rounded-lg shadow-sm text-center">
-              <div className="bg-brand-100 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4">
-                <BookOpen className="h-7 w-7 text-brand-600" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Education</h3>
-              <p className="text-gray-600">
-                We believe in empowering our customers with knowledge about credit repair, scoring, and financial literacy.
-              </p>
-            </div>
-            
-            <div className="bg-white p-6 rounded-lg shadow-sm text-center">
-              <div className="bg-brand-100 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4">
-                <UserCheck className="h-7 w-7 text-brand-600" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Customer Success</h3>
-              <p className="text-gray-600">
-                We measure our success by the improvements in our customers' credit scores and financial opportunities.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Stats Section */}
-      <section className="py-16">
-        <div className="container px-4 mx-auto">
-          <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-            <div>
-              <p className="text-5xl font-bold text-brand-600 mb-2">15,000+</p>
-              <p className="text-lg text-gray-600">Customers Served</p>
+        {/* Core Values */}
+        <section className="px-6 py-20 border-y border-[#1E2D47] bg-[rgba(26,35,64,0.3)]">
+          <div className="max-w-5xl mx-auto">
+            <div className="text-center mb-14">
+              <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ letterSpacing: '-0.02em' }}>
+                Our Core Values
+              </h2>
+              <p className="text-muted-foreground">The principles that guide everything we do</p>
             </div>
-            <div>
-              <p className="text-5xl font-bold text-brand-600 mb-2">85%</p>
-              <p className="text-lg text-gray-600">Success Rate</p>
-            </div>
-            <div>
-              <p className="text-5xl font-bold text-brand-600 mb-2">68</p>
-              <p className="text-lg text-gray-600">Average Score Increase</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Team Section */}
-      <section className="py-16 bg-gray-50">
-        <div className="container px-4 mx-auto">
-          <div className="max-w-3xl mx-auto text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">Our Team</h2>
-            <p className="text-lg text-gray-600">
-              Meet the experts behind CreditClarityAI
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 max-w-5xl mx-auto">
-            {teamMembers.map((member, index) => (
-              <div key={index} className="text-center">
-                <div className="mb-4">
-                  <img 
-                    src={member.image} 
-                    alt={member.name} 
-                    className="w-32 h-32 rounded-full mx-auto object-cover"
-                  />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[
+                {
+                  icon: Shield,
+                  title: 'Transparency',
+                  desc: "We're honest and upfront about what our service can and cannot do, with fair pricing and no hidden fees.",
+                },
+                {
+                  icon: BookOpen,
+                  title: 'Education',
+                  desc: 'We believe in empowering our customers with knowledge about credit repair, scoring, and financial literacy.',
+                },
+                {
+                  icon: UserCheck,
+                  title: 'Customer Success',
+                  desc: "We measure our success by the improvements in our customers' credit scores and financial opportunities.",
+                },
+              ].map(({ icon: Icon, title, desc }) => (
+                <div key={title} className="card-midnight p-8 rounded-xl text-center">
+                  <div className="p-3 rounded-full bg-[rgba(212,168,83,0.1)] w-14 h-14 flex items-center justify-center mx-auto mb-5">
+                    <Icon className="h-6 w-6 text-[#D4A853]" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-3">{title}</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed">{desc}</p>
                 </div>
-                <h3 className="text-lg font-semibold mb-1">{member.name}</h3>
-                <p className="text-gray-600">{member.title}</p>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Stats */}
+        <section className="border-b border-[#1E2D47] bg-[rgba(26,35,64,0.4)]">
+          <div className="max-w-5xl mx-auto px-6 py-16 grid grid-cols-1 sm:grid-cols-3 gap-8 text-center">
+            {[
+              { value: '15,000+', label: 'Customers Served' },
+              { value: '85%', label: 'Success Rate' },
+              { value: '+68 pts', label: 'Avg. Score Increase' },
+            ].map(({ value, label }) => (
+              <div key={label}>
+                <p className="text-4xl font-bold text-gold-gradient mb-2">{value}</p>
+                <p className="text-sm text-muted-foreground">{label}</p>
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* CTA Section */}
-      <section className="py-16 bg-brand-900 text-white">
-        <div className="container px-4 mx-auto">
-          <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-3xl font-bold mb-4">Ready to Improve Your Credit?</h2>
-            <p className="text-xl mb-8">
+        {/* Team */}
+        <section className="px-6 py-20 max-w-5xl mx-auto">
+          <div className="text-center mb-14">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ letterSpacing: '-0.02em' }}>
+              Our Team
+            </h2>
+            <p className="text-muted-foreground">Meet the experts behind CreditClarityAI</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+            {teamMembers.map((member) => (
+              <div key={member.name} className="card-midnight rounded-xl p-6 text-center">
+                <img
+                  src={member.image}
+                  alt={member.name}
+                  className="w-20 h-20 rounded-full mx-auto mb-4 object-cover ring-2 ring-[rgba(212,168,83,0.2)]"
+                />
+                <h3 className="font-semibold mb-1">{member.name}</h3>
+                <p className="text-sm text-muted-foreground">{member.title}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section className="px-6 pb-24">
+          <div
+            className="max-w-4xl mx-auto rounded-2xl p-12 text-center"
+            style={{
+              background: 'linear-gradient(135deg, rgba(212,168,83,0.12) 0%, rgba(59,127,212,0.08) 100%)',
+              border: '1px solid rgba(212,168,83,0.2)',
+            }}
+          >
+            <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ letterSpacing: '-0.02em' }}>
+              Ready to Improve Your Credit?
+            </h2>
+            <p className="text-muted-foreground mb-8 max-w-xl mx-auto">
               Join thousands of customers who have successfully improved their credit scores with CreditClarityAI.
             </p>
             <Link to="/signup">
-              <Button size="lg" className="bg-white text-brand-900 hover:bg-gray-100">
+              <Button size="lg" className="btn-gold rounded-md px-10 text-base h-12">
                 Get Started Today
+                <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
           </div>
-        </div>
-      </section>
+        </section>
+
+      </div>
     </>
   );
 }

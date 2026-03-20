@@ -1,0 +1,36 @@
+{
+  "template": {
+    "id": "dashboard-layout-2",
+    "target": "dashboard",
+    "variant": 2,
+    "name": "Top Nav + Full Grid",
+    "device": "responsive",
+    "dom_structure": {
+      "root": "app-shell-topnav",
+      "structure": [
+        { "id": "topnav", "tag": "header", "role": "banner", "sticky": true, "children": ["logo", "nav-links", "search", "notifications", "avatar"] },
+        { "id": "main", "tag": "main", "role": "main", "children": [
+          { "id": "hero-summary", "layout": "full-width-gradient", "children": ["welcome-text", "credit-score-ring", "quick-action-pills"] },
+          { "id": "stats-grid", "layout": "4-col-auto", "children": ["stat-1", "stat-2", "stat-3", "stat-4"] },
+          { "id": "three-col-grid", "layout": "3-col-responsive", "children": [
+            { "id": "tradelines-col", "span": 2, "children": ["tradeline-table"] },
+            { "id": "sidebar-widgets", "span": 1, "children": ["dispute-progress", "tips-card"] }
+          ]},
+          { "id": "bottom-band", "children": ["upload-banner"] }
+        ]}
+      ]
+    },
+    "css_layout_rules": {
+      "app_shell": "display: flex; flex-direction: column; min-height: 100svh;",
+      "topnav": "position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 1rem; padding: 0 1.5rem; height: 64px; backdrop-filter: blur(12px); border-bottom: 1px solid var(--border);",
+      "main": "flex: 1; padding: 0;",
+      "hero_summary": "padding: 3rem 1.5rem 2.5rem; background: var(--gradient-hero);",
+      "hero_summary_grid": "display: flex; flex-direction: column; gap: 1.5rem; max-width: 1280px; margin: 0 auto;",
+      "hero_summary_md": "@media(min-width:768px){ .hero-summary-inner { flex-direction: row; align-items: center; justify-content: space-between; } }",
+      "stats_grid": "display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; padding: 1.5rem; max-width: 1280px; margin: 0 auto;",
+      "stats_grid_lg": "@media(min-width:1024px){ .stats-grid { grid-template-columns: repeat(4, 1fr); } }",
+      "three_col": "display: grid; grid-template-columns: 1fr; gap: 1.5rem; padding: 0 1.5rem 2rem; max-width: 1280px; margin: 0 auto;",
+      "three_col_xl": "@media(min-width:1280px){ .three-col { grid-template-columns: 2fr 1fr; } }"
+    }
+  }
+}

@@ -1,52 +1,97 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Global CSS variables and base styles */
+/* ============================================================
+   MIDNIGHT TRUST — Design Token System
+   Dark navy + gold. Premium financial aesthetics.
+   ============================================================ */
+
 @layer base {
+  /* Applied always — Midnight Trust is dark-first */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 47.4% 11.2%;
-    --accent: 210 40% 96.1%; /* A light blue/green shade */
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 47.4% 11.2%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 47.4% 11.2%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 47.4% 11.2%;
-    --radius: 0.5rem;
+    /* Backgrounds */
+    --background: 223 53% 7%;        /* #080D1A */
+    --foreground: 218 40% 94%;       /* #E8EDF5 */
+
+    /* Cards */
+    --card: 221 39% 11%;             /* #111827 */
+    --card-foreground: 218 40% 94%;
+
+    /* Popovers / Dropdowns */
+    --popover: 226 42% 18%;          /* #1A2340 */
+    --popover-foreground: 218 40% 94%;
+
+    /* Primary = Gold */
+    --primary: 40 60% 58%;           /* #D4A853 */
+    --primary-foreground: 224 46% 11%; /* #0F1629 dark text on gold */
+
+    /* Secondary = Elevated surface */
+    --secondary: 226 42% 18%;        /* #1A2340 */
+    --secondary-foreground: 218 40% 94%;
+
+    /* Muted = subtle surface */
+    --muted: 226 42% 18%;            /* #1A2340 */
+    --muted-foreground: 220 20% 69%; /* #A0AABF */
+
+    /* Accent = Blue */
+    --accent: 213 64% 53%;           /* #3B7FD4 */
+    --accent-foreground: 218 40% 94%;
+
+    /* Destructive = Red */
+    --destructive: 0 84% 60%;        /* #EF4444 */
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders & Inputs */
+    --border: 218 40% 20%;           /* #1E2D47 */
+    --input: 226 42% 18%;            /* #1A2340 */
+    --ring: 40 60% 58%;              /* #D4A853 gold focus ring */
+
+    /* Border radius */
+    --radius: 0.75rem;
+
+    /* Midnight Trust custom tokens */
+    --mt-bg-deep: #080D1A;
+    --mt-card: #111827;
+    --mt-card-elevated: #1A2340;
+    --mt-sidebar: #0C1220;
+    --mt-gold: #D4A853;
+    --mt-gold-light: #E8C06A;
+    --mt-blue: #3B7FD4;
+    --mt-border: #1E2D47;
+    --mt-border-subtle: #151F33;
+    --mt-text: #E8EDF5;
+    --mt-text-secondary: #A0AABF;
+    --mt-text-muted: #5C6A82;
+    --mt-success: #22C55E;
+    --mt-error: #EF4444;
+    --mt-warning: #F59E0B;
+    --mt-navbar-height: 72px;
   }
 
+  /* .dark mirrors :root — Midnight Trust is always dark */
   .dark {
-    --background: 222.2 47.4% 11.2%;
-    --foreground: 210 40% 96.1%;
-    --accent: 217.2 32.6% 17.5%; /* A darker blue/green shade */
-    --accent-foreground: 210 40% 96.1%;
-    --card: 222.2 47.4% 11.2%;
-    --card-foreground: 210 40% 96.1%;
-    --popover: 222.2 47.4% 11.2%;
-    --popover-foreground: 210 40% 96.1%;
-    --primary: 210 40% 96.1%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 96.1%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 96.1%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --background: 223 53% 7%;
+    --foreground: 218 40% 94%;
+    --card: 221 39% 11%;
+    --card-foreground: 218 40% 94%;
+    --popover: 226 42% 18%;
+    --popover-foreground: 218 40% 94%;
+    --primary: 40 60% 58%;
+    --primary-foreground: 224 46% 11%;
+    --secondary: 226 42% 18%;
+    --secondary-foreground: 218 40% 94%;
+    --muted: 226 42% 18%;
+    --muted-foreground: 220 20% 69%;
+    --accent: 213 64% 53%;
+    --accent-foreground: 218 40% 94%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 218 40% 20%;
+    --input: 226 42% 18%;
+    --ring: 40 60% 58%;
   }
 }
 
@@ -54,11 +99,207 @@
   * {
     @apply border-border;
   }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply bg-background text-foreground;
-    font-family: "Open Sans", sans-serif; /* Default body font */
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
+
   h1, h2, h3, h4, h5, h6 {
-    font-family: "Montserrat", sans-serif; /* Headings font */
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    letter-spacing: -0.025em;
   }
 }
+
+/* ============================================================
+   ANIMATIONS — Midnight Trust motion system
+   ============================================================ */
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+
+@keyframes goldPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212, 168, 83, 0); }
+  50%       { box-shadow: 0 0 20px 4px rgba(212, 168, 83, 0.25); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   UTILITIES — Midnight Trust design primitives
+   ============================================================ */
+
+@layer utilities {
+  /* Gold gradient text */
+  .text-gold-gradient {
+    background: linear-gradient(90deg, #D4A853, #E8C06A);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Gold gradient button */
+  .btn-gold {
+    background: linear-gradient(135deg, #D4A853, #E8C06A);
+    color: #0F1629;
+    font-weight: 700;
+    transition: all 200ms;
+  }
+  .btn-gold:hover {
+    box-shadow: 0 0 30px rgba(212, 168, 83, 0.4);
+    transform: translateY(-1px);
+  }
+
+  /* Gold outline button */
+  .btn-gold-outline {
+    background: transparent;
+    color: #D4A853;
+    border: 1px solid rgba(212, 168, 83, 0.4);
+    font-weight: 600;
+    transition: all 150ms;
+  }
+  .btn-gold-outline:hover {
+    background: rgba(212, 168, 83, 0.08);
+  }
+
+  /* Midnight card */
+  .card-midnight {
+    background: var(--mt-card);
+    border: 1px solid var(--mt-border);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(212, 168, 83, 0.04);
+    transition: border-color 200ms, box-shadow 200ms;
+  }
+  .card-midnight:hover {
+    border-color: rgba(212, 168, 83, 0.2);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(212, 168, 83, 0.08);
+  }
+
+  /* Gold glow */
+  .shadow-gold {
+    box-shadow: 0 0 24px rgba(212, 168, 83, 0.25);
+  }
+  .shadow-gold-strong {
+    box-shadow: 0 0 40px rgba(212, 168, 83, 0.4);
+  }
+
+  /* Skeleton shimmer */
+  .skeleton-shimmer {
+    background: linear-gradient(90deg, var(--mt-card) 25%, var(--mt-card-elevated) 50%, var(--mt-card) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite linear;
+  }
+
+  /* Animation utilities */
+  .animate-fade-in-up {
+    animation: fadeInUp 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  }
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease forwards;
+  }
+  .animate-scale-in {
+    animation: scaleIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+
+  /* Stagger delays */
+  .delay-100 { animation-delay: 100ms; }
+  .delay-200 { animation-delay: 200ms; }
+  .delay-300 { animation-delay: 300ms; }
+  .delay-400 { animation-delay: 400ms; }
+  .delay-500 { animation-delay: 500ms; }
+}
+
+/* ============================================================
+   NAVBAR — Glassmorphism override
+   Ensures the fixed navbar always looks correct globally.
+   ============================================================ */
+
+.navbar-midnight {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  height: var(--mt-navbar-height);
+  display: flex;
+  align-items: center;
+  background: rgba(8, 13, 26, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(212, 168, 83, 0.1);
+}
+
+/* Page content offset for fixed navbar */
+.has-navbar {
+  padding-top: var(--mt-navbar-height);
+}
+
+/* ============================================================
+   SCROLLBAR — Midnight Trust dark scrollbar
+   ============================================================ */
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--mt-bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--mt-border); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--mt-text-muted); }
+
+/* ============================================================
+   SELECTION
+   ============================================================ */
+
+::selection {
+  background: rgba(212, 168, 83, 0.2);
+  color: var(--mt-text);
+}
+
+/* ============================================================
+   BADGE OVERRIDES — bureau badges
+   ============================================================ */
+
+.badge-negative {
+  background: rgba(239, 68, 68, 0.12);
+  color: #F87171;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+.badge-positive {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ADE80;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+.badge-warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: #FCD34D;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+/* ============================================================
+   BUREAU COLUMN HEADERS
+   ============================================================ */
+
+.bureau-header-eq  { background: #DC2626; }
+.bureau-header-ex  { background: #1D4ED8; }
+.bureau-header-tu  { background: #15803D; }

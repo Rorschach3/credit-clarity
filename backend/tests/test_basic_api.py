@@ -3,7 +3,6 @@ Basic API tests that work with current main.py
 Tests fundamental FastAPI functionality without complex dependencies
 """
 import pytest
-from fastapi.testclient import TestClient
 from unittest.mock import Mock, patch
 import sys
 import os
@@ -13,18 +12,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from main import app
 
-@pytest.fixture
-def client():
-    """Create test client."""
-    return TestClient(app)
-
-
 class TestBasicEndpoints:
     """Test basic API endpoints."""
     
-    def test_root_endpoint(self, client):
+    @pytest.mark.asyncio
+    async def test_root_endpoint(self, async_client):
         """Test root endpoint returns basic info."""
-        response = client.get("/")
+        response = await async_client.get("/")
         # Root may not be implemented, check health instead
         if response.status_code == 404:
             pytest.skip("Root endpoint not implemented")
@@ -32,18 +26,20 @@ class TestBasicEndpoints:
         data = response.json()
         assert "message" in data or "name" in data
     
-    def test_health_check(self, client):
+    @pytest.mark.asyncio
+    async def test_health_check(self, async_client):
         """Test health check endpoint."""
-        response = client.get("/health")
+        response = await async_client.get("/health")
         assert response.status_code in [200, 404]  # May not be implemented yet
         if response.status_code == 200:
             data = response.json()
             assert "status" in data or "health" in data
     
-    def test_cors_headers(self, client):
+    @pytest.mark.asyncio
+    async def test_cors_headers(self, async_client):
         """Test CORS headers are configured."""
         # Test on an existing endpoint instead
-        response = client.get("/health")
+        response = await async_client.get("/health")
         # Just verify the request completes (CORS is configured)
         assert response.status_code in [200, 404]
 

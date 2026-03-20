@@ -6,10 +6,10 @@ from decimal import Decimal
 import logging
 from dataclasses import dataclass
 
-from ..models.tradeline_models import Tradeline, CreditReport, ConsumerInfo
-from ..models.llm_models import LLMRequest, LLMResponse, NormalizationResult
-from ..config.llm_config import LLMConfig
-from ..utils.llm_helpers import TokenCounter, ResponseValidator
+from models.tradeline_models import Tradeline, CreditReport, ConsumerInfo
+from models.llm_models import LLMRequest, LLMResponse, NormalizationResult
+from config.llm_config import LLMConfig
+from utils.llm_helpers import TokenCounter, ResponseValidator
 from .prompt_templates import PromptTemplates
 
 logger = logging.getLogger(__name__)

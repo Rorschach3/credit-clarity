@@ -10,7 +10,8 @@ from typing import Optional, Dict, Any
 
 from fastapi import APIRouter, HTTPException, Depends, Request, status
 from fastapi.security import HTTPBearer
-from pydantic import BaseModel, Field, EmailStr, validator
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, validator
 
 from core.config import get_settings
 from core.exceptions import (
@@ -36,7 +37,7 @@ rate_limit_store: Dict[str, list] = {}
 
 class RegisterRequest(BaseModel):
     """User registration request."""
-    email: EmailStr
+    email: str = Field(..., pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     password: str = Field(..., min_length=8, max_length=128)
     first_name: str = Field(..., min_length=1, max_length=50)
     last_name: str = Field(..., min_length=1, max_length=50)
@@ -63,7 +64,7 @@ class RegisterRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     """User login request."""
-    email: EmailStr
+    email: str = Field(..., pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     password: str = Field(..., min_length=1)
 
 
@@ -74,7 +75,7 @@ class RefreshTokenRequest(BaseModel):
 
 class PasswordResetRequest(BaseModel):
     """Password reset request."""
-    email: EmailStr
+    email: str = Field(..., pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class PasswordResetConfirmRequest(BaseModel):
@@ -199,7 +200,9 @@ def create_success_response(data: Any, message: str = "", request_id: str = None
         "success": True,
         "data": data if isinstance(data, dict) else data.dict() if hasattr(data, 'dict') else data,
         "error": None,
-        "request_id": request_id or generate_request_id()
+        "request_id": request_id or generate_request_id(),
+        "timestamp": datetime.now().isoformat(),
+        "version": "1.0",
     }
 
 
@@ -213,8 +216,14 @@ def create_error_response(exc: CreditClarityException, request_id: str = None) -
             "message": exc.message,
             "details": exc.details
         },
-        "request_id": request_id or generate_request_id()
+        "request_id": request_id or generate_request_id(),
+        "timestamp": datetime.now().isoformat(),
+        "version": "1.0",
     }
+
+
+def _json_error(status_code: int, exc: CreditClarityException, request_id: str) -> JSONResponse:
+    return JSONResponse(status_code=status_code, content=create_error_response(exc, request_id))
 
 
 # ============== Authentication Endpoints ==============
@@ -234,12 +243,10 @@ async def register(request: RegisterRequest, req: Request):
     
     if not supabase_client:
         logger.error(f"[{request_id}] Supabase client not initialized")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=create_error_response(
-                auth_error("Authentication service temporarily unavailable"),
-                request_id
-            )
+        return _json_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            auth_error("Authentication service temporarily unavailable"),
+            request_id,
         )
     
     try:
@@ -278,21 +285,17 @@ async def register(request: RegisterRequest, req: Request):
         
         # Handle specific Supabase errors
         error_str = str(e).lower()
-        if "email" in error_str and "already" in error_str:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=create_error_response(
-                    validation_error("Email already registered"),
-                    request_id
-                )
+        if "already" in error_str and ("registered" in error_str or "exists" in error_str or "email" in error_str):
+            return _json_error(
+                status.HTTP_409_CONFLICT,
+                validation_error("Email already registered"),
+                request_id,
             )
         
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=create_error_response(
-                auth_error(f"Registration failed: {str(e)}"),
-                request_id
-            )
+        return _json_error(
+            status.HTTP_400_BAD_REQUEST,
+            auth_error(f"Registration failed: {str(e)}"),
+            request_id,
         )
 
 
@@ -311,24 +314,20 @@ async def login(request: LoginRequest, req: Request):
     if not check_rate_limit(rate_limit_key, max_attempts=10, window_seconds=60):
         retry_after = get_rate_limit_retry_after(rate_limit_key)
         logger.warning(f"[{request_id}] Rate limit exceeded for login from IP: {client_ip}")
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=create_error_response(
-                rate_limit_error(retry_after=retry_after),
-                request_id
-            )
+        return _json_error(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            rate_limit_error(retry_after=retry_after),
+            request_id,
         )
     
     logger.info(f"[{request_id}] Login attempt for email: {request.email} from IP: {client_ip}")
     
     if not supabase_client:
         logger.error(f"[{request_id}] Supabase client not initialized")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=create_error_response(
-                auth_error("Authentication service temporarily unavailable"),
-                request_id
-            )
+        return _json_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            auth_error("Authentication service temporarily unavailable"),
+            request_id,
         )
     
     try:
@@ -379,12 +378,10 @@ async def login(request: LoginRequest, req: Request):
             f"email={request.email} ip={client_ip} reason={str(e)}"
         )
         
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=create_error_response(
-                auth_error("Invalid email or password"),
-                request_id
-            )
+        return _json_error(
+            status.HTTP_401_UNAUTHORIZED,
+            auth_error("Invalid email or password"),
+            request_id,
         )
 
 
@@ -443,12 +440,10 @@ async def request_password_reset(request: PasswordResetRequest, req: Request):
     
     if not supabase_client:
         logger.error(f"[{request_id}] Supabase client not initialized")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=create_error_response(
-                auth_error("Authentication service temporarily unavailable"),
-                request_id
-            )
+        return _json_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            auth_error("Authentication service temporarily unavailable"),
+            request_id,
         )
     
     try:
@@ -493,12 +488,10 @@ async def confirm_password_reset(request: PasswordResetConfirmRequest, req: Requ
     
     if not supabase_client:
         logger.error(f"[{request_id}] Supabase client not initialized")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=create_error_response(
-                auth_error("Authentication service temporarily unavailable"),
-                request_id
-            )
+        return _json_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            auth_error("Authentication service temporarily unavailable"),
+            request_id,
         )
     
     try:
@@ -526,12 +519,10 @@ async def confirm_password_reset(request: PasswordResetConfirmRequest, req: Requ
     except Exception as e:
         logger.error(f"[{request_id}] Password reset confirmation failed: {str(e)}")
         
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=create_error_response(
-                auth_error("Password reset failed. The link may have expired."),
-                request_id
-            )
+        return _json_error(
+            status.HTTP_400_BAD_REQUEST,
+            auth_error("Password reset failed. The link may have expired."),
+            request_id,
         )
 
 
@@ -549,12 +540,10 @@ async def refresh_token(request: RefreshTokenRequest, req: Request):
     
     if not supabase_client:
         logger.error(f"[{request_id}] Supabase client not initialized")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=create_error_response(
-                auth_error("Authentication service temporarily unavailable"),
-                request_id
-            )
+        return _json_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            auth_error("Authentication service temporarily unavailable"),
+            request_id,
         )
     
     try:
@@ -581,10 +570,8 @@ async def refresh_token(request: RefreshTokenRequest, req: Request):
     except Exception as e:
         logger.warning(f"[{request_id}] Token refresh failed: {str(e)}")
         
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=create_error_response(
-                auth_error("Invalid or expired refresh token"),
-                request_id
-            )
+        return _json_error(
+            status.HTTP_401_UNAUTHORIZED,
+            auth_error("Invalid or expired refresh token"),
+            request_id,
         )

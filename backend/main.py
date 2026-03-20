@@ -38,6 +38,7 @@ from datetime import datetime
 # PDF Chunking
 from services.pdf_chunker import PDFChunker
 from core.security import verify_supabase_jwt
+from core.config import settings
 from services.advanced_parsing.negative_tradeline_classifier import NegativeTradelineClassifier
 
 # Import asyncio for timeout handling
@@ -57,6 +58,7 @@ from utils.field_validator import field_validator
 # Import error handling and response modules
 from middleware.error_handler import ErrorHandlerMiddleware, setup_exception_handlers
 from core.response import ResponseFormatter, success_response, error_response
+from api.v1.routes import v1_router
 
 async def with_timeout(coro, timeout_seconds):
     try:
@@ -93,12 +95,28 @@ app = FastAPI(
 app.add_middleware(ErrorHandlerMiddleware)
 setup_exception_handlers(app)
 
+# Root endpoint (used by health/unit tests and basic observability checks)
+@app.get("/")
+async def root():
+    return {
+        "name": "Credit Clarity API",
+        "version": "3.0.0",
+        "architecture": "modular",
+        "status": "operational",
+    }
+
 # Initialize background job processor
 from services.background_jobs import job_processor
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup"""
+    logger.info(f"Startup event begin (environment={settings.environment})")
+    # Tests set ENVIRONMENT=testing; avoid starting background workers or attempting
+    # external service connections during app startup.
+    if settings.is_testing():
+        logger.info("🧪 Testing mode: skipping background job processor and WebSocket init")
+        return
     await job_processor.start()
     from services.websocket_manager import initialize_websocket_manager
     await initialize_websocket_manager()
@@ -108,6 +126,8 @@ async def startup_event():
 @app.on_event("shutdown")  
 async def shutdown_event():
     """Cleanup on shutdown"""
+    if settings.is_testing():
+        return
     from services.websocket_manager import shutdown_websocket_manager
     await shutdown_websocket_manager()
     await job_processor.stop()
@@ -310,16 +330,7 @@ class TradelineSchema(BaseModel):
 # Note: For production, replace localhost origins with actual domain
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",    # React default
-        "http://127.0.0.1:3000",
-        "http://localhost:5173",    # Vite default
-        "http://127.0.0.1:5173",
-        "http://localhost:8080",    # Other common ports
-        "http://127.0.0.1:8080",
-        "http://localhost:4173",    # Vite preview
-        "http://127.0.0.1:4173"
-    ],
+    allow_origins=settings.get_cors_origins(),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=[
@@ -334,6 +345,9 @@ app.add_middleware(
         "X-Process-Time"
     ]
 )
+
+# API v1 (modular router). Tests and clients expect these to be mounted at /api/v1/*.
+app.include_router(v1_router, prefix="/api")
 
 def detect_credit_bureau(text_content: str) -> str:
     """
@@ -1847,11 +1861,92 @@ def parse_tradelines_basic(text: str) -> list:
         logger.info("🔧 BASIC PARSING - INPUT DATA:")
         logger.info(f"  Text length: {len(text)} characters")
         
-        # Basic pattern matching logic here
         tradelines = []
-        # TODO: Implement basic parsing logic
-        
-        return tradelines
+        lines = text.split('\n')
+
+        # Field patterns used across credit bureaus
+        account_number_re = re.compile(r'account\s*(?:number|#|num)[:\s]+([A-Z0-9*X-]{4,20})', re.IGNORECASE)
+        balance_re = re.compile(r'balance[:\s]+\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE)
+        status_re = re.compile(r'(?:account\s+)?status[:\s]+([A-Za-z /]+)', re.IGNORECASE)
+        date_opened_re = re.compile(r'date\s+opened[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\w+\s+\d{4})', re.IGNORECASE)
+        payment_status_re = re.compile(r'payment\s+status[:\s]+([A-Za-z /]+)', re.IGNORECASE)
+
+        # Keywords that indicate a new creditor block is starting
+        creditor_keywords = ['bank', 'credit', 'card', 'loan', 'mortgage', 'financial',
+                             'capital', 'chase', 'citi', 'wells', 'american', 'discover',
+                             'synchrony', 'barclays', 'ally', 'usaa', 'navy', 'federal']
+
+        current = None
+
+        def _flush(entry):
+            """Append entry only when it has a creditor name."""
+            if entry and entry.get('creditor_name'):
+                tradelines.append(entry)
+
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+
+            line_lower = stripped.lower()
+
+            # Detect the start of a new creditor block: a line that looks like a
+            # creditor name (contains known keywords, no colon field separator,
+            # reasonably short).
+            is_new_creditor = (
+                ':' not in stripped
+                and any(kw in line_lower for kw in creditor_keywords)
+                and len(stripped) < 80
+                and any(c.isalpha() for c in stripped)
+            )
+
+            if is_new_creditor:
+                _flush(current)
+                current = {
+                    'creditor_name': stripped,
+                    'account_number': None,
+                    'balance': None,
+                    'status': None,
+                    'date_opened': None,
+                }
+                continue
+
+            if current is None:
+                # Haven't found a creditor yet; try to pick one up from
+                # "Account Number:" style lines that follow a header.
+                continue
+
+            # Account Number
+            m = account_number_re.search(stripped)
+            if m and current['account_number'] is None:
+                current['account_number'] = re.sub(r'[^A-Za-z0-9]', '', m.group(1)) or None
+
+            # Balance
+            m = balance_re.search(stripped)
+            if m and current['balance'] is None:
+                current['balance'] = m.group(1).replace(',', '')
+
+            # Payment Status takes priority over generic Status
+            m = payment_status_re.search(stripped)
+            if m:
+                current['status'] = m.group(1).strip()
+            elif current['status'] is None:
+                m = status_re.search(stripped)
+                if m:
+                    candidate = m.group(1).strip()
+                    # Reject overly long or clearly non-status matches
+                    if len(candidate) <= 30:
+                        current['status'] = candidate
+
+            # Date Opened
+            m = date_opened_re.search(stripped)
+            if m and current['date_opened'] is None:
+                current['date_opened'] = m.group(1).strip()
+
+        _flush(current)
+
+        logger.info(f"Basic parsing found {len(tradelines)} tradelines")
+        return tradelines[:20]  # cap to avoid noise
         
     except Exception as e:
         logger.error(f"❌ Basic parsing failed: {str(e)}")
@@ -2035,26 +2130,8 @@ async def _process_credit_report_core(
             
             if result['success']:
                 logger.info(f"✅ Processing completed using {result['method_used']}")
-                
-                # Save tradelines to database if available
-                tradelines = result.get('tradelines', [])
-                if tradelines and supabase:
-                    logger.info(f"💾 Saving {len(tradelines)} tradelines to database...")
-                    try:
-                        # Add user_id to each tradeline
-                        for tradeline in tradelines:
-                            tradeline['user_id'] = user_id
+                logger.info(f"📤 Returning {len(result.get('tradelines', []))} tradelines to frontend for save")
 
-                        # Insert tradelines into database
-                        insert_result = supabase.table("tradelines").insert(tradelines).execute()
-                        if insert_result.data:
-                            logger.info(f"✅ Successfully saved {len(insert_result.data)} tradelines to database for user {user_id}")
-                        else:
-                            logger.warning(f"⚠️ Database insert returned no data for user {user_id}")
-                    except Exception as db_error:
-                        logger.error(f"❌ Failed to insert tradelines into database for user {user_id}: {db_error}", exc_info=True)
-                        # Continue without failing the entire request
-                
                 return {
                     "success": True,
                     "message": f"Successfully processed {len(result['tradelines'])} tradelines",
@@ -2133,8 +2210,8 @@ async def get_user_jobs(user_id: str, limit: int = 10):
     """Get user's recent processing jobs"""
     try:
         from services.background_jobs import job_processor
-        
-        jobs = job_processor.job_queue.get_user_jobs(user_id, limit)
+
+        jobs = await job_processor.job_queue.get_user_jobs(user_id, limit)
         
         job_data = []
         for job in jobs:
@@ -2292,6 +2369,7 @@ async def health_check():
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
+        "version": "3.0.0",
         "services": {
             "document_ai": "configured" if PROJECT_ID and PROCESSOR_ID else "not_configured",
             "gemini": "configured" if gemini_model else "not_configured",

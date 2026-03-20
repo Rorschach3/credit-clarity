@@ -1,0 +1,75 @@
+{
+  "project_structure": "Integration points connect frontend upload flows, backend processing routes, background job orchestration, and Supabase persistence. The main integration surfaces are API endpoints, pipeline services, and React pages.",
+  "relevant_files": [
+    {
+      "path": "backend/api/v1/routes/processing_v2.py",
+      "relevance": 0.92,
+      "rationale": "API endpoint for upload and processing orchestration."
+    },
+    {
+      "path": "backend/services/tradeline_extraction/pipeline.py",
+      "relevance": 0.9,
+      "rationale": "Pipeline service used by processing routes and background jobs."
+    },
+    {
+      "path": "backend/services/background_jobs.py",
+      "relevance": 0.82,
+      "rationale": "Job submission and processing used by processing_v2 routes."
+    },
+    {
+      "path": "frontend/src/utils/creditReportProcessor.ts",
+      "relevance": 0.85,
+      "rationale": "Frontend upload and polling integration with backend APIs."
+    },
+    {
+      "path": "frontend/src/pages/CreditReportUploadPage.tsx",
+      "relevance": 0.78,
+      "rationale": "User entry point for uploading reports to backend."
+    },
+    {
+      "path": "frontend/src/pages/DisputeWizardPage.tsx",
+      "relevance": 0.8,
+      "rationale": "Consumes parsed tradelines and generates dispute letters."
+    },
+    {
+      "path": "frontend/src/integrations/supabase/client.ts",
+      "relevance": 0.7,
+      "rationale": "Shared Supabase client used by frontend data access layers."
+    }
+  ],
+  "patterns": "- Frontend submits PDF uploads via fetch with FormData and auth headers.\n- Backend routes split between synchronous and background processing based on file size.\n- Pipeline returns structured processing metrics consumed by UI.\n- Supabase client is shared across hooks and utility functions for auth and persistence.",
+  "dependencies": "INTERNAL: processing_v2 -> background_jobs.submit_pdf_processing_job; processing_v2 -> tradeline pipeline; creditReportProcessor -> API routes and Supabase auth.\nEXTERNAL: FastAPI (routes), Supabase JS (frontend auth), Fetch API (upload), asyncio (backend pipeline).",
+  "integration_points": "- backend/api/v1/routes/processing_v2.py:71-119 upload endpoint chooses sync vs background path.\n- backend/api/v1/routes/processing_v2.py:235-259 submits background job for large files.\n- backend/services/tradeline_extraction/pipeline.py:50-116 handles extraction, validation, storage.\n- frontend/src/utils/creditReportProcessor.ts:102-140 performs OCR upload and fetch handling.\n- frontend/src/pages/DisputeWizardPage.tsx:166-194 generates dispute letters from selected tradelines.",
+  "constraints": "- Upload integration must preserve multipart FormData and auth headers for Supabase.\n- Background jobs require job_id response for polling and status tracking.\n- API responses must maintain existing structure to avoid frontend regressions.",
+  "clarification_needs": [
+    {
+      "question": "Should integration points emphasize API contracts or internal service calls?",
+      "context": "The PRD planning can focus on external API interfaces or internal pipeline dependencies. Clarify the emphasis for context packaging.",
+      "options": [
+        "API contracts only",
+        "Internal services only",
+        "Both with clear separation"
+      ],
+      "recommended": 2
+    },
+    {
+      "question": "Is background job orchestration part of the MVP integration scope?",
+      "context": "The current processing flow supports both sync and async paths; clarify whether the PRD treats background jobs as core or optional in Phase 1.",
+      "options": [
+        "MVP includes background jobs",
+        "MVP is sync only",
+        "MVP supports both but deprioritizes async improvements"
+      ],
+      "recommended": 2
+    }
+  ],
+  "_metadata": {
+    "timestamp": "2026-03-03T15:31:39.480858+00:00",
+    "task_description": "Resume workflow planning by completing Phase 2 context gathering for session WFS-brainstorm-for-a-prd; regenerate stale context-package.json using architecture, patterns, dependencies, and integration-points explorations.",
+    "source": "cli-explore-agent",
+    "exploration_angle": "integration-points",
+    "exploration_index": 4,
+    "total_explorations": 4,
+    "duration_seconds": 120
+  }
+}

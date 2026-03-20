@@ -1,0 +1,47 @@
+[
+  {
+    "dimension": "maintainability",
+    "review_id": "review-20260304-053643",
+    "analysis_timestamp": "2026-03-04T05:39:00.683256+00:00",
+    "cli_tool_used": "codex",
+    "model": "gpt-5",
+    "analysis_duration_ms": 60000,
+    "summary": {
+      "total_findings": 1,
+      "critical": 0,
+      "high": 0,
+      "medium": 1,
+      "low": 0,
+      "files_analyzed": 25,
+      "lines_reviewed": 12368
+    },
+    "findings": [
+      {
+        "id": "mai-001-5503328a",
+        "title": "Ralph loop extractor module is extremely large",
+        "severity": "medium",
+        "category": "large-class",
+        "description": "ralph_loop_extractor.py is ~960 lines, which increases cognitive load and raises risk of regressions when modifying extraction logic.",
+        "file": "backend/services/tradeline_extraction/ralph_loop_extractor.py",
+        "line": 1,
+        "snippet": "\"\"\"Ralph loop extractor\"\"\"",
+        "recommendation": "Split the module into smaller components (OCR orchestration, quality scoring, AI extraction, retries) and add unit tests per component.",
+        "references": [],
+        "impact": "Potential degradation of reliability or security posture if left unaddressed.",
+        "metadata": {},
+        "iteration": 0,
+        "status": "pending_remediation",
+        "cross_references": []
+      }
+    ],
+    "cross_references": [
+      {
+        "finding_id": "mai-001-5503328a",
+        "related_dimensions": [
+          "quality"
+        ],
+        "reason": "Large parser module impacts both quality and maintainability."
+      }
+    ]
+  }
+]
